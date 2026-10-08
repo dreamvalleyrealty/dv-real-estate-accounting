@@ -3,7 +3,10 @@ import{LayoutDashboard,ArrowLeftRight,Landmark,ReceiptText,Users,Clock3,Percent,
 import{supabase}from"./lib/supabase";
 
 const nav=[["Dashboard",LayoutDashboard],["Transactions",ArrowLeftRight],["Banking & Reconciliation",Landmark],["Expenses & A/P",ReceiptText],["Agents & Commissions",Users],["Payroll & Staff Hours",Clock3],["HST / Tax",Percent],["Reports",BarChart3],["Compliance & Month End",ClipboardCheck],["Settings",Settings]];
-const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(n||0));\nconst today=()=>new Date().toISOString().slice(0,10);\nasync function loadTable(table){if(!supabase)return[];const{data}=await supabase.from(table).select("*");return data||[]}\nfunction useRows(table){const[rows,setRows]=useState([]);const load=async()=>{try{setRows(await loadTable(table))}catch{setRows([])}};useEffect(()=>{load()},[table]);return{rows,setRows,load}}
+const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(n||0));
+const today=()=>new Date().toISOString().slice(0,10);
+async function loadTable(table){if(!supabase)return[];const{data}=await supabase.from(table).select("*");return data||[]}
+function useRows(table){const[rows,setRows]=useState([]);const load=async()=>{try{setRows(await loadTable(table))}catch{setRows([])}};useEffect(()=>{load()},[table]);return{rows,setRows,load}}
 
 function Card({title,value,sub}){return <div className="card"><div className="muted">{title}</div><div className="metric">{value}</div><div className="sub">{sub}</div></div>}
 function Modal({title,onClose,children}){return <div className="overlay"><div className="modal"><div className="modalhead"><h2>{title}</h2><button className="iconbtn" onClick={onClose}><X/></button></div>{children}</div></div>}
