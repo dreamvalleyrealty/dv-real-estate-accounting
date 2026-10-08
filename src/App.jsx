@@ -49,7 +49,7 @@ function Expenses(){
 }
 
 function Payroll(){
- const emp=useRows("dv_accounting_employees"),time=useRows("dv_accounting_time_entries"),runs=useRows("dv_accounting_payroll_runs"),lines=useRows("dv_accounting_payroll_lines");
+ const emp=useRows("dv_accounting_employees"),time=useRows("dv_accounting_time_entries"),runs=useRows("dv_accounting_payroll_runs"),lines=useRows("dv_accounting_payroll_lines"),remittances=useRows("dv_accounting_payroll_remittances");
  const[employeeShow,setEmployeeShow]=useState(false),[hoursShow,setHoursShow]=useState(false),[runShow,setRunShow]=useState(false);
  const[employee,setEmployee]=useState({name:"",email:"",job_title:"",department:"",province:"ON",date_of_birth:"",pay_type:"HOURLY",hourly_rate:"",annual_salary:"",pay_frequency:"BIWEEKLY",overtime_rate_multiplier:"1.5",vacation_pay_rate:"0.04",hire_date:"",federal_claim_code:"1",ontario_claim_code:"1",additional_tax:"0",cpp_exempt:false,ei_exempt:false});
  const[hoursForm,setHoursForm]=useState({employee_id:"",work_date:today(),hours:"",overtime_hours:"",notes:""});
@@ -67,6 +67,9 @@ function Payroll(){
   if(supabase){const{data,error}=await supabase.from("dv_accounting_time_entries").insert([payload]).select().single();if(error)return alert(error.message);time.setRows(r=>[data,...r])}else time.setRows(r=>[{...payload,id:Date.now()},...r]);
   setHoursShow(false);
  }
+ async function approveRun(id){if(!supabase)return;const{data,error}=await supabase.from("dv_accounting_payroll_runs").update({status:"APPROVED",approved_at:new Date().toISOString()}).eq("id",id).select().single();if(error)return alert(error.message);runs.setRows(r=>r.map(x=>x.id===id?data:x))}
+ async function postRun(id){if(!supabase)return;const{error}=await supabase.rpc("dv_accounting_post_payroll",{p_payroll_run_id:id});if(error)return alert(error.message);await runs.load();await remittances.load()}
+ async function markRemittancePaid(id){if(!supabase)return;const{data,error}=await supabase.from("dv_accounting_payroll_remittances").update({status:"PAID",paid_at:new Date().toISOString()}).eq("id",id).select().single();if(error)return alert(error.message);remittances.setRows(r=>r.map(x=>x.id===id?data:x))}
  async function createRun(e){
   e.preventDefault();
   const start=new Date(form.period_start+"T00:00:00"),end=new Date(form.period_end+"T23:59:59"),taxYear=new Date(form.pay_date+"T12:00:00").getFullYear();
