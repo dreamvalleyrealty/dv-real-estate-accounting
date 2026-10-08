@@ -10,6 +10,8 @@ function useRows(table){const[rows,setRows]=useState([]);const load=async()=>{tr
 
 function Card({title,value,sub}){return <div className="card"><div className="muted">{title}</div><div className="metric">{value}</div><div className="sub">{sub}</div></div>}
 function Modal({title,onClose,children}){return <div className="overlay"><div className="modal"><div className="modalhead"><h2>{title}</h2><button className="iconbtn" onClick={onClose}><X/></button></div>{children}</div></div>}
+function Empty({icon:Icon=FileText,title="Nothing here yet",text="Create your first record to get started."}){return <div className="empty"><Icon/><h3>{title}</h3><p>{text}</p></div>}
+function Toolbar({q,setQ,onRefresh}){return <div className="toolbar"><div className="search"><Search size={17}/><input placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)}/></div>{onRefresh&&<button className="secondary" onClick={onRefresh}><RefreshCw size={16}/> Refresh</button>}</div>
 
 function Dashboard({setActive}){
  const[stats,setStats]=useState({transactions:0,expenses:0,gci:0,expensesTotal:0});
