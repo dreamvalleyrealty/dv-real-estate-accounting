@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 213 256">
+<rect width="213" height="256" fill="none"/>
+<path d="M14 79 L106 10 L199 79 M199 79 V238 H14 V79" fill="none" stroke="#9e8556" stroke-width="8" stroke-linejoin="miter"/>
+<text x="18" y="236" font-family="Georgia, 'Times New Roman', serif" font-size="105" fill="#9e8556" letter-spacing="-12">DV</text>
+</svg>
