@@ -1,5 +1,5 @@
 import{useEffect,useMemo,useState}from"react";
-import{LayoutDashboard,ArrowLeftRight,Landmark,ReceiptText,Users,Clock3,Percent,BarChart3,ClipboardCheck,Settings,Menu,X,Plus,Search,RefreshCw,Save,LogOut,CheckCircle2,AlertCircle,FileText}from"lucide-react";
+import{LayoutDashboard,ArrowLeftRight,Landmark,ReceiptText,Users,Clock3,Percent,BarChart3,ClipboardCheck,Settings,Menu,X,Plus,Search,RefreshCw,Save,LogOut,CheckCircle2,AlertCircle,FileText,Building2}from"lucide-react";
 import{supabase}from"./lib/supabase";
 
 const nav=[["Dashboard",LayoutDashboard],["Transactions",ArrowLeftRight],["Banking & Reconciliation",Landmark],["Expenses & A/P",ReceiptText],["Agents & Commissions",Users],["Payroll & Staff Hours",Clock3],["HST / Tax",Percent],["Reports",BarChart3],["Compliance & Month End",ClipboardCheck],["Settings",Settings]];
@@ -11,7 +11,7 @@ function useRows(table){const[rows,setRows]=useState([]);const load=async()=>{tr
 function Card({title,value,sub}){return <div className="card"><div className="muted">{title}</div><div className="metric">{value}</div><div className="sub">{sub}</div></div>}
 function Modal({title,onClose,children}){return <div className="overlay"><div className="modal"><div className="modalhead"><h2>{title}</h2><button className="iconbtn" onClick={onClose}><X/></button></div>{children}</div></div>}
 function Empty({icon:Icon=FileText,title="Nothing here yet",text="Create your first record to get started."}){return <div className="empty"><Icon/><h3>{title}</h3><p>{text}</p></div>}
-function Toolbar({q,setQ,onRefresh}){return <div className="toolbar"><div className="search"><Search size={17}/><input placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)}/></div>{onRefresh&&<button className="secondary" onClick={onRefresh}><RefreshCw size={16}/> Refresh</button>}</div>
+function Toolbar({q,setQ,onRefresh}){return <div className="toolbar"><div className="search"><Search size={17}/><input placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)}/></div>{onRefresh&&<button className="secondary" onClick={onRefresh}><RefreshCw size={16}/> Refresh</button>}</div>}
 
 function Dashboard({setActive}){
  const[stats,setStats]=useState({transactions:0,expenses:0,gci:0,expensesTotal:0});
