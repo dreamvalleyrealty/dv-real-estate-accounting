@@ -1,5 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 213 256">
-<rect width="213" height="256" fill="none"/>
-<path d="M14 79 L106 10 L199 79 M199 79 V238 H14 V79" fill="none" stroke="#9e8556" stroke-width="8" stroke-linejoin="miter"/>
-<text x="18" y="236" font-family="Georgia, 'Times New Roman', serif" font-size="105" fill="#9e8556" letter-spacing="-12">DV</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 695 782">
+<g fill="#9e8556">
+<path d="M44 292V260L319 60l330 300v420h-49V383L319 122 93 285v7z"/>
+<path d="M34 365h194c103 0 166 56 166 143 0 89-63 148-166 148H34v-20l44-7V392l-44-7zm116 40v211h70c71 0 116-34 116-108 0-69-45-103-116-103z"/>
+<path d="M251 365h149v20l-37 7 83 259 82-259-34-7v-20h122v20l-37 8-119 389h-31L300 393l-49-8z"/>
+</g>
 </svg>
