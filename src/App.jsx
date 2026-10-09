@@ -3,7 +3,7 @@ import{LayoutDashboard,ArrowLeftRight,Landmark,ReceiptText,Users,Clock3,Percent,
 import{supabase}from"./lib/supabase";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
-const APP_VERSION="0.6.10";
+const APP_VERSION="0.6.11";
 const nav=[["Dashboard",LayoutDashboard],["Transactions",ArrowLeftRight],["Banking & Reconciliation",Landmark],["Expenses & A/P",ReceiptText],["Agents & Commissions",Users],["Payroll & Staff Hours",Clock3],["HST / Tax",Percent],["Reports",BarChart3],["Compliance & Month End",ClipboardCheck],["Settings",Settings]];
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(n||0));
 const today=()=>new Date().toISOString().slice(0,10);
