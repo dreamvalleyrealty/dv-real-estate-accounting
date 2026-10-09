@@ -3,7 +3,7 @@ import{LayoutDashboard,ArrowLeftRight,Landmark,ReceiptText,Users,Clock3,Percent,
 import{supabase}from"./lib/supabase";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
-const APP_VERSION="0.6.6";
+const APP_VERSION="0.6.7";
 const nav=[["Dashboard",LayoutDashboard],["Transactions",ArrowLeftRight],["Banking & Reconciliation",Landmark],["Expenses & A/P",ReceiptText],["Agents & Commissions",Users],["Payroll & Staff Hours",Clock3],["HST / Tax",Percent],["Reports",BarChart3],["Compliance & Month End",ClipboardCheck],["Settings",Settings]];
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(n||0));
 const today=()=>new Date().toISOString().slice(0,10);
@@ -251,6 +251,7 @@ function Agents({user}){
    const fe=await supabase.from("dv_accounting_agent_fee_rules").insert([rule]);if(fe.error)throw new Error("Agent was saved, but the special fee rule could not be saved: "+fe.error.message);
   }
   setShow(false);resetForm();setSavingAgent(false)
+ }catch(err){const msg=err?.message||String(err);console.error("Agent save failed",err);setAgentSaveError(msg);alert(msg);setSavingAgent(false)}
  }
  async function savePlan(e){
   e.preventDefault();if(!supabase||!companyId)return;
