@@ -32,9 +32,6 @@ alter table public.dv_accounting_agent_fee_settings
   add column if not exists effective_to date,
   add column if not exists is_promotion boolean not null default false;
 
-alter table public.dv_accounting_agent_fee_rules
-  add column if not exists is_promotion boolean not null default false;
-
 alter table public.dv_accounting_transactions
   add column if not exists market_segment text not null default 'RESIDENTIAL';
 
