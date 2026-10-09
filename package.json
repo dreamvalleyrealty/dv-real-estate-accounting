@@ -1,7 +1,7 @@
 {
   "name": "dv-real-estate-accounting",
   "private": true,
-  "version": "0.6.14",
+  "version": "0.6.15",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,9 @@
     "lucide-react": "^0.468.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-router-dom": "^7.9.2"
+    "react-router-dom": "^7.9.2",
+    "xlsx": "^0.18.5",
+    "pdfjs-dist": "^4.8.69"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.2",
