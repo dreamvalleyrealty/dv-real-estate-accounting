@@ -79,8 +79,20 @@ function Payroll(){
  const hours=time.rows.reduce((s,x)=>s+Number(x.hours||0),0),gross=runs.rows.reduce((s,x)=>s+Number(x.gross_pay||0),0);
  async function saveEmployee(e){
   e.preventDefault();
-  const payload={...employee,hourly_rate:Number(employee.hourly_rate||0),annual_salary:Number(employee.annual_salary||0),overtime_rate_multiplier:Number(employee.overtime_rate_multiplier||1.5),vacation_pay_rate:Number(employee.vacation_pay_rate||0.04),federal_claim_code:Number(employee.federal_claim_code||1),ontario_claim_code:Number(employee.ontario_claim_code||1),additional_tax:Number(employee.additional_tax||0)};
-  if(supabase){const{data,error}=await supabase.from("dv_accounting_employees").insert([{...payload,company_id:companies.rows[0]?.id,branch_id:employee.branch_id||null}]).select().single();if(error)return alert(error.message);emp.setRows(r=>[data,...r])}else emp.setRows(r=>[{...payload,id:Date.now()},...r]);
+  const payload={...employee,
+   company_id:companies.rows[0]?.id||null,
+   branch_id:employee.branch_id||null,
+   date_of_birth:employee.date_of_birth||null,
+   hire_date:employee.hire_date||null,
+   hourly_rate:Number(employee.hourly_rate||0),
+   annual_salary:Number(employee.annual_salary||0),
+   overtime_rate_multiplier:Number(employee.overtime_rate_multiplier||1.5),
+   vacation_pay_rate:Number(employee.vacation_pay_rate||0.04),
+   federal_claim_code:Number(employee.federal_claim_code||1),
+   ontario_claim_code:Number(employee.ontario_claim_code||1),
+   additional_tax:Number(employee.additional_tax||0)
+  };
+  if(!companies.rows[0]?.id){alert("Please set up the brokerage first.");return}if(supabase){const{data,error}=await supabase.from("dv_accounting_employees").insert([payload]).select().single();if(error)return alert("Could not save staff member: "+error.message);emp.setRows(r=>[data,...r])}else emp.setRows(r=>[{...payload,id:Date.now()},...r]);
   setEmployeeShow(false);
  }
  async function saveHours(e){
