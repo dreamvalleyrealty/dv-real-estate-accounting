@@ -15,7 +15,7 @@ function Province({value,onChange}){return <select value={value||"ON"} onChange=
 function useRows(table){const[rows,setRows]=useState([]);const load=async()=>{if(!supabase)return;const{data,error}=await supabase.from(table).select("*");if(!error)setRows(data||[])};useEffect(()=>{load()},[table]);return{rows,setRows,load}}
 function Tabs({active,setActive}){const names=["Key Info","People","Outside Brokers","Trust","Commission","Agent Info"];return <div className="tx-tabs">{names.map((n,i)=><button type="button" className={active===i?"active":""} onClick={()=>setActive(i)} key={n}><span>{i+1}</span>{n}</button>)}</div>}
 function TransactionEditor({onClose,onSaved,initial=null}){
- const listings=useRows("dv_accounting_listings"),agents=useRows("dv_accounting_agents"),banks=useRows("dv_accounting_bank_accounts"),companies=useRows("dv_accounting_companies"),plans=useRows("dv_accounting_fee_plans"),contacts=useRows("dv_accounting_contacts"),brokerages=useRows("dv_accounting_external_brokerages");
+ const listings=useRows("dv_accounting_listings"),agents=useRows("dv_accounting_agents"),banks=useRows("dv_accounting_bank_accounts"),companies=useRows("dv_accounting_companies"),plans=useRows("dv_accounting_fee_plans"),feeSettings=useRows("dv_accounting_agent_fee_settings"),feeRules=useRows("dv_accounting_agent_fee_rules"),contacts=useRows("dv_accounting_contacts"),brokerages=useRows("dv_accounting_external_brokerages");
  const[tab,setTab]=useState(0),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
  const[form,setForm]=useState({transaction_number:"",listing_id:"",is_own_listing:"NO",street_number:"",street_name:"",unit_number:"",city:"",province:"ON",postal_code:"",offer_date:"",firm_date:"",close_date:"",entry_date:today(),finalized_date:"",side:"BUYER",market_segment:"RESIDENTIAL",sale_price:"",client_name:""});
  const[people,setPeople]=useState([{...blankPerson(),person_type:"BUYER"},{...blankPerson(),person_type:"SELLER"}]);
@@ -50,15 +50,17 @@ function TransactionEditor({onClose,onSaved,initial=null}){
 
  useEffect(()=>{if(selectedListing){const address=String(selectedListing.address||selectedListing.property_address||"");const bits=address.trim().split(/\s+/);setForm(f=>({...f,street_number:f.street_number||bits.shift()||"",street_name:f.street_name||bits.join(" "),is_own_listing:"YES"}))}},[form.listing_id]);
  useEffect(()=>{const agent=agents.rows.find(x=>x.id===agentInfo.agent_id);if(!agent){setAgentFee({split:90,admin:0,lead:0,desk:0,outstanding:Number(agentInfo.other_outstanding_fees||0),agentGross:0,netPayable:0});return}
-  const plan=plans.rows.find(x=>x.id===agent.fee_plan_id);const split=Number(agent.commission_split_override_percent??plan?.commission_split_percent??90);
+  const settings=feeSettings.rows.find(x=>x.agent_id===agent.id);const asOf=form.close_date||form.firm_date||today();
+  const rule=feeRules.rows.filter(x=>x.agent_id===agent.id&&x.active!==false&&(!x.effective_from||x.effective_from<=asOf)&&(!x.effective_to||x.effective_to>=asOf)).sort((a,b)=>String(b.effective_from||"").localeCompare(String(a.effective_from||"")))[0];
+  const plan=plans.rows.find(x=>x.id===(settings?.fee_plan_id||agent.fee_plan_id));const split=Number(settings?.commission_split_override_percent??rule?.commission_split_percent??plan?.commission_split_percent??90);
   const kind=String(form.side||"BUYER")==="LEASE"?"lease":"buy_sell";const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commercial_":"";
-  const adminType=agent["admin_fee_"+segment+kind+"_type"]||plan?.["admin_fee_"+segment+kind+"_type"]||agent.admin_fee_buy_sell_type||plan?.admin_fee_buy_sell_type||"AMOUNT";
-  const adminValue=Number(agent.admin_fee_override??agent["admin_fee_"+segment+kind+"_value"]??plan?.["admin_fee_"+segment+kind+"_value"]??0);
-  const leadType=agent.lead_fee_override!=null?"AMOUNT":(agent["lead_fee_"+kind+"_type"]||plan?.["lead_fee_"+kind+"_type"]||"AMOUNT");
-  const leadValue=Number(agent.lead_fee_override??agent["lead_fee_"+kind+"_value"]??plan?.["lead_fee_"+kind+"_value"]??0);
-  const base=inbound;const admin=adminType==="PERCENT"?base*adminValue/100:adminValue;const lead=leadType==="PERCENT"?base*leadValue/100:leadValue;const desk=Number(agent.desk_fee_override??plan?.desk_fee??0);const gross=base*split/100;const outstanding=Number(agentInfo.other_outstanding_fees||0);
+  const adminType=settings?.["admin_fee_"+kind+"_type"]||rule?.["admin_fee_"+segment+kind+"_type"]||plan?.["admin_fee_"+segment+kind+"_type"]||agent["admin_fee_"+segment+kind+"_type"]||"AMOUNT";
+  const adminValue=Number(settings?.admin_fee_override??rule?.["admin_fee_"+segment+kind+"_value"]??plan?.["admin_fee_"+segment+kind+"_value"]??agent["admin_fee_"+segment+kind+"_value"]??0);
+  const leadType=settings?.lead_fee_override!=null?"AMOUNT":(settings?.["lead_fee_"+kind+"_type"]||rule?.["lead_fee_"+kind+"_type"]||plan?.["lead_fee_"+kind+"_type"]||agent["lead_fee_"+kind+"_type"]||"AMOUNT");
+  const leadValue=Number(settings?.lead_fee_override??rule?.["lead_fee_"+kind+"_value"]??plan?.["lead_fee_"+kind+"_value"]??agent["lead_fee_"+kind+"_value"]??0);
+  const base=inbound;const admin=adminType==="PERCENT"?base*adminValue/100:adminValue;const lead=leadType==="PERCENT"?base*leadValue/100:leadValue;const desk=Number(settings?.desk_fee_override??rule?.desk_fee??plan?.desk_fee??agent.desk_fee_override??0);const gross=base*split/100;const outstanding=Number(agentInfo.other_outstanding_fees||0);
   setAgentFee({split,admin,lead,desk,outstanding,agentGross:gross,netPayable:Math.max(0,gross-admin-lead-desk-outstanding)});
- },[agentInfo.agent_id,agentInfo.other_outstanding_fees,agents.rows,plans.rows,inbound,form.side,form.market_segment]);
+ },[agentInfo.agent_id,agentInfo.other_outstanding_fees,agents.rows,plans.rows,feeSettings.rows,feeRules.rows,inbound,form.side,form.market_segment,form.close_date,form.firm_date]);
  function setField(k,v){setForm(f=>({...f,[k]:v}))}
  function updatePerson(i,k,v){setPeople(a=>a.map((p,n)=>n===i?{...p,[k]:v}:p))}
  function updateBroker(i,k,v){setBrokers(a=>a.map((p,n)=>n===i?{...p,[k]:v}:p))}
