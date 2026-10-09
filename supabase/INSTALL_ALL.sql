@@ -3522,3 +3522,16 @@ EXECUTE FUNCTION public.dv_accounting_resync_transaction_commissions();
 UPDATE public.dv_accounting_transaction_commissions
 SET amount=amount;
 
+
+
+-- 0034 repair transaction commission schema
+CREATE TABLE IF NOT EXISTS public.dv_accounting_transaction_commissions (
+ id uuid primary key default gen_random_uuid(), transaction_id uuid not null references public.dv_accounting_transactions(id) on delete cascade,
+ side text not null default 'LISTING' check(side in ('LISTING','BUYER')), calculation_type text not null default 'PERCENT' check(calculation_type in ('PERCENT','AMOUNT')),
+ rate numeric(9,4) not null default 0, amount numeric(14,2) not null default 0, hst_rate numeric(6,3) not null default 13, hst_amount numeric(14,2) not null default 0,
+ settlement_direction text not null default 'RECEIVABLE' check(settlement_direction in ('RECEIVABLE','PAYABLE')), brokerage_id uuid, notes text, created_at timestamptz not null default now()
+);
+ALTER TABLE public.dv_accounting_transaction_commissions ADD COLUMN IF NOT EXISTS side text, ADD COLUMN IF NOT EXISTS calculation_type text, ADD COLUMN IF NOT EXISTS rate numeric(9,4), ADD COLUMN IF NOT EXISTS amount numeric(14,2), ADD COLUMN IF NOT EXISTS hst_rate numeric(6,3), ADD COLUMN IF NOT EXISTS hst_amount numeric(14,2), ADD COLUMN IF NOT EXISTS settlement_direction text, ADD COLUMN IF NOT EXISTS brokerage_id uuid, ADD COLUMN IF NOT EXISTS notes text;
+UPDATE public.dv_accounting_transaction_commissions SET side=COALESCE(side,'LISTING'), calculation_type=COALESCE(calculation_type,'PERCENT'), rate=COALESCE(rate,0), amount=COALESCE(amount,0), hst_rate=COALESCE(hst_rate,13), hst_amount=COALESCE(hst_amount,0), settlement_direction=COALESCE(settlement_direction,'RECEIVABLE') WHERE side IS NULL OR calculation_type IS NULL OR rate IS NULL OR amount IS NULL OR hst_rate IS NULL OR hst_amount IS NULL OR settlement_direction IS NULL;
+ALTER TABLE public.dv_accounting_transaction_commissions ALTER COLUMN side SET DEFAULT 'LISTING', ALTER COLUMN side SET NOT NULL, ALTER COLUMN calculation_type SET DEFAULT 'PERCENT', ALTER COLUMN calculation_type SET NOT NULL, ALTER COLUMN rate SET DEFAULT 0, ALTER COLUMN rate SET NOT NULL, ALTER COLUMN amount SET DEFAULT 0, ALTER COLUMN amount SET NOT NULL, ALTER COLUMN hst_rate SET DEFAULT 13, ALTER COLUMN hst_rate SET NOT NULL, ALTER COLUMN hst_amount SET DEFAULT 0, ALTER COLUMN hst_amount SET NOT NULL, ALTER COLUMN settlement_direction SET DEFAULT 'RECEIVABLE', ALTER COLUMN settlement_direction SET NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_dv_accounting_tx_commissions_transaction ON public.dv_accounting_transaction_commissions(transaction_id);
