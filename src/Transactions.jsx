@@ -25,8 +25,8 @@ function TransactionEditor({onClose,onSaved,initial=null}){
  const[commissions,setCommissions]=useState([blankCommission("LISTING"),blankCommission("BUYER")]);
  const[agentInfo,setAgentInfo]=useState({agent_id:"",other_outstanding_fees:"0",notes:""});
  const[agentFee,setAgentFee]=useState({split:90,admin:0,lead:0,desk:0,outstanding:0,agentGross:0,netPayable:0});
- const selectedListing=listingRows.find(x=>x.id===form.listing_id);
  const companyRows=Array.isArray(companies.rows)?companies.rows:[], listingRows=Array.isArray(listings.rows)?listings.rows:[], agentRows=Array.isArray(agents.rows)?agents.rows:[], bankRows=Array.isArray(banks.rows)?banks.rows:[], planRows=Array.isArray(plans.rows)?plans.rows:[], feeSettingRows=Array.isArray(feeSettings.rows)?feeSettings.rows:[], feeRuleRows=Array.isArray(feeRules.rows)?feeRules.rows:[], contactRows=Array.isArray(contacts.rows)?contacts.rows:[], brokerageRows=Array.isArray(brokerages.rows)?brokerages.rows:[];
+ const selectedListing=listingRows.find(x=>x.id===form.listing_id);
  const ownCompany=companyRows.length?companyRows[0]?.name||"Dream Valley Realty Inc., Brokerage":"Dream Valley Realty Inc., Brokerage";
  const activeBanks=bankRows.filter(x=>x.active!==false&&String(x.account_type||"").includes("TRUST"));
  const inbound=commissions.reduce((s,c)=>s+(c.settlement_direction==="RECEIVABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0):0),0);
