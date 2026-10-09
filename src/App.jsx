@@ -4,7 +4,7 @@ import{supabase}from"./lib/supabase";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
-const APP_VERSION="0.6.20";
+const APP_VERSION="0.6.21";
 const nav=[["Dashboard",LayoutDashboard,"dashboard.view"],["Transactions",ArrowLeftRight,"transactions.view"],["Banking & Reconciliation",Landmark,"banking.view"],["Expenses & A/P",ReceiptText,"expenses.view"],["Agents",Users,"agents.view"],["Commission Payroll",ReceiptText,"commission.view"],["Staff Payroll",Clock3,"staff.view"],["HST / Tax",Percent,"tax.view"],["Reports",BarChart3,"reports.view"],["Compliance & Month End",ClipboardCheck,"compliance.view"],["Settings",Settings,"settings.view"]];
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(n||0));
 const today=()=>new Date().toISOString().slice(0,10);
@@ -147,8 +147,7 @@ function Payroll({user,permissions={}}){
 }
 function Reports(){
  const tx=useRows("dv_accounting_transactions"),ex=useRows("dv_accounting_expenses"),gci=tx.rows.reduce((s,x)=>s+Number(x.gross_commission||0),0),exp=ex.rows.reduce((s,x)=>s+Number(x.amount||0),0);
- const report=(name)=>{let lines=[];if(name==="Profit & Loss")lines=[["Revenue",gci],["Expenses",exp],["Net Profit",gci-exp]];else if(name==="Sales Volume")lines=[["Transactions",tx.rows.length],["Sales Volume",tx.rows.reduce((s,x)=>s+Number(x.sale_price||0),0)]];else if(name==="Expense Summary")lines=ex.rows.map(x=>[x.category||"Uncategorized",Number(x.amount||0)]);else lines=[["Report",name],["Transactions",tx.rows.length],["GCI",gci],["Expenses",exp]];const csv=[["Metric","Amount"],...lines].map(r=>r.join(",")).join("
-");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=name.toLowerCase().replaceAll(" ","-")+".csv";a.click()};
+ const report=(name)=>{let lines=[];if(name==="Profit & Loss")lines=[["Revenue",gci],["Expenses",exp],["Net Profit",gci-exp]];else if(name==="Sales Volume")lines=[["Transactions",tx.rows.length],["Sales Volume",tx.rows.reduce((s,x)=>s+Number(x.sale_price||0),0)]];else if(name==="Expense Summary")lines=ex.rows.map(x=>[x.category||"Uncategorized",Number(x.amount||0)]);else lines=[["Report",name],["Transactions",tx.rows.length],["GCI",gci],["Expenses",exp]];const csv=[["Metric","Amount"],...lines].map(r=>r.join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=name.toLowerCase().replaceAll(" ","-")+".csv";a.click()};
  return <><div className="pagehead"><div><h1>Reports</h1><p>Management reports and working papers.</p></div></div><section className="reportgrid">{["Profit & Loss","Balance Sheet","Trial Balance","General Ledger","Revenue by Month","Expense Summary","Sales Volume","Agent Ranking","Listings & Units","Trust Reconciliation","HST Working Paper","Payroll Register"].map(x=><button className="report" key={x} onClick={()=>report(x)}><FileText/><span>{x}</span><span className="textbutton">Export</span></button>)}</section><section className="panel"><div className="paneltitle"><h2>Live summary</h2></div><div className="grid4"><Card title="Revenue" value={money(gci)} sub="Recorded GCI"/><Card title="Expenses" value={money(exp)} sub="Recorded expenses"/><Card title="Net Profit" value={money(gci-exp)} sub="Before tax"/><Card title="Transactions" value={tx.rows.length} sub="Recorded"/></div></section></>
 }
 function Compliance(){
