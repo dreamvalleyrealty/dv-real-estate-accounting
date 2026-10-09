@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useState} from "react";
+import {Component,useEffect,useMemo,useState} from "react";
 import {Plus,Save,RefreshCw,Search,FileText,AlertCircle,Printer,Trash2,ChevronLeft,ChevronRight} from "lucide-react";
 import {supabase} from "./lib/supabase";
 
@@ -117,11 +117,30 @@ function TransactionEditor({onClose,onSaved,initial=null}){
  <div className="tx-footer"><button type="button" className="secondary" onClick={onClose}>Cancel</button><div className="tx-footer-right">{tab>0&&<button type="button" className="secondary" onClick={()=>setTab(t=>t-1)}><ChevronLeft size={16}/> Previous</button>}{tab<5&&<button type="button" className="secondary" onClick={()=>setTab(t=>t+1)}>Next <ChevronRight size={16}/></button>}<button type="submit" className="primary" disabled={busy}><Save size={16}/>{busy?"Saving...":initial?"Save Changes":"Save Transaction"}</button></div></div>
  </form></div>
 }
-export default function TransactionWorkspace(){
+function TransactionWorkspaceInner(){
  const[rows,setRows]=useState([]),[q,setQ]=useState(""),[show,setShow]=useState(false),[editing,setEditing]=useState(null);
  const load=async()=>{if(!supabase)return;const{data,error}=await supabase.from("dv_accounting_transactions").select("*").order("transaction_date",{ascending:false});if(!error)setRows(data||[])};
  useEffect(()=>{load()},[]);
  const filtered=rows.filter(x=>[x.transaction_number,x.property_address,x.client_name,x.agent_name].join(" ").toLowerCase().includes(q.toLowerCase()));
  async function finalize(id){if(!supabase)return;const{error}=await supabase.rpc("dv_accounting_finalize_transaction",{p_transaction_id:id});if(error)alert(error.message);else await load()}
  return <><div className="pagehead"><div><h1>Transactions</h1><p>Capture every deal detail across six tabs, with linked contacts, trust deposits, commissions and agent payout calculations.</p></div><button className="primary" onClick={()=>{setEditing(null);setShow(true)}}><Plus size={17}/> New Transaction</button></div><div className="toolbar"><div className="search"><Search size={17}/><input placeholder="Search trade number, property, client or agent..." value={q} onChange={e=>setQ(e.target.value)}/></div><button className="secondary" onClick={load}><RefreshCw size={16}/> Refresh</button></div><section className="panel tablewrap"><table><thead><tr><th>Entry Date</th><th>Trade #</th><th>Property</th><th>Client</th><th>Sale Price</th><th>Commission Receivable</th><th>Agent Payable</th><th>Trust Deposit</th><th>Status</th><th></th></tr></thead><tbody>{filtered.map(x=><tr key={x.id}><td>{x.entry_date||x.transaction_date||"—"}</td><td>{x.transaction_number||"—"}</td><td>{x.property_address||"—"}</td><td>{x.client_name||"—"}</td><td>{cash(x.sale_price)}</td><td>{cash(x.gross_commission)}</td><td>{cash(x.agent_commission)}</td><td>{cash(x.deposit_amount)}</td><td><span className="status">{x.status||"DRAFT"}</span></td><td><button type="button" className="textbutton" onClick={()=>{setEditing(x);setShow(true)}}>Open</button>{x.status!=="FINALIZED"&&<button type="button" className="textbutton" onClick={()=>finalize(x.id)}>Finalize</button>}</td></tr>)}{!filtered.length&&<tr><td colSpan="10"><div className="empty small"><FileText/><h3>No transactions yet</h3><p>Create your first deal using the six-tab transaction form.</p></div></td></tr>}</tbody></table></section>{show&&<div className="overlay"><div className="modal tx-modal"><div className="modalhead"><h2>{editing?"Edit Transaction":"New Transaction"}</h2><button className="iconbtn" onClick={()=>setShow(false)}>×</button></div><TransactionEditor initial={editing} onClose={()=>setShow(false)} onSaved={async(data)=>{setShow(false);if(!supabase&&data)setRows(r=>[data,...r]);await load()}}/></div></div>}</>
+}
+
+
+class TransactionErrorBoundary extends Component {
+ constructor(props){super(props);this.state={error:null}}
+ static getDerivedStateFromError(error){return {error}}
+ componentDidCatch(error){console.error("Transaction workspace render error:",error)}
+ render(){
+  if(this.state.error)return <section className="panel" style={{margin:24,padding:24,border:"1px solid #b45309"}}>
+   <h2 style={{color:"#b45309"}}>Transaction page encountered an error</h2>
+   <p>The app is still running. This message helps identify the issue instead of showing a blank page.</p>
+   <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",background:"#f8fafc",padding:12,borderRadius:8}}>{this.state.error?.message||String(this.state.error)}</pre>
+   <button className="secondary" onClick={()=>this.setState({error:null})}>Try again</button>
+  </section>;
+  return this.props.children;
+ }
+}
+export default function TransactionWorkspace(){
+ return <TransactionErrorBoundary><TransactionWorkspaceInner/></TransactionErrorBoundary>;
 }
