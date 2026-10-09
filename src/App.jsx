@@ -3,7 +3,7 @@ import{LayoutDashboard,ArrowLeftRight,Landmark,ReceiptText,Users,Clock3,Percent,
 import{supabase}from"./lib/supabase";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
-const APP_VERSION="0.6.9";
+const APP_VERSION="0.6.10";
 const nav=[["Dashboard",LayoutDashboard],["Transactions",ArrowLeftRight],["Banking & Reconciliation",Landmark],["Expenses & A/P",ReceiptText],["Agents & Commissions",Users],["Payroll & Staff Hours",Clock3],["HST / Tax",Percent],["Reports",BarChart3],["Compliance & Month End",ClipboardCheck],["Settings",Settings]];
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(n||0));
 const today=()=>new Date().toISOString().slice(0,10);
@@ -237,7 +237,7 @@ function Agents({user}){
   let data,error;if(editId){const r=await supabase.from("dv_accounting_agents").update(payload).eq("id",editId).select().single();data=r.data;error=r.error}else{delete payload.agent_number;const r=await supabase.from("dv_accounting_agents").insert([payload]).select().single();data=r.data;error=r.error}
   if(error)throw new Error("Could not save agent: "+error.message);a.setRows(z=>editId?z.map(x=>x.id===data.id?data:x):[data,...z]);
   const agentId=data.id;
-  if(headshotFile){const ext=(headshotFile.name.split(".").pop()||"jpg").toLowerCase(),path=`${companyId}/agent/${agentId}/headshot-${Date.now()}.${ext}`;const{error:he}=await supabase.storage.from("dv-personnel").upload(path,headshotFile,{upsert:true,contentType:headshotFile.type});if(he)throw new Error("Agent information was saved, but the headshot was NOT saved: "+he.message);else{const{data:hd,error:hu}=await supabase.from("dv_accounting_agents").update({headshot_path:path}).eq("id",agentId).select().single();if(hu)throw new Error("Headshot uploaded, but the agent record could not be updated: "+hu.message);data=hd;a.setRows(z=>z.map(x=>x.id===agentId?hd:x))}}
+  if(headshotFile){const ext=(headshotFile.name.split(".").pop()||"jpg").toLowerCase(),path=`${companyId}/agent/${agentId}/headshot-${Date.now()}.${ext}`;const{error:he}=await supabase.storage.from("dv-personnel").upload(path,headshotFile,{upsert:false,contentType:headshotFile.type});if(he)throw new Error("Agent information was saved, but the headshot was NOT saved: "+he.message);else{const{data:hd,error:hu}=await supabase.from("dv_accounting_agents").update({headshot_path:path}).eq("id",agentId).select().single();if(hu)throw new Error("Headshot uploaded, but the agent record could not be updated: "+hu.message);data=hd;a.setRows(z=>z.map(x=>x.id===agentId?hd:x))}}
   const bankPayload={agent_id:agentId,bank_name:text(form.bank_name)||null,institution_number:text(form.institution_number)||null,transit_number:text(form.transit_number)||null,account_number:text(form.account_number)||null,account_type:form.account_type||null,account_name:text(form.account_name)||null};
   const be=await supabase.from("dv_accounting_agent_bank_details").upsert(bankPayload,{onConflict:"agent_id"});if(be.error)throw new Error("Agent was saved, but bank details could not be saved: "+be.error.message);
   const hasFees=form.fee_plan_id||form.desk_fee_override!==""||form.admin_fee_override!==""||form.lead_fee_override!==""||form.commission_split_override_percent!==""||form.lead_fee_buy_sell_type||form.lead_fee_lease_type;
