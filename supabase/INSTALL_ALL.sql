@@ -3535,3 +3535,7 @@ ALTER TABLE public.dv_accounting_transaction_commissions ADD COLUMN IF NOT EXIST
 UPDATE public.dv_accounting_transaction_commissions SET side=COALESCE(side,'LISTING'), calculation_type=COALESCE(calculation_type,'PERCENT'), rate=COALESCE(rate,0), amount=COALESCE(amount,0), hst_rate=COALESCE(hst_rate,13), hst_amount=COALESCE(hst_amount,0), settlement_direction=COALESCE(settlement_direction,'RECEIVABLE') WHERE side IS NULL OR calculation_type IS NULL OR rate IS NULL OR amount IS NULL OR hst_rate IS NULL OR hst_amount IS NULL OR settlement_direction IS NULL;
 ALTER TABLE public.dv_accounting_transaction_commissions ALTER COLUMN side SET DEFAULT 'LISTING', ALTER COLUMN side SET NOT NULL, ALTER COLUMN calculation_type SET DEFAULT 'PERCENT', ALTER COLUMN calculation_type SET NOT NULL, ALTER COLUMN rate SET DEFAULT 0, ALTER COLUMN rate SET NOT NULL, ALTER COLUMN amount SET DEFAULT 0, ALTER COLUMN amount SET NOT NULL, ALTER COLUMN hst_rate SET DEFAULT 13, ALTER COLUMN hst_rate SET NOT NULL, ALTER COLUMN hst_amount SET DEFAULT 0, ALTER COLUMN hst_amount SET NOT NULL, ALTER COLUMN settlement_direction SET DEFAULT 'RECEIVABLE', ALTER COLUMN settlement_direction SET NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_dv_accounting_tx_commissions_transaction ON public.dv_accounting_transaction_commissions(transaction_id);
+
+
+-- 0032_unique_trade_number.sql
+CREATE UNIQUE INDEX IF NOT EXISTS dv_accounting_transactions_trade_number_uidx ON public.dv_accounting_transactions (transaction_number) WHERE transaction_number IS NOT NULL AND btrim(transaction_number) <> '';
