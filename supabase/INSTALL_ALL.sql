@@ -3608,3 +3608,10 @@ ALTER TABLE public.dv_accounting_transaction_agent_info
   ADD COLUMN IF NOT EXISTS net_payable numeric(14,2) DEFAULT 0,
   ADD COLUMN IF NOT EXISTS notes text;
 NOTIFY pgrst, 'reload schema';
+
+
+-- 0032 transaction type
+alter table public.dv_accounting_transactions
+  add column if not exists transaction_type text not null default 'BUY_SELL'
+  check (transaction_type in ('BUY_SELL','LEASE'));
+create index if not exists dv_tx_transaction_type_idx on public.dv_accounting_transactions(transaction_type);
