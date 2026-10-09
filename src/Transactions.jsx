@@ -9,7 +9,7 @@ const blankPerson=()=>({contact_id:"",person_type:"BUYER",first_name:"",last_nam
 const blankBroker=()=>({brokerage_id:"",company_name:"",phone:"",fax:"",agent_name:"",agent_email:"",address:"",unit:"",city:"",province:"ON",postal_code:"",billing_email:"",charges_hst:true});
 const blankCondition=()=>({item_type:"CONDITION",description:"",due_date:"",met_date:"",notes:""});
 const blankCommission=side=>({side,calculation_type:"PERCENT",rate:"",amount:"",hst_rate:"13",settlement_direction:side==="LISTING"?"RECEIVABLE":"PAYABLE",brokerage_id:"",notes:""});
-const blankTrust=()=>({we_hold_deposit:"YES",held_by:"",received:"NO",deposit_date:"",received_from:"",amount:"",trust_bank_account_id:"",earns_interest:"NO",payment_type:"CHEQUE",reference_number:""});
+const blankTrust=()=>({we_hold_deposit:"NO",held_by:"",received:"NO",deposit_date:"",received_from:"",amount:"",trust_bank_account_id:"",earns_interest:"NO",payment_type:"CHEQUE",reference_number:""});
 function Field({label,children,wide=false}){return <label className={wide?"tx-field tx-wide":"tx-field"}><span>{label}</span>{children}</label>}
 function Province({value,onChange}){return <select value={value||"ON"} onChange={onChange}>{PROVINCES.map(p=><option key={p[0]} value={p[0]}>{p[1]}</option>)}</select>}
 function useRows(table){const[rows,setRows]=useState([]);const load=async()=>{if(!supabase)return;const{data,error}=await supabase.from(table).select("*");if(!error)setRows(data||[])};useEffect(()=>{load()},[table]);return{rows,setRows,load}}
@@ -31,6 +31,23 @@ function TransactionEditor({onClose,onSaved,initial=null}){
  const inbound=commissions.reduce((s,c)=>s+(c.settlement_direction==="RECEIVABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0):0),0);
  const inboundHst=commissions.reduce((s,c)=>s+(c.settlement_direction==="RECEIVABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0)*Number(c.hst_rate||13)/100:0),0);
  const depositTotal=Number(trust.amount||0);
+ useEffect(()=>{setTrust(t=>({...t,we_hold_deposit:form.is_own_listing==="YES"?"YES":"NO",held_by:form.is_own_listing==="YES"?ownCompany:(brokers.rows[0]?.company_name||"")}))},[form.is_own_listing]);
+ useEffect(()=>{if(!initial?.id||!supabase)return;let cancelled=false;(async()=>{const [p,c,b,t,cm,ai]=await Promise.all([
+  supabase.from("dv_accounting_transaction_people").select("*").eq("transaction_id",initial.id),
+  supabase.from("dv_accounting_transaction_conditions").select("*").eq("transaction_id",initial.id),
+  supabase.from("dv_accounting_transaction_outside_brokers").select("*").eq("transaction_id",initial.id),
+  supabase.from("dv_accounting_transaction_trust").select("*").eq("transaction_id",initial.id).maybeSingle(),
+  supabase.from("dv_accounting_transaction_commissions").select("*").eq("transaction_id",initial.id),
+  supabase.from("dv_accounting_transaction_agent_info").select("*").eq("transaction_id",initial.id).maybeSingle()
+ ]);if(cancelled)return;setForm(f=>({...f,...initial,listing_id:initial.listing_id||"",is_own_listing:initial.is_own_listing?"YES":"NO",street_number:initial.street_number||"",street_name:initial.street_name||"",unit_number:initial.unit_number||"",city:initial.city||"",province:initial.province||"ON",postal_code:initial.postal_code||"",offer_date:initial.offer_date||"",firm_date:initial.firm_date||"",close_date:initial.close_date||"",entry_date:initial.entry_date||initial.transaction_date||today(),finalized_date:initial.finalized_date||"",sale_price:initial.sale_price||""}));
+  if(p.data?.length)setPeople(p.data.map(x=>({...blankPerson(),...x,contact_id:x.contact_id||""})));
+  if(c.data?.length)setConditions(c.data.map(x=>({...blankCondition(),...x,due_date:x.due_date||"",met_date:x.met_date||""})));
+  if(b.data?.length)setBrokers(b.data.map(x=>({...blankBroker(),...x,brokerage_id:x.brokerage_id||""})));
+  if(t.data)setTrust({...blankTrust(),...t.data,trust_bank_account_id:t.data.trust_bank_account_id||"",deposit_date:t.data.deposit_date||""});
+  if(cm.data?.length)setCommissions(cm.data.map(x=>({...blankCommission(x.side),...x,rate:String(x.rate??""),amount:String(x.amount??""),hst_rate:String(x.hst_rate??13),brokerage_id:x.brokerage_id||""})));
+  if(ai.data)setAgentInfo({agent_id:ai.data.agent_id||"",other_outstanding_fees:String(ai.data.other_outstanding_fees||0),notes:ai.data.notes||""});
+ })();return()=>{cancelled=true}},[initial?.id]);
+
  useEffect(()=>{if(selectedListing){const address=String(selectedListing.address||selectedListing.property_address||"");const bits=address.trim().split(/\s+/);setForm(f=>({...f,street_number:f.street_number||bits.shift()||"",street_name:f.street_name||bits.join(" "),is_own_listing:"YES"}))}},[form.listing_id]);
  useEffect(()=>{const agent=agents.rows.find(x=>x.id===agentInfo.agent_id);if(!agent){setAgentFee({split:90,admin:0,lead:0,desk:0,outstanding:Number(agentInfo.other_outstanding_fees||0),agentGross:0,netPayable:0});return}
   const plan=plans.rows.find(x=>x.id===agent.fee_plan_id);const split=Number(agent.commission_split_override_percent??plan?.commission_split_percent??90);
