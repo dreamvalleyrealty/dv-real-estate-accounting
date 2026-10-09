@@ -2032,7 +2032,7 @@ grant execute on function public.dv_accounting_calculate_commission_fees(uuid,uu
 
 
 -- ============================================================
--- 0022_fee_schema_repair.sql
+-- -- 0022_fee_schema_repair.sql
 -- ============================================================
 
 -- 0022: repair fee-plan schema for databases installed before migrations 0018-0021
@@ -2067,9 +2067,6 @@ alter table public.dv_accounting_agent_fee_settings
   add column if not exists admin_fee_commercial_lease_value numeric(14,4),
   add column if not exists effective_from date,
   add column if not exists effective_to date,
-  add column if not exists is_promotion boolean not null default false;
-
-alter table public.dv_accounting_agent_fee_rules
   add column if not exists is_promotion boolean not null default false;
 
 alter table public.dv_accounting_transactions
