@@ -163,21 +163,3 @@ class TransactionErrorBoundary extends Component {
 export default function TransactionWorkspace(){
  return <TransactionErrorBoundary><TransactionWorkspaceInner/></TransactionErrorBoundary>;
 }
-
-class TransactionErrorBoundary extends Component {
- constructor(props){super(props);this.state={error:null}}
- static getDerivedStateFromError(error){return {error}}
- componentDidCatch(error){console.error("Transaction workspace render error:",error)}
- render(){
-  if(this.state.error)return <section className="panel" style={{margin:24,padding:24,border:"1px solid #b45309"}}>
-   <h2 style={{color:"#b45309"}}>Transaction page encountered an error</h2>
-   <p>The app is still running. This message helps identify the issue instead of showing a blank page.</p>
-   <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",background:"#f8fafc",padding:12,borderRadius:8}}>{this.state.error?.message||String(this.state.error)}</pre>
-   <button className="secondary" onClick={()=>this.setState({error:null})}>Try again</button>
-  </section>;
-  return this.props.children;
- }
-}
-export default function TransactionWorkspace(){
- return <TransactionErrorBoundary><TransactionWorkspaceInner/></TransactionErrorBoundary>;
-}
