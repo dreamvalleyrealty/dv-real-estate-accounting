@@ -90,7 +90,7 @@ function TransactionEditor({onClose,onSaved,initial=null}){
     if(commissionRows.length){const{error}=await supabase.from("dv_accounting_transaction_commissions").insert(commissionRows);if(error)throw error}
     await supabase.from("dv_accounting_transaction_agent_info").delete().eq("transaction_id",txId);
     const{error:ae}=await supabase.from("dv_accounting_transaction_agent_info").insert([{transaction_id:txId,agent_id:agentInfo.agent_id||null,split_percent:agentFee.split,admin_fee:agentFee.admin,lead_fee:agentFee.lead,desk_fee:agentFee.desk,other_outstanding_fees:agentFee.outstanding,agent_gross:agentFee.agentGross,net_payable:agentFee.netPayable,notes:agentInfo.notes||null}]);if(ae)throw ae;
-   }else{txId=Date.now();onSaved({...payload,id:txId})}
+   }else{txId=Date.now()}
    if(trust.we_hold_deposit==="YES"&&trust.received==="YES"&&trust.amount){setMessage("Transaction saved. You can print the trust deposit receipt.");setTimeout(()=>{},0)}else setMessage("Transaction saved.");
    onSaved?.({id:txId,...payload});onClose();
   }catch(err){setMessage(err?.message||"Unable to save transaction. Apply migration 0031 and try again.");}
