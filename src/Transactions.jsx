@@ -39,6 +39,10 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
  const activeBanks=bankRows.filter(x=>x.active!==false&&x.account_type==="REAL_ESTATE_TRUST");
  const inbound=commissions.reduce((s,c)=>s+(c.settlement_direction==="RECEIVABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0):0),0);
  const inboundHst=commissions.reduce((s,c)=>s+(c.settlement_direction==="RECEIVABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0)*Number(c.hst_rate||13)/100:0),0);
+ const receivableTotal=inbound+inboundHst;
+ const payableBase=commissions.reduce((s,c)=>s+(c.settlement_direction==="PAYABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0):0),0);
+ const payableHst=commissions.reduce((s,c)=>s+(c.settlement_direction==="PAYABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0)*Number(c.hst_rate||13)/100:0),0);
+ const payableTotal=payableBase+payableHst;
  const depositTotal=Number(trust.amount||0);
  const activeCommissionBanks=bankRows.filter(x=>x.active!==false&&x.account_type==="COMMISSION_TRUST");
  useEffect(()=>{setTrust(t=>({...t,we_hold_deposit:form.is_own_listing==="YES"?"YES":"NO",held_by:form.is_own_listing==="YES"?ownCompany:(brokers[0]?.company_name||"")}))},[form.is_own_listing, ownCompany, brokers[0]?.company_name]);
