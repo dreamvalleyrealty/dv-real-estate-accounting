@@ -1,7 +1,7 @@
 import{useEffect,useMemo,useState}from"react";
 import{LayoutDashboard,ArrowLeftRight,Landmark,ReceiptText,Users,Clock3,Percent,BarChart3,ClipboardCheck,Settings,Menu,X,Plus,Search,RefreshCw,Save,LogOut,CheckCircle2,AlertCircle,FileText,Building2,Upload,ShieldCheck,FileSpreadsheet}from"lucide-react";
 import{supabase}from"./lib/supabase";
-import TransactionWorkspace from "./Transactions";
+import TransactionWorkspace,{TransactionEditor} from "./Transactions";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
@@ -255,6 +255,47 @@ function PaidCommissionCorrections({commissions=[],transactions=[],agents=[],can
    <div className="modalactions"><button type="button" className="secondary" onClick={()=>setShow(false)}>Cancel</button><button className="primary" disabled={saving||!paid.length}><Save size={16}/>{saving?"Saving...":"Save Correction"}</button></div>
   </form></Modal>}
  </section>
+}
+
+
+function CommissionPaymentDialog({commission,transaction,agent,cheques,onClose,onIssued}){
+ const[method,setMethod]=useState("CHEQUE"),[reference,setReference]=useState(""),[payDate,setPayDate]=useState(today()),[busy,setBusy]=useState(false),[issued,setIssued]=useState(null),[error,setError]=useState("");
+ const moneyValue=n=>money(Number(n||0));
+ const infoText=transaction?.transaction_number||"";
+ const admin=Number(commission?._admin_fee??0);
+ const net=Number(commission?._net_before_hst??0);
+ const hst=Number(commission?._agent_hst??0);
+ const total=Number(commission?._payment_total??(net+hst));
+ const previous=cheques.filter(x=>x.agent_id===agent?.id&&x.status==="ISSUED").reduce((s,x)=>s+Number(x.net_amount||0),0);
+ const toDate=previous+(issued?Number(issued.net_amount||total):total);
+ const escapeHtml=v=>String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+ const dateLabel=v=>{if(!v)return "";const d=new Date(v+"T12:00:00");return d.toLocaleDateString("en-CA",{year:"numeric",month:"long",day:"2-digit"})};
+ function printStub(){
+  const amount=Number(issued?.net_amount??total),methodLabel=method==="EFT"?"PAID BY E.F.T.":"CHEQUE";
+  const gross=Number(commission?.gross_commission||transaction?.gross_commission||0);
+  const fee=Number(commission?._admin_fee||0)+Number(commission?._lead_fee||0)+Number(commission?._desk_fee||0);
+  const hstAmount=Number(issued?.agent_hst_amount??hst);
+  const address=transaction?.property_address||"";
+  const chequeFace=method==="CHEQUE"?`<section class="chequeface"><div class="company">Dream Valley Realty Inc.</div><div class="date">${escapeHtml(dateLabel(payDate))}</div><div class="amount">${escapeHtml(moneyValue(amount))}</div><div class="payto">PAY TO THE ORDER OF <b>${escapeHtml(agent?.legal_name||agent?.corporation_name||agent?.name||[agent?.first_name,agent?.last_name].filter(Boolean).join(" "))}</b></div><div class="words">Payment reference: ${escapeHtml(reference||"—")}</div><div class="note">NOTE: ${escapeHtml(infoText)} · ${escapeHtml(address)}</div><div class="eft">${methodLabel}</div></section>`:"";
+  const stub=`<section class="stub"><div class="stubhead"><b>Dream Valley Realty Inc.</b><span>${methodLabel}</span></div><div class="agent">${escapeHtml(agent?.agent_number||"")} &nbsp; <b>${escapeHtml(agent?.legal_name||agent?.corporation_name||agent?.name||[agent?.first_name,agent?.last_name].filter(Boolean).join(" "))}</b><br>${escapeHtml(agent?.address||"")} ${escapeHtml(agent?.city||"")} ${escapeHtml(agent?.province||"ON")} ${escapeHtml(agent?.postal_code||"")}</div><div class="meta">${escapeHtml(infoText)} &nbsp; ${escapeHtml(address)}<br>Reference: ${escapeHtml(reference||"—")} &nbsp; Date: ${escapeHtml(dateLabel(payDate))}</div><table><thead><tr><th>Trade # / Property</th><th>Gross</th><th>Cheque Summary</th><th>Amount</th><th>To-Date</th></tr></thead><tbody><tr><td>${escapeHtml(infoText)} — ${escapeHtml(address)}<br><small>Close Date: ${escapeHtml(transaction?.close_date||"—")}</small></td><td>${escapeHtml(moneyValue(gross))}</td><td>Gross Earnings</td><td>${escapeHtml(moneyValue(gross))}</td><td>${escapeHtml(moneyValue(gross))}</td></tr><tr><td>Buyer / Tenant: ${escapeHtml(transaction?.client_name||"—")}</td><td></td><td>Admin / Transaction Fees</td><td>-${escapeHtml(moneyValue(fee))}</td><td></td></tr><tr><td>Sale / Lease Value: ${escapeHtml(moneyValue(transaction?.sale_price))}</td><td></td><td>HST</td><td>${escapeHtml(moneyValue(hstAmount))}</td><td></td></tr><tr class="total"><td></td><td></td><td>Net Pay</td><td>${escapeHtml(moneyValue(amount))}</td><td>${escapeHtml(moneyValue(toDate))}</td></tr></tbody></table><div class="banknote">Dream Valley Realty Inc., Brokerage</div></section>`;
+  const w=window.open("","_blank","width=1050,height=850");if(!w){setError("Please allow pop-ups to print the payment stub.");return}
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${method==="EFT"?"EFT Stub":"Commission Cheque & Stub"}</title><style>@page{size:letter;margin:.35in}body{font-family:Arial,Helvetica,sans-serif;color:#14213d;font-size:11px;margin:0}.chequeface{height:3.45in;position:relative;border-bottom:1px dashed #94a3b8;padding:14px 24px;box-sizing:border-box}.company{font-size:16px;font-weight:bold;margin:12px 0 26px}.date{position:absolute;right:45px;top:35px}.amount{position:absolute;right:35px;top:83px;font-size:15px;font-weight:bold}.payto{margin-top:12px}.words{margin-top:18px}.note{position:absolute;bottom:45px;left:24px}.eft{position:absolute;bottom:10px;left:45%;font-weight:bold}.stub{padding:14px 12px;page-break-inside:avoid}.stubhead{display:flex;justify-content:space-between;border-bottom:2px solid #9e8556;padding-bottom:7px}.agent,.meta{margin:10px 0;line-height:1.6}.agent{font-size:12px}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #aeb8c5;padding:7px;text-align:left}th{background:#f1f5f9}.total td{font-weight:bold}.banknote{text-align:center;margin-top:18px;color:#475569}@media print{.no-print{display:none}}</style></head><body>${chequeFace}${stub}<div class="no-print" style="padding:12px"><button onclick="window.print()">Print / Save as PDF</button></div></body></html>`);
+  w.document.close();w.focus();
+ }
+ async function issue(){
+  if(!supabase)return;
+  if(method==="EFT"&&!reference.trim()){setError("Enter the EFT payment reference before issuing.");return}
+  if(method==="CHEQUE"&&!reference.trim()){setError("Enter the cheque number before issuing.");return}
+  setBusy(true);setError("");
+  const{data,error}=await supabase.rpc("dv_accounting_issue_commission_cheque",{p_commission_id:commission.id,p_cheque_number:reference.trim(),p_cheque_date:payDate});
+  if(error){setError(error.message);setBusy(false);return}
+  const{error:updateError}=await supabase.from("dv_accounting_commission_cheques").update({payment_method:method,payment_reference:reference.trim()}).eq("id",data.cheque_id);
+  if(updateError){setError("Payment was issued, but the payment method could not be saved. Run migration 0055 and contact an administrator before continuing. "+updateError.message);setBusy(false);return}
+  setIssued(data);setBusy(false);await onIssued?.();
+ }
+ return <Modal title={issued?(method==="EFT"?"EFT Payment Stub":"Cheque & Stub Preview"):"Issue Agent Payment"} onClose={onClose}>
+  {!issued?<form onSubmit={e=>{e.preventDefault();issue()}}><div className="notice"><AlertCircle size={16}/> Review the trade record and payment amount before issuing. Issuing the payment marks this commission as paid.</div><div className="formgrid"><label>Payment Method<select value={method} onChange={e=>{setMethod(e.target.value);setReference("")}}><option value="CHEQUE">Cheque</option><option value="EFT">Electronic Funds Transfer (EFT)</option></select></label><label>{method==="EFT"?"EFT Reference / Confirmation #":"Cheque Number"}<input required value={reference} onChange={e=>setReference(e.target.value)} placeholder={method==="EFT"?"e.g. EFT276":"Enter cheque number"}/></label><label>Payment Date<input type="date" required value={payDate} onChange={e=>setPayDate(e.target.value)}/></label></div><div className="tx-summary"><span>Trade</span><b>{transaction?.transaction_number||"—"} · {transaction?.property_address||"—"}</b><span>Agent</span><b>{agent?.name||[agent?.first_name,agent?.last_name].filter(Boolean).join(" ")||"—"}</b><span>Net Agent Commission</span><b>{moneyValue(net)}</b><span>Agent HST</span><b>{moneyValue(hst)}</b><span>Total Payment</span><b>{moneyValue(total)}</b></div>{error&&<div className="error">{error}</div>}<div className="modalactions"><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy?"Issuing...":"Issue Payment"}</button></div></form>:<><div className="notice"><CheckCircle2 size={16}/> Payment issued successfully. Preview the {method==="EFT"?"EFT stub":"cheque and remittance stub"} before printing.</div><div className="tx-summary"><span>Payment Method</span><b>{method==="EFT"?"EFT":"Cheque"}</b><span>Reference</span><b>{reference}</b><span>Payment Date</span><b>{dateLabel(payDate)}</b><span>Net Payment</span><b>{moneyValue(issued.net_amount)}</b></div><div className="modalactions"><button className="secondary" onClick={onClose}>Close</button><button className="primary" onClick={printStub}><Printer size={16}/> Print Preview / Save PDF</button></div></>}
+ </Modal>
 }
 
 function Agents({user,mode="agents",permissions={},setActive}){
