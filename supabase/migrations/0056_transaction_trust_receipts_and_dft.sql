@@ -208,6 +208,7 @@ DECLARE
   gl_bank uuid;
   gl_liability uuid;
   line record;
+  refund_done boolean := false;
 BEGIN
   SELECT * INTO t FROM public.dv_accounting_transactions WHERE id=p_transaction_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Transaction not found'; END IF;
@@ -278,6 +279,7 @@ BEGIN
       END IF;
     END IF;
 
+    refund_done := true;
     UPDATE public.dv_accounting_transactions
     SET status='DFT',dft_at=now(),dft_by=auth.uid(),deposit_refunded=true,
         deposit_refund_date=COALESCE(p_refund_date,CURRENT_DATE),
@@ -292,7 +294,7 @@ BEGIN
   END IF;
 
   RETURN jsonb_build_object('ok',true,'transaction_id',t.id,'status','DFT',
-    'deposit_refunded',FOUND,'refund_amount',COALESCE(tr.amount,0));
+    'deposit_refunded',refund_done,'refund_amount',CASE WHEN refund_done THEN COALESCE(tr.amount,0) ELSE 0 END);
 END
 $$;
 
