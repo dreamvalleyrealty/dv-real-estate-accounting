@@ -71,7 +71,7 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
   const leadValue=Number(settings?.lead_fee_override??rule?.["lead_fee_"+kind+"_value"]??plan?.["lead_fee_"+kind+"_value"]??agent["lead_fee_"+kind+"_value"]??0);
   const base=Number(inbound||0);const admin=adminType==="PERCENT"?base*adminValue/100:adminValue;const lead=!!form.is_brokerage_lead?(leadType==="PERCENT"?base*leadValue/100:leadValue):0;const desk=Number(settings?.desk_fee_override??rule?.desk_fee??plan?.desk_fee??agent.desk_fee_override??0);const gross=base*split/100;const outstanding=feeChargeRows.filter(x=>x.agent_id===agent.id&&x.status==="OPEN"&&x.applied_to_cheque_id==null).reduce((sum,x)=>sum+Number(x.amount||0),0);const source=settings?.commission_split_override_percent!=null||settings?.admin_fee_override!=null||settings?.lead_fee_override!=null||settings?.desk_fee_override!=null?"Agent fee settings":rule?"Agent fee rule":plan?"Fee plan":"Agent defaults";
   setAgentFee({split,admin,lead,desk,outstanding,agentGross:gross,netPayable:Math.max(0,gross-admin-lead-desk-outstanding),source,planName:plan?.name||"",ruleName:rule?.name||"",basis:base});
- },[agentInfo.agent_id,agents.rows,plans.rows,feeSettings.rows,feeRules.rows,feeCharges.rows,inbound,form.side,form.market_segment,form.close_date,form.firm_date]);
+ },[agentInfo.agent_id,agents.rows,plans.rows,feeSettings.rows,feeRules.rows,feeCharges.rows,inbound,form.side,form.market_segment,form.close_date,form.firm_date,form.is_brokerage_lead]);
  function setField(k,v){setForm(f=>({...f,[k]:v}))}
  function updatePerson(i,k,v){setPeople(a=>a.map((p,n)=>n===i?{...p,[k]:v}:p))}
  function updateBroker(i,k,v){setBrokers(a=>a.map((p,n)=>n===i?{...p,[k]:v}:p))}
