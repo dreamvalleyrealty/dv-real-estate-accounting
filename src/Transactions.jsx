@@ -26,7 +26,7 @@ function TransactionEditor({onClose,onSaved,initial=null}){
  const[trust,setTrust]=useState(blankTrust());
  const[commissions,setCommissions]=useState([blankCommission("LISTING"),blankCommission("BUYER")]);
  const[agentInfo,setAgentInfo]=useState({agent_id:"",other_outstanding_fees:"0",notes:""});
- const[agentFee,setAgentFee]=useState({split:90,admin:0,lead:0,desk:0,outstanding:0,agentGross:0,netPayable:0,source:"Default",planName:"",ruleName:"",basis:0});
+ const[agentFee,setAgentFee]=useState({split:85,admin:0,lead:0,desk:0,outstanding:0,agentGross:0,netPayable:0,source:"Default",planName:"",ruleName:"",basis:0});
  const companyRows=Array.isArray(companies.rows)?companies.rows:[], listingRows=Array.isArray(listings.rows)?listings.rows:[], agentRows=Array.isArray(agents.rows)?agents.rows:[], bankRows=Array.isArray(banks.rows)?banks.rows:[], planRows=Array.isArray(plans.rows)?plans.rows:[], feeSettingRows=Array.isArray(feeSettings.rows)?feeSettings.rows:[], feeRuleRows=Array.isArray(feeRules.rows)?feeRules.rows:[], feeChargeRows=Array.isArray(feeCharges.rows)?feeCharges.rows:[], contactRows=Array.isArray(contacts.rows)?contacts.rows:[], brokerageRows=Array.isArray(brokerages.rows)?brokerages.rows:[];
  const selectedListing=listingRows.find(x=>x.id===form.listing_id);
  const ownCompany=companyRows.length?companyRows[0]?.name||"Dream Valley Realty Inc., Brokerage":"Dream Valley Realty Inc., Brokerage";
@@ -52,7 +52,7 @@ function TransactionEditor({onClose,onSaved,initial=null}){
  })();return()=>{cancelled=true}},[initial?.id]);
 
  useEffect(()=>{if(selectedListing){const address=String(selectedListing.address||selectedListing.property_address||"");const bits=address.trim().split(/\s+/);setForm(f=>({...f,street_number:f.street_number||bits.shift()||"",street_name:f.street_name||bits.join(" "),is_own_listing:"YES"}))}},[form.listing_id]);
- useEffect(()=>{const agent=agentRows.find(x=>x.id===agentInfo.agent_id);if(!agent){setAgentFee({split:90,admin:0,lead:0,desk:0,outstanding:Number(agentInfo.other_outstanding_fees||0),agentGross:0,netPayable:0,source:"Select an agent",planName:"",ruleName:"",basis:inbound});return}
+ useEffect(()=>{const agent=agentRows.find(x=>x.id===agentInfo.agent_id);if(!agent){setAgentFee({split:85,admin:0,lead:0,desk:0,outstanding:Number(agentInfo.other_outstanding_fees||0),agentGross:0,netPayable:0,source:"Select an agent",planName:"",ruleName:"",basis:inbound});return}
   const settings=feeSettingRows.find(x=>x.agent_id===agent.id);const asOf=form.close_date||form.firm_date||today();
   const rule=feeRuleRows.filter(x=>x.agent_id===agent.id&&x.active!==false&&(!x.effective_from||x.effective_from<=asOf)&&(!x.effective_to||x.effective_to>=asOf)).sort((a,b)=>String(b.effective_from||"").localeCompare(String(a.effective_from||"")))[0];
   const planId=settings?.fee_plan_id||agent.fee_plan_id;const plan=planRows.find(x=>x.id===planId);const split=kind==="lease"?Number(settings?.commission_split_lease_override_percent??rule?.commission_split_lease_percent??plan?.commission_split_lease_percent??100):Number(settings?.commission_split_buy_sell_override_percent??settings?.commission_split_override_percent??rule?.commission_split_buy_sell_percent??rule?.commission_split_percent??plan?.commission_split_buy_sell_percent??plan?.commission_split_percent??85);
