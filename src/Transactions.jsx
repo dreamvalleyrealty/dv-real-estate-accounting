@@ -173,7 +173,7 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
    }else{txId=Date.now()}
    if(trust.we_hold_deposit==="YES"&&trust.received==="YES"&&trust.amount){setMessage("Transaction saved. You can print the trust deposit receipt.");setTimeout(()=>{},0)}else setMessage("Transaction saved.");
    onSaved?.({id:txId,...payload});onClose();
-  }catch(err){const detail=err?.message||"Unable to save transaction.";if(txId&&payload){alert("The transaction record was saved, but a related detail could not be saved: "+detail+" The trade has been added to the list. Open it and correct the issue before continuing.");onSaved?.({id:txId,...payload});onClose()}else setMessage(detail+" If this is a database-column error, run the pending transaction workspace migrations in Supabase.");}
+  }catch(err){const detail=err?.message||"Unable to save transaction.";if(txId&&payload){setMessage("The transaction header was saved, but a related detail failed: "+detail+". The editor will stay open so you can review the buyer/contact and retry. Do not close this window until the error is resolved.");}else setMessage("Transaction was not saved: "+detail+". Check the database error and confirm the required transaction workspace migrations have been run.");}
   setBusy(false)
  }
  function printReceipt(){
