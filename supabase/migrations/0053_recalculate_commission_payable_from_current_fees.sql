@@ -120,8 +120,12 @@ BEGIN
     - transaction_fees,2),0);
 
   UPDATE public.dv_accounting_commissions
-  SET agent_share=agent_share,
-      brokerage_share=GREATEST(ROUND(COALESCE(gross_commission,0)-agent_share,2),0)
+  SET agent_share=GREATEST(ROUND(
+        COALESCE((calc->>'agent_share')::numeric,c.agent_share,t.agent_commission,0)
+        - transaction_fees,2),0),
+      brokerage_share=GREATEST(ROUND(COALESCE(gross_commission,0)-
+        GREATEST(ROUND(COALESCE((calc->>'agent_share')::numeric,c.agent_share,t.agent_commission,0)
+        - transaction_fees,2),0),2),0)
   WHERE id=c.id;
   UPDATE public.dv_accounting_transactions
   SET agent_commission=agent_share,
