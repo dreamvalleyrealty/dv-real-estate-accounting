@@ -29,7 +29,11 @@ BEGIN
 
       lead_to_restore := GREATEST(COALESCE(ai.lead_fee,0),0);
 
-      IF lead_to_restore > 0 THEN
+      -- Migration 0050 may already have restored this amount to the commission
+      -- and transaction while leaving the transaction-agent snapshot unchanged.
+      -- Only restore when the commission still matches the saved pre-fee net.
+      IF lead_to_restore > 0
+         AND ROUND(COALESCE(c.agent_share,0),2) <= ROUND(COALESCE(ai.net_payable,c.agent_share,0),2) + 0.01 THEN
         UPDATE public.dv_accounting_commissions
         SET agent_share=ROUND(COALESCE(agent_share,0)+lead_to_restore,2),
             brokerage_share=GREATEST(
