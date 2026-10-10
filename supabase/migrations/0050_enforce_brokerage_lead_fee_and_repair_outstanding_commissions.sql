@@ -9,27 +9,52 @@
 DO $$
 DECLARE
   c record;
+  t record;
   calc jsonb;
-  old_lead numeric;
+  old_lead numeric(14,2);
 BEGIN
+  -- Existing commission records do not store total_fees. The agent_share
+  -- represents the payable amount handed off from the transaction, so for
+  -- outstanding non-lead transactions we add back only the lead fee that
+  -- was incorrectly deducted.
   FOR c IN
-    SELECT id, agent_id, transaction_id, gross_commission, total_fees
+    SELECT id, agent_id, transaction_id, gross_commission, agent_share
     FROM public.dv_accounting_commissions
     WHERE status <> 'PAID'
-      AND COALESCE((SELECT is_brokerage_lead FROM public.dv_accounting_transactions t WHERE t.id=transaction_id),false)=false
-      AND COALESCE(total_fees,0) > 0
   LOOP
-    calc := public.dv_accounting_calculate_commission_fees(
-      c.agent_id,
-      c.transaction_id,
-      COALESCE(c.gross_commission,0),
-      current_date
-    );
-    old_lead := COALESCE((calc->>'lead_fee')::numeric,0);
-    IF old_lead > 0 THEN
-      UPDATE public.dv_accounting_commissions
-      SET total_fees = GREATEST(ROUND(COALESCE(total_fees,0) - old_lead,2),0)
-      WHERE id=c.id;
+    SELECT id, is_brokerage_lead, agent_commission
+      INTO t
+    FROM public.dv_accounting_transactions
+    WHERE id=c.transaction_id;
+
+    IF t.id IS NOT NULL AND NOT COALESCE(t.is_brokerage_lead,false) THEN
+      calc := public.dv_accounting_calculate_commission_fees(
+        c.agent_id,
+        c.transaction_id,
+        COALESCE(c.gross_commission,0),
+        current_date
+      );
+      old_lead := COALESCE((calc->>'lead_fee')::numeric,0);
+
+      IF old_lead > 0 THEN
+        UPDATE public.dv_accounting_commissions
+        SET agent_share=ROUND(COALESCE(agent_share,0)+old_lead,2),
+            brokerage_share=GREATEST(
+              ROUND(COALESCE(gross_commission,0)-(COALESCE(agent_share,0)+old_lead),2),0
+            )
+        WHERE id=c.id;
+
+        -- Keep the transaction's approved/payroll amount synchronized with
+        -- the repaired commission record.
+        UPDATE public.dv_accounting_transactions
+        SET agent_commission=ROUND(COALESCE(agent_commission,0)+old_lead,2),
+            commission_approved_agent_payable=CASE
+              WHEN COALESCE(commission_approved,false)
+              THEN ROUND(COALESCE(commission_approved_agent_payable,0)+old_lead,2)
+              ELSE commission_approved_agent_payable
+            END
+        WHERE id=c.transaction_id;
+      END IF;
     END IF;
   END LOOP;
 END $$;
