@@ -39,7 +39,8 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
  const activeBanks=bankRows.filter(x=>x.active!==false&&x.account_type==="REAL_ESTATE_TRUST");
  const inbound=commissions.reduce((s,c)=>s+(c.settlement_direction==="RECEIVABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0):0),0);
  const inboundHst=commissions.reduce((s,c)=>s+(c.settlement_direction==="RECEIVABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0)*Number(c.hst_rate||13)/100:0),0);
- const receivableTotal=inbound+inboundHst;
+ const receivableHst=inboundHst;
+ const receivableTotal=inbound+receivableHst;
  const payableBase=commissions.reduce((s,c)=>s+(c.settlement_direction==="PAYABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0):0),0);
  const payableHst=commissions.reduce((s,c)=>s+(c.settlement_direction==="PAYABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0)*Number(c.hst_rate||13)/100:0),0);
  const payableTotal=payableBase+payableHst;
