@@ -87,3 +87,6 @@ main{margin-left:276px;width:calc(100% - 276px);min-width:0}.top{height:76px;bac
 
 .agent-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:14px}.agent-toolbar .toolbar{margin-bottom:0;flex:1}.sortbtn{white-space:nowrap}.tableheadsort{border:0;background:none;padding:0;font:inherit;font-size:inherit;font-weight:700;color:inherit;cursor:pointer}.tableheadsort:hover{color:var(--gold)}
 .agent-toolbar+table{font-size:12px;line-height:1.25}.agent-toolbar+table th{padding:8px 9px;white-space:nowrap}.agent-toolbar+table td{padding:7px 9px;vertical-align:middle}.agent-toolbar+table tbody tr{height:38px}.agent-toolbar+table .linkbtn{padding:0;font-size:12px}.agent-toolbar+table .textbutton{padding:3px 6px;font-size:11px}.agent-toolbar+table .secondary{padding:5px 8px;font-size:11px}.agent-toolbar+table small{font-size:10px}
+
+/* Agent roster compact rows v0.6.22 */
+.agent-table{font-size:12px!important;line-height:1.15!important}.agent-table th{padding:8px 9px!important}.agent-table td{padding:5px 9px!important;height:0;vertical-align:middle}.agent-table tbody tr{height:40px!important}.agent-table td:first-child{white-space:nowrap}.agent-table .linkbtn{line-height:1.1!important}.agent-table .linkbtn .agent-avatar,.agent-table .linkbtn>div:first-child{flex:none}
