@@ -3683,7 +3683,7 @@ declare t public.dv_accounting_transactions%rowtype;
 begin
   select * into t from public.dv_accounting_transactions where id=p_transaction_id for update;
   if not found then raise exception 'Transaction not found'; end if;
-  if t.status='CLOSED' then raise exception 'Closed transaction cannot be changed'; end if;
+  if t.status in ('FINALIZED','CLOSED') then raise exception 'Finalized or closed transaction commission cannot be changed'; end if;
   if coalesce(t.gross_commission,0)<=0 and coalesce(t.agent_commission,0)<=0 then
     raise exception 'Enter and verify the commission amount before approval';
   end if;
@@ -3700,7 +3700,7 @@ create or replace function public.dv_accounting_close_transaction(p_transaction_
 returns jsonb language plpgsql security definer set search_path=public as $$
 declare
   t public.dv_accounting_transactions%rowtype;
-  commission_id uuid;
+  v_commission_id uuid;
   agent_amt numeric(14,2);
   gross_amt numeric(14,2);
 begin
@@ -3713,36 +3713,36 @@ begin
 
   gross_amt:=coalesce(t.commission_approved_amount,t.gross_commission,0);
   agent_amt:=coalesce(t.commission_approved_agent_payable,t.agent_commission,0);
-  commission_id:=t.commission_id;
+  v_commission_id:=t.commission_id;
 
-  if commission_id is null then
-    select id into commission_id from public.dv_accounting_commissions where transaction_id=t.id order by id limit 1;
-    if commission_id is null then
+  if v_commission_id is null then
+    select id into v_commission_id from public.dv_accounting_commissions where transaction_id=t.id order by id limit 1;
+    if v_commission_id is null then
       insert into public.dv_accounting_commissions(transaction_id,agent_id,gross_commission,brokerage_share,agent_share,status)
       values(t.id,t.agent_id,gross_amt,greatest(gross_amt-agent_amt,0),agent_amt,'UNPAID')
-      returning id into commission_id;
+      returning id into v_commission_id;
     else
       update public.dv_accounting_commissions
       set agent_id=t.agent_id,gross_commission=gross_amt,brokerage_share=greatest(gross_amt-agent_amt,0),agent_share=agent_amt
-      where id=commission_id;
+      where id=v_commission_id;
     end if;
   else
     update public.dv_accounting_commissions
     set status=case when status='PAID' then status else 'UNPAID' end,
         agent_id=t.agent_id,gross_commission=gross_amt,brokerage_share=greatest(gross_amt-agent_amt,0),agent_share=agent_amt
-    where id=commission_id;
+    where id=v_commission_id;
   end if;
 
   update public.dv_accounting_transactions
   set status='CLOSED',closed_at=coalesce(closed_at,now()),closed_by=auth.uid(),
       commission_payroll_status=case when exists(
         select 1 from public.dv_accounting_commission_cheques ch
-        where ch.commission_id=commission_id and ch.status='ISSUED'
+        where ch.commission_id=v_commission_id and ch.status='ISSUED'
       ) then 'PAID' else 'READY' end,
-      commission_id=commission_id
+      commission_id=v_commission_id
   where id=t.id;
 
-  return jsonb_build_object('ok',true,'transaction_id',t.id,'commission_id',commission_id,'commission_payroll_status','READY','agent_payable',agent_amt);
+  return jsonb_build_object('ok',true,'transaction_id',t.id,'commission_id',v_commission_id,'commission_payroll_status','READY','agent_payable',agent_amt);
 end $$;
 
 revoke all on function public.dv_accounting_approve_transaction_commission(uuid) from public;
