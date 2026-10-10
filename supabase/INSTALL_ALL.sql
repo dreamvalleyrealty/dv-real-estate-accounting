@@ -4016,3 +4016,20 @@ END $$;
 REVOKE ALL ON FUNCTION public.dv_accounting_close_transaction(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.dv_accounting_close_transaction(uuid) TO authenticated;
 NOTIFY pgrst, 'reload schema';
+
+-- ============================================================
+-- 0042_transaction_commission_id.sql
+-- ============================================================
+ALTER TABLE public.dv_accounting_transactions
+  ADD COLUMN IF NOT EXISTS commission_id uuid;
+
+CREATE INDEX IF NOT EXISTS idx_dv_accounting_transactions_commission_id
+  ON public.dv_accounting_transactions(commission_id);
+
+UPDATE public.dv_accounting_transactions t
+SET commission_id = c.id
+FROM public.dv_accounting_commissions c
+WHERE c.transaction_id = t.id
+  AND t.commission_id IS NULL;
+
+NOTIFY pgrst, 'reload schema';
