@@ -92,8 +92,9 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    const lines=text.split(/\n+/).map(v=>v.trim()).filter(Boolean),found={};
    const set=(key,val)=>{val=String(val||"").replace(/^[\s:|#.-]+|[\s|.]+$/g,"").replace(/\s{2,}/g," ").trim();if(val&&!String(form[key]||"").trim())found[key]=val};
    const labelValue=(labels,nextLabels=[])=>{
-     const re=new RegExp("(?:"+labels.join("|")+")\s*[:\-]?\s*([\s\S]{1,220}?)"+(nextLabels.length?"(?="+nextLabels.join("|")+"|$)":"(?=\n|$)"),"i");
-     const m=text.match(re);return m?m[1].split(/\n/).map(x=>x.trim()).filter(Boolean).join(" ").replace(/^[.…·\s]+|[.…·\s]+$/g,"").trim():"";
+     const esc=v=>String(v).replace(/[.*+?^$()|[\]\\]/g,"\\$&");
+     const re=new RegExp("(?:"+labels.map(esc).join("|")+")\\s*[:\\-]?\\s*([\\s\\S]{1,220}?)"+(nextLabels.length?"(?="+nextLabels.map(esc).join("|")+"|$)":"(?=\\n|$)"),"i");
+     const m=text.match(re);return m?m[1].split(/\\n/).map(x=>x.trim()).filter(Boolean).join(" ").replace(/^[.…·\\s]+|[.…·\\s]+$/g,"").trim():"";
    };
    const moneyFrom=s=>{const m=String(s||"").match(/(?:CDN\$\s*)?\$?\s*([0-9]{1,3}(?:,[0-9]{3})+(?:\.\d{2})?|[0-9]{5,}(?:\.\d{2})?)/);return m?m[1].replace(/,/g,""):""};
    const dateFrom=s=>{
