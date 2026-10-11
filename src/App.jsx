@@ -342,9 +342,7 @@ function Agents({user,mode="agents",permissions={},setActive}){
   if(!supabase||!isSuperAdmin)return;
   if(!agent?.email)return alert("This agent does not have an email address.");
   const generated=Math.random().toString(36).slice(-5).toUpperCase()+"!"+Math.floor(100+Math.random()*900);
-  const password=window.prompt("Enter a temporary password for "+(agent.name||[agent.first_name,agent.last_name].filter(Boolean).join(" "))+"
-
-Minimum 8 characters. Leave the generated password below or replace it:",generated);
+  const password=window.prompt("Enter a temporary password for "+(agent.name||[agent.first_name,agent.last_name].filter(Boolean).join(" "))+"\n\nMinimum 8 characters. Leave the generated password below or replace it:",generated);
   if(password===null)return;
   if(password.length<8)return alert("Temporary password must be at least 8 characters.");
   setTempBusy(true);setTempResult("");
