@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, Clock3, FileText, Plus, RefreshCw, Send, Upload, XCircle, ExternalLink } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock3, FileText, Plus, RefreshCw, Send, Upload, XCircle, ExternalLink, X } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
@@ -133,7 +133,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    const path=`${user.id}/${draft.id}/${Date.now()}-${safe}`;
    const {error:upError}=await supabase.storage.from("dv-trade-documents").upload(path,file,{upsert:false,contentType:file.type||"application/octet-stream"});
    if(upError){setError(upError.message);setBusy(false);return}
-   const {data,error:e}=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:selected.id,document_type:docType,document_name:file.name,storage_path:path,mime_type:file.type||null,file_size:file.size,uploaded_by:user.id}]).select().single();
+   const {data,error:e}=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:docType,document_name:file.name,storage_path:path,mime_type:file.type||null,file_size:file.size,uploaded_by:user.id}]).select().single();
    if(e){await supabase.storage.from("dv-trade-documents").remove([path]);setError(e.message);setBusy(false);return}
    setDocs(old=>[...old,data]);setFile(null);setMessage("Document uploaded.");setBusy(false);
  }
