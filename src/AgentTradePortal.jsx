@@ -90,7 +90,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    setBusy(true);setError("");
    const {data,error:e}=await supabase.from("dv_accounting_agent_trade_submissions").insert([{agent_id:agentId,submitted_by:user.id,payload:{...form},status:"DRAFT"}]).select().single();
    if(e){setError(e.message);setBusy(false);return null}
-   setSelected(data);setForm(old=>({...blank,...(data.payload||{}),...old}));setSubmissions(old=>[data,...old.filter(x=>x.id!==data.id)]);setBusy(false);return data;
+   setSelected(data);setForm(old=>({...blank,...old,...(data.payload||{})}));setSubmissions(old=>[data,...old.filter(x=>x.id!==data.id)]);setBusy(false);return data;
  }
  function parseTradePdf(rawText){
    const text=String(rawText||"").replace(/\u00a0/g," ").replace(/\r/g,"");
