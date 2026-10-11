@@ -25,7 +25,7 @@ function statusPill(status){return <span className="pill" style={{background:sta
 
 export default function AgentTradePortal({user,agentId,adminMode=false}) {
  const [submissions,setSubmissions]=useState([]),[docs,setDocs]=useState([]),[agents,setAgents]=useState([]);
- const [selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[file,setFile]=useState(null),[docType,setDocType]=useState("APS"),[extractBusy,setExtractBusy]=useState(false),[extractedPreview,setExtractedPreview]=useState(null);
+ const [selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[file,setFile]=useState(null),[files,setFiles]=useState([]),[docType,setDocType]=useState("APS"),[extractBusy,setExtractBusy]=useState(false),[extractedPreview,setExtractedPreview]=useState(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[reviewNotes,setReviewNotes]=useState("");
  const [previewUrl,setPreviewUrl]=useState(""),[previewDoc,setPreviewDoc]=useState(null);
  const [filter,setFilter]=useState("SUBMITTED");
@@ -54,8 +54,8 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
  useEffect(()=>{if(!adminMode||!supabase)return;const channel=supabase.channel("dv-agent-trade-submission-alerts").on("postgres_changes",{event:"INSERT",schema:"public",table:"dv_accounting_agent_trade_submissions"},payload=>{if(payload.new?.status==="SUBMITTED"){setMessage("New agent trade submission received. Please review the queue.");load();if(typeof window!=="undefined"&&"Notification" in window&&Notification.permission==="granted")new Notification("Dream Valley — Trade submitted",{body:"An agent submitted a trade for approval."})}}).subscribe();return()=>{supabase.removeChannel(channel)}},[adminMode,load]);
  useEffect(()=>{if(selected?.id)loadDocs(selected.id);else setDocs([])},[selected?.id,loadDocs]);
 
- function startNew(){setSelected(null);setForm({...blank});setFile(null);setExtractedPreview(null);setMessage("");setError("");}
- function editSubmission(s){setSelected(s);setForm({...blank,...(s.payload||{})});setFile(null);setExtractedPreview(null);setMessage("");setError("");setReviewNotes(s.review_notes||"");}
+ function startNew(){setSelected(null);setForm({...blank});setFile(null);setFiles([]);setExtractedPreview(null);setMessage("");setError("");}
+ function editSubmission(s){setSelected(s);setForm({...blank,...(s.payload||{})});setFile(null);setFiles([]);setExtractedPreview(null);setMessage("");setError("");setReviewNotes(s.review_notes||"");}
  async function saveDraft({submit=false}={}){
    if(!supabase||!agentId){setError("Your login is not linked to an active Dream Valley agent record. Ask the administrator to make sure your login email matches your agent profile email.");return}
    if(submit){
@@ -110,7 +110,16 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    if(priceTokens.length)set("sale_price",priceTokens[priceTokens.length-1]);
    const completionLabel=firstPage.search(/COMPLETION DATE/i);
    const completionArea=completionLabel>=0?firstPage.slice(Math.max(0,completionLabel-250),Math.min(firstPage.length,completionLabel+250)):"";
-   const close=dateFrom(completionArea);if(close)set("close_date",close);
+   let close=dateFrom(completionArea);
+   // OREA Form 100 often extracts the day/month before the label and the year after it.
+   if(!close&&completionLabel>=0){
+     const before=firstPage.slice(Math.max(0,completionLabel-180),completionLabel);
+     const after=firstPage.slice(completionLabel,completionLabel+180);
+     const dm=before.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s*$/i);
+     const yr=after.match(/\b20\s*(\d{2})\b/);
+     if(dm&&yr)close=toIso(dm[1],dm[2],yr[1]);
+   }
+   if(close)set("close_date",close);
    const offerLabel=firstPage.search(/Agreement of Purchase and Sale dated/i);
    const offerArea=offerLabel>=0?firstPage.slice(Math.max(0,offerLabel-160),Math.min(firstPage.length,offerLabel+180)):"";
    const offer=dateFrom(offerArea);if(offer)set("offer_date",offer);
@@ -152,15 +161,21 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    }catch(e){setError(e?.message||String(e))}finally{setExtractBusy(false)}
  }
  async function uploadFile(){
-   if(!file||!supabase)return;
+   const filesToUpload=files.length?files:(file?[file]:[]);
+   if(!filesToUpload.length||!supabase)return;
    const draft=await ensureDraftForUpload();if(!draft)return;
-   setBusy(true);setError("");const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
-   const path=`${user.id}/${draft.id}/${Date.now()}-${safe}`;
-   const {error:upError}=await supabase.storage.from("dv-trade-documents").upload(path,file,{upsert:false,contentType:file.type||"application/octet-stream"});
-   if(upError){setError(upError.message);setBusy(false);return}
-   const {data,error:e}=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:docType,document_name:file.name,storage_path:path,mime_type:file.type||null,file_size:file.size,uploaded_by:user.id}]).select().single();
-   if(e){await supabase.storage.from("dv-trade-documents").remove([path]);setError(e.message);setBusy(false);return}
-   setDocs(old=>[...old,data]);setFile(null);setMessage("Document uploaded.");setBusy(false);
+   setBusy(true);setError("");let uploaded=0;
+   for(const currentFile of filesToUpload){
+     const safe=currentFile.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+     const path=${user.id}+"/"+draft.id+"/"+Date.now()+"-"+uploaded+"-"+safe;
+     const {error:upError}=await supabase.storage.from("dv-trade-documents").upload(path,currentFile,{upsert:false,contentType:currentFile.type||"application/octet-stream"});
+     if(upError){setError("Uploaded "+uploaded+" file(s); "+currentFile.name+" failed: "+upError.message);break}
+     const {data,error:e}=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:docType,document_name:currentFile.name,storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id}]).select().single();
+     if(e){await supabase.storage.from("dv-trade-documents").remove([path]);setError("Uploaded "+uploaded+" file(s); "+currentFile.name+" could not be registered: "+e.message);break}
+     setDocs(old=>[...old,data]);uploaded++;
+   }
+   if(uploaded===filesToUpload.length){setFile(null);setFiles([]);setMessage(uploaded===1?"Document uploaded.":uploaded+" documents uploaded.");}
+   setBusy(false);if(draft.id)await loadDocs(draft.id);
  }
  async function openDoc(doc){
    const {data,error:e}=await supabase.storage.from("dv-trade-documents").createSignedUrl(doc.storage_path,3600);
@@ -232,8 +247,8 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
           <h3 style={{margin:"0 0 6px"}}>Required trade documents</h3>
           <p className="agent-trade-muted" style={{margin:"0 0 12px"}}>Upload each required document to this trade. These files will stay linked to the trade when the Trade Admin Manager approves it.</p>
           <div className="agent-trade-checks">{[["APS","Agreement of Purchase and Sale / Lease"],["MLS","MLS / Listing sheet"],["COMMISSION","Commission confirmation"]].map(([type,label])=>{const uploaded=docs.some(d=>d.document_type===type);return <div className="agent-trade-check" key={type}><b>{uploaded?"✓ Uploaded":"Required"}</b>{label}<div className="agent-trade-muted">{uploaded?docs.filter(d=>d.document_type===type).length+" file(s) attached":"Not uploaded yet"}</div></div>})}</div>
-          <div className="agent-trade-grid"><Field label="Document type"><select value={docType} onChange={e=>setDocType(e.target.value)}><option value="APS">Agreement of Purchase and Sale / Lease</option><option value="MLS">MLS / Listing sheet</option><option value="COMMISSION">Commission confirmation</option><option value="ID">Other required compliance document</option><option value="OTHER">Other supporting document</option></select></Field><Field label="Select file"><input type="file" accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx" onChange={e=>setFile(e.target.files?.[0]||null)}/></Field></div>
-          <button className="secondary" style={{marginTop:10}} type="button" disabled={!file||busy} onClick={uploadFile}><Upload size={16}/> Upload Selected Document</button><div className="agent-trade-muted" style={{marginTop:6}}>PDF, JPG, PNG, TIFF or Word; maximum 25 MB per file.</div>
+          <div className="agent-trade-grid"><Field label="Document type"><select value={docType} onChange={e=>setDocType(e.target.value)}><option value="APS">Agreement of Purchase and Sale / Lease</option><option value="MLS">MLS / Listing sheet</option><option value="COMMISSION">Commission confirmation</option><option value="ID">Other required compliance document</option><option value="OTHER">Other supporting document</option></select></Field><Field label="Select file"><input type="file" accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx" onChange={e=>setFiles(Array.from(e.target.files||[]))} multiple/></Field></div>
+          <button className="secondary" style={{marginTop:10}} type="button" disabled={!files.length||busy} onClick={uploadFile}><Upload size={16}/> Upload {files.length||""} Selected Document{files.length===1?"":"s"}</button><div className="agent-trade-muted" style={{marginTop:6}}>Select multiple PDF, JPG, PNG, TIFF or Word files (maximum 25 MB each). Choose a document type for this batch; upload another batch to use a different type.</div>
         </div>}
          {adminMode&&selected.status==="SUBMITTED"&&<div style={{marginTop:18}}><Field label="Review notes (required when requesting changes)"><textarea value={reviewNotes} onChange={e=>setReviewNotes(e.target.value)} placeholder="List any missing document or mismatch to correct."/></Field><div className="agent-trade-buttons"><button className="secondary" disabled={busy} onClick={()=>review("NEEDS_CHANGES")}>Request Changes</button><button className="primary" disabled={busy||!docs.length||docs.some(d=>!["MATCH","NOT_APPLICABLE"].includes(d.match_status))||mismatchCount>0} onClick={()=>review("APPROVED")}><CheckCircle2 size={16}/> Approve & Create Transaction</button></div><p className="agent-trade-muted">Approval creates a DRAFT transaction linked to this agent so accounting can complete billing, commission calculations and payout workflow.</p></div>}
          {selected.status==="APPROVED"&&<div className="agent-trade-success" style={{marginTop:14}}>This trade was approved and transferred to the Transactions workflow. Transaction ID: {selected.transaction_id||"—"}</div>}
