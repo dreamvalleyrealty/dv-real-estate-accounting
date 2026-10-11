@@ -92,7 +92,9 @@ function Payroll({user,permissions={}}){
    ontario_claim_code:Number(employee.ontario_claim_code||1),
    additional_tax:Number(employee.additional_tax||0)
   };
-  if(!companies.rows[0]?.id){alert("Please set up the brokerage first.");return}if(supabase){let data,error;if(employeeEditId){const r=await supabase.from("dv_accounting_employees").update(payload).eq("id",employeeEditId).select().single();data=r.data;error=r.error}else{const r=await supabase.from("dv_accounting_employees").insert([payload]).select().single();data=r.data;error=r.error}if(error)return alert("Could not save staff member: "+error.message);if(employeeHeadshotFile&&data?.id){const ext=(employeeHeadshotFile.name.split(".").pop()||"jpg").toLowerCase(),path=`${payload.company_id}/staff/${data.id}/headshot-${Date.now()}.${ext}`;const{error:he}=await supabase.storage.from("dv-personnel").upload(path,employeeHeadshotFile,{upsert:true,contentType:employeeHeadshotFile.type});if(he)alert("Staff was saved, but the headshot storage is not configured yet. Please run migrations 0025 and 0026 in Supabase, then upload the headshot again.\n\n"+he.message);else{const{data:hd}=await supabase.from("dv_accounting_employees").update({headshot_path:path}).eq("id",data.id).select().single();if(hd)data=hd}}emp.setRows(r=>employeeEditId?r.map(x=>x.id===data.id?data:x):[data,...r])}else emp.setRows(r=>[{...payload,id:Date.now()},...r]);
+  if(!companies.rows[0]?.id){alert("Please set up the brokerage first.");return}if(supabase){let data,error;if(employeeEditId){const r=await supabase.from("dv_accounting_employees").update(payload).eq("id",employeeEditId).select().single();data=r.data;error=r.error}else{const r=await supabase.from("dv_accounting_employees").insert([payload]).select().single();data=r.data;error=r.error}if(error)return alert("Could not save staff member: "+error.message);if(employeeHeadshotFile&&data?.id){const ext=(employeeHeadshotFile.name.split(".").pop()||"jpg").toLowerCase(),path=`${payload.company_id}/staff/${data.id}/headshot-${Date.now()}.${ext}`;const{error:he}=await supabase.storage.from("dv-personnel").upload(path,employeeHeadshotFile,{upsert:true,contentType:employeeHeadshotFile.type});if(he)alert("Staff was saved, but the headshot storage is not configured yet. Please run migrations 0025 and 0026 in Supabase, then upload the headshot again.
+
+"+he.message);else{const{data:hd}=await supabase.from("dv_accounting_employees").update({headshot_path:path}).eq("id",data.id).select().single();if(hd)data=hd}}emp.setRows(r=>employeeEditId?r.map(x=>x.id===data.id?data:x):[data,...r])}else emp.setRows(r=>[{...payload,id:Date.now()},...r]);
   setEmployeeShow(false);setEmployeeEditId(null);setEmployeeHeadshotFile(null);
  }
  async function deleteEmployee(id){if(!supabase)return;if(!confirm("Delete this staff member? Payroll history may prevent deletion; use inactive status for historical employees."))return;const{error}=await supabase.from("dv_accounting_employees").delete().eq("id",id);if(error)return alert(error.message);emp.setRows(r=>r.filter(x=>x.id!==id))}
@@ -145,7 +147,8 @@ function Payroll({user,permissions={}}){
 }
 function Reports(){
  const tx=useRows("dv_accounting_transactions"),ex=useRows("dv_accounting_expenses"),gci=tx.rows.reduce((s,x)=>s+Number(x.gross_commission||0),0),exp=ex.rows.reduce((s,x)=>s+Number(x.amount||0),0);
- const report=(name)=>{let lines=[];if(name==="Profit & Loss")lines=[["Revenue",gci],["Expenses",exp],["Net Profit",gci-exp]];else if(name==="Sales Volume")lines=[["Transactions",tx.rows.length],["Sales Volume",tx.rows.reduce((s,x)=>s+Number(x.sale_price||0),0)]];else if(name==="Expense Summary")lines=ex.rows.map(x=>[x.category||"Uncategorized",Number(x.amount||0)]);else lines=[["Report",name],["Transactions",tx.rows.length],["GCI",gci],["Expenses",exp]];const csv=[["Metric","Amount"],...lines].map(r=>r.join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=name.toLowerCase().replaceAll(" ","-")+".csv";a.click()};
+ const report=(name)=>{let lines=[];if(name==="Profit & Loss")lines=[["Revenue",gci],["Expenses",exp],["Net Profit",gci-exp]];else if(name==="Sales Volume")lines=[["Transactions",tx.rows.length],["Sales Volume",tx.rows.reduce((s,x)=>s+Number(x.sale_price||0),0)]];else if(name==="Expense Summary")lines=ex.rows.map(x=>[x.category||"Uncategorized",Number(x.amount||0)]);else lines=[["Report",name],["Transactions",tx.rows.length],["GCI",gci],["Expenses",exp]];const csv=[["Metric","Amount"],...lines].map(r=>r.join(",")).join("
+");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=name.toLowerCase().replaceAll(" ","-")+".csv";a.click()};
  return <><div className="pagehead"><div><h1>Reports</h1><p>Management reports and working papers.</p></div></div><section className="reportgrid">{["Profit & Loss","Balance Sheet","Trial Balance","General Ledger","Revenue by Month","Expense Summary","Sales Volume","Agent Ranking","Listings & Units","Trust Reconciliation","HST Working Paper","Payroll Register"].map(x=><button className="report" key={x} onClick={()=>report(x)}><FileText/><span>{x}</span><span className="textbutton">Export</span></button>)}</section><section className="panel"><div className="paneltitle"><h2>Live summary</h2></div><div className="grid4"><Card title="Revenue" value={money(gci)} sub="Recorded GCI"/><Card title="Expenses" value={money(exp)} sub="Recorded expenses"/><Card title="Net Profit" value={money(gci-exp)} sub="Before tax"/><Card title="Transactions" value={tx.rows.length} sub="Recorded"/></div></section></>
 }
 function Compliance(){
@@ -342,7 +345,9 @@ function Agents({user,mode="agents",permissions={},setActive}){
   if(!supabase||!isSuperAdmin)return;
   if(!agent?.email)return alert("This agent does not have an email address.");
   const generated=Math.random().toString(36).slice(-5).toUpperCase()+"!"+Math.floor(100+Math.random()*900);
-  const password=window.prompt("Enter a temporary password for "+(agent.name||[agent.first_name,agent.last_name].filter(Boolean).join(" "))+"\n\nMinimum 8 characters. Leave the generated password below or replace it:",generated);
+  const password=window.prompt("Enter a temporary password for "+(agent.name||[agent.first_name,agent.last_name].filter(Boolean).join(" "))+"
+
+Minimum 8 characters. Leave the generated password below or replace it:",generated);
   if(password===null)return;
   if(password.length<8)return alert("Temporary password must be at least 8 characters.");
   setTempBusy(true);setTempResult("");
@@ -350,7 +355,11 @@ function Agents({user,mode="agents",permissions={},setActive}){
     const{data,error}=await supabase.functions.invoke("admin-create-agent-user",{body:{agent_id:agent.id,email:agent.email,password}});
     if(error)throw new Error(error.message||"Could not create the agent login.");
     if(data?.error)throw new Error(data.error);
-    const message="Login created/reset for "+agent.email+"\n\nTemporary password: "+password+"\n\nThe agent will be required to change this password on first login.";
+    const message="Login created/reset for "+agent.email+"
+
+Temporary password: "+password+"
+
+The agent will be required to change this password on first login.";
     setTempResult(message);window.alert(message);
   }catch(err){alert(err?.message||String(err))}finally{setTempBusy(false)}
  }
@@ -413,7 +422,9 @@ function Agents({user,mode="agents",permissions={},setActive}){
   let data,error;if(planEditId){const r=await supabase.from("dv_accounting_fee_plans").update(p).eq("id",planEditId).select().single();data=r.data;error=r.error}else{const r=await supabase.from("dv_accounting_fee_plans").insert([p]).select().single();data=r.data;error=r.error}if(error)return alert(error.message);plans.setRows(r=>planEditId?r.map(x=>x.id===data.id?data:x):[data,...r]);setPlanShow(false);setPlanEditId(null)
  }
  async function saveMembership(e){e.preventDefault();if(!supabase||!editId)return;const board=boards.rows.find(x=>x.id===memberForm.board_id);const{data,error}=await supabase.from("dv_accounting_agent_memberships").insert([{agent_id:editId,board_id:memberForm.board_id||null,board_name:board?.name||null,membership_number:memberForm.membership_number.trim()}]).select().single();if(error)return alert(error.message);setMemberships(r=>[...r,data]);setMemberForm({board_id:"",membership_number:""})}
- async function deleteAgent(id){if(!supabase)return;if(!confirm("Delete this agent and their personnel file? This cannot be undone. If the agent has transactions or commission history, use Deactivate instead."))return;const agent=a.rows.find(x=>x.id===id);if(agent?.headshot_path)await supabase.storage.from("dv-personnel").remove([agent.headshot_path]);const{error}=await supabase.from("dv_accounting_agents").delete().eq("id",id);if(error)return alert("This agent could not be deleted because related records exist. Deactivate the agent instead, or remove the related records first.\n\n"+error.message);a.setRows(r=>r.filter(x=>x.id!==id))}
+ async function deleteAgent(id){if(!supabase)return;if(!confirm("Delete this agent and their personnel file? This cannot be undone. If the agent has transactions or commission history, use Deactivate instead."))return;const agent=a.rows.find(x=>x.id===id);if(agent?.headshot_path)await supabase.storage.from("dv-personnel").remove([agent.headshot_path]);const{error}=await supabase.from("dv_accounting_agents").delete().eq("id",id);if(error)return alert("This agent could not be deleted because related records exist. Deactivate the agent instead, or remove the related records first.
+
+"+error.message);a.setRows(r=>r.filter(x=>x.id!==id))}
  async function removeMembership(id){if(!supabase)return;const{error}=await supabase.from("dv_accounting_agent_memberships").delete().eq("id",id);if(error)return alert(error.message)}
  async function saveL(e){e.preventDefault();const p={...lf,company_id:companyId,branch_id:lf.branch_id||null,list_price:Number(lf.list_price||0)};if(supabase){const{x,error}=await supabase.from("dv_accounting_listings").insert([p]).select().single();if(error)return alert(error.message);l.setRows(z=>[x,...z])}setLs(false)}
  async function saveRecurring(e){e.preventDefault();if(!supabase||!companyId)return;const p={...recForm,company_id:companyId,agent_id:recForm.applies_to==="AGENT"?recForm.agent_id:null,amount:Number(recForm.amount||0),hst_amount:Number(recForm.hst_amount||0),interval_days:Number(recForm.interval_days||30),end_date:recForm.end_date||null,branch_id:recForm.branch_id||null};let data,error;if(recurringEditId){const r=await supabase.from("dv_accounting_recurring_fee_rules").update(p).eq("id",recurringEditId).select().single();data=r.data;error=r.error}else{const r=await supabase.from("dv_accounting_recurring_fee_rules").insert([p]).select().single();data=r.data;error=r.error}if(error)return alert(error.message);recurring.setRows(r=>recurringEditId?r.map(x=>x.id===data.id?data:x):[data,...r]);setRecurringShow(false);setRecurringEditId(null)}
@@ -451,7 +462,11 @@ function Agents({user,mode="agents",permissions={},setActive}){
  async function deletePaidCommission(id){
   if(!isSuperAdmin)return;
   const c=comm.rows.find(x=>x.id===id); const tx=t.rows.find(x=>x.id===c?.transaction_id); const label=tx?.transaction_number||"this commission";
-  if(!window.confirm("SUPER ADMIN ONLY\n\nThis will completely delete the paid commission, its commission cheque and related commission charges, then return the transaction to Finalized so it can be recalculated and paid again.\n\nContinue for "+label+"?"))return;
+  if(!window.confirm("SUPER ADMIN ONLY
+
+This will completely delete the paid commission, its commission cheque and related commission charges, then return the transaction to Finalized so it can be recalculated and paid again.
+
+Continue for "+label+"?"))return;
   const{error}=await supabase.rpc("dv_accounting_delete_paid_commission",{p_commission_id:id});
   if(error)return alert(error.message);
   alert("Paid commission deleted. The transaction is ready to be finalized/closed again and the commission can be recalculated.");
