@@ -114,7 +114,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const firstPage=flat.split(/Page\s+2\s+of\s+\d+/i)[0];
    const months="January February March April May June July August September October November December".split(" ");
    const toIso=(day,month,year)=>{const mn=months.findIndex(x=>x.toLowerCase()===String(month).toLowerCase())+1;let yr=String(year||"").replace(/\s/g,"");if(yr.length===2)yr="20"+yr;return mn>0&&Number(day)>0&&Number(day)<=31?yr+"-"+String(mn).padStart(2,"0")+"-"+String(day).padStart(2,"0"):""};
-   const dateFrom=(source)=>{const v=String(source||"");const matches=[...v.matchAll(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\s*\d{2}|\d{2})\b/gi)];const slash=[...v.matchAll(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/g)];const all=[...matches.map(m=>({i:m.index,iso:toIso(m[1],m[2],m[3])})),...slash.map(m=>({i:m.index,iso:m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0")}))].sort((a,b)=>a.i-b.i);return all.length?all[all.length-1].iso:""};
+   const dateFrom=(source)=>{const v=String(source||"");const matches=[...v.matchAll(/\b(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?(?:\s+day\s+of)?\s+(January|February|March|April|May|June|July|August|September|October|November|December)[,\s]+(20\s*\d{2}|\d{2})\b/gi)];const slash=[...v.matchAll(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/g)];const all=[...matches.map(m=>({i:m.index,iso:toIso(m[1],m[2],m[3])})),...slash.map(m=>({i:m.index,iso:m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0")}))].sort((a,b)=>a.i-b.i);return all.length?all[all.length-1].iso:""};
    const nameBeforeLabel=(role)=>{
      const lines=text.split("\n").map(x=>x.replace(/\.{3,}/g," ").replace(/\s+/g," ").trim()).filter(Boolean);
      const labelIndex=lines.findIndex(line=>new RegExp("\\b"+role+"\\s*:","i").test(line));
@@ -157,6 +157,14 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      if(dm&&year)close=toIso(dm[1],dm[2],year);
    }
    if(close)set("close_date",close);
+   // OREA forms often place the agreement date beside a "DATED this" phrase and split date parts across text rows.
+   const agreementArea=firstPage.match(/(?:DATED\s+this|DATE\s+OF\s+AGREEMENT|AGREEMENT\s+DATE)[\s\S]{0,180}/i);
+   let offerDate=agreementArea?dateFrom(agreementArea[0]):"";
+   if(!offerDate){const dated=[...firstPage.matchAll(/\b(?:dated\s+this|this)\s+(\d{1,2})(?:st|nd|rd|th)?\s+day\s+of\s+(January|February|March|April|May|June|July|August|September|October|November|December)[,\s]+(20\s*\d{2}|\d{2})\b/gi)];if(dated.length)offerDate=toIso(dated[dated.length-1][1],dated[dated.length-1][2],dated[dated.length-1][3]);}
+   if(offerDate)set("offer_date",offerDate);
+   // Fallback for OREA layouts where the amount or date is separated from its heading in extracted PDF text.
+   if(!found.sale_price){const priceMatch=firstPage.match(/PURCHASE\s+PRICE[\s\S]{0,180}?(?:\$\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d{5,})(?!\d)/i);if(priceMatch){const amount=Number(priceMatch[1].replace(/,/g,"").replace(/\.00$/,""));if(amount>=1000)set("sale_price",String(amount));}}
+   if(!found.close_date){const completionMatch=firstPage.match(/COMPLETION\s+DATE[\s\S]{0,220}/i);if(completionMatch){const completionDate=dateFrom(completionMatch[0]);if(completionDate)set("close_date",completionDate);}}
    const acceptanceLabel=flat.search(/finally accepted by all parties at/i);
    // The acceptance date is the reference point for conditions expressed in banking/business days.
    const acceptanceArea=acceptanceLabel>=0?flat.slice(Math.max(0,acceptanceLabel-180),acceptanceLabel+300):"";
