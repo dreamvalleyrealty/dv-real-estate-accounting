@@ -92,7 +92,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    setBusy(true);setError("");setMessage("");
    try{
      if(["buyer_name","seller_name"].includes(key)){
-       const parts=value.split(/\\s+/);const first_name=parts.shift()||value;const last_name=parts.join(" ");
+       const parts=value.split(/\s+/);const first_name=parts.shift()||value;const last_name=parts.join(" ");
        const contact_type=key==="buyer_name"?"BUYER":"SELLER";
        const exists=contactDirectory.some(c=>contactName(c).toLowerCase()===value.toLowerCase()&&String(c.contact_type||"").toUpperCase()===contact_type);
        if(exists){setMessage("This contact is already in the directory.");return}
@@ -114,7 +114,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
        setLawFirmDirectory(old=>[...old,data]);setMessage("Law firm saved to the directory.");
      }else if(["seller_lawyer_name","buyer_lawyer_name"].includes(key)){
        const side=key.startsWith("seller_")?"seller":"buyer";
-       const parts=value.split(/\\s+/);const first_name=parts.shift()||value;const last_name=parts.join(" ");
+       const parts=value.split(/\s+/);const first_name=parts.shift()||value;const last_name=parts.join(" ");
        const firm=lawFirmDirectory.find(f=>String(f.firm_name||"").trim().toLowerCase()===String(form[side+"_lawyer_firm"]||"").trim().toLowerCase());
        const exists=lawyerContacts.some(c=>contactName(c).toLowerCase()===value.toLowerCase());
        if(exists){setMessage("This lawyer is already in the directory.");return}
