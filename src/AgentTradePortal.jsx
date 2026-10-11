@@ -101,16 +101,22 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const months="January February March April May June July August September October November December".split(" ");
    const toIso=(day,month,year)=>{const mn=months.findIndex(x=>x.toLowerCase()===String(month).toLowerCase())+1;let yr=String(year||"").replace(/\s/g,"");if(yr.length===2)yr="20"+yr;return mn>0&&Number(day)>0&&Number(day)<=31?yr+"-"+String(mn).padStart(2,"0")+"-"+String(day).padStart(2,"0"):""};
    const dateFrom=(source)=>{const v=String(source||"");const matches=[...v.matchAll(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\s*\d{2}|\d{2})\b/gi)];const slash=[...v.matchAll(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/g)];const all=[...matches.map(m=>({i:m.index,iso:toIso(m[1],m[2],m[3])})),...slash.map(m=>({i:m.index,iso:m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0")}))].sort((a,b)=>a.i-b.i);return all.length?all[all.length-1].iso:""};
-   const nameFromSection=(section,role)=>{
-     let value=String(section||"").replace(/^[\s\S]*?\b(?:BUYER|SELLER)\s*:/i,"");
-     value=value.replace(/\(Full legal names of all (?:Buyers|Sellers)\)/ig," ").replace(/\.{3,}/g," ").replace(/\s+(?:agrees to purchase from|the following)\b[\s\S]*$/i," ").replace(/\s+/g," ").trim();
-     value=value.replace(/^[\s,;:.|]+|[\s,;:.|]+$/g,"").trim();
-     return /^(?:PROPERTY|agrees to purchase from|the following)$/i.test(value)?"":value;
+   const nameBeforeLabel=(role)=>{
+     const lines=text.split("\n").map(x=>x.replace(/\.{3,}/g," ").replace(/\s+/g," ").trim()).filter(Boolean);
+     const labelIndex=lines.findIndex(line=>new RegExp("\\b"+role+"\\s*:","i").test(line));
+     if(labelIndex<1)return "";
+     for(let k=labelIndex-1;k>=Math.max(0,labelIndex-3);k--){
+       const candidate=lines[k].replace(/^[\s,;:.|]+|[\s,;:.|]+$/g,"").trim();
+       if(!candidate||/^(?:\(Full legal names of all (?:Buyers|Sellers)\)|Agreement of Purchase and Sale|Condominium Resale|Form 101)$/i.test(candidate))continue;
+       if(/^(?:PROPERTY|BUYER|SELLER)$/i.test(candidate))continue;
+       if(/\b(?:day of|dated this|agrees to purchase from|the following)\b/i.test(candidate))continue;
+       if(candidate.length>140)continue;
+       return candidate;
+     }
+     return "";
    };
-   const buyerSection=(text.match(/\bBUYER\s*:[\s\S]{0,700}?\bSELLER\s*:/i)||[])[0]||"";
-   const sellerSection=(text.match(/\bSELLER\s*:[\s\S]{0,700}?\bPROPERTY\s*:/i)||[])[0]||"";
-   const buyerName=nameFromSection(buyerSection,"BUYER");
-   const sellerName=nameFromSection(sellerSection,"SELLER");
+   const buyerName=nameBeforeLabel("BUYER");
+   const sellerName=nameBeforeLabel("SELLER");
    if(buyerName)set("buyer_name",buyerName);
    if(sellerName)set("seller_name",sellerName);
    const addressMatch=firstPage.match(/located at\s+(\d+\s+.+?\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)\s+in the/i)||firstPage.match(/(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)\s+Address/i)||firstPage.match(/Address\s*:?\s*(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i);
