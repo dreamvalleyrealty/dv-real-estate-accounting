@@ -20,7 +20,7 @@ const inputFields = [
   ["street_number","Street number"],["street_name","Street name"],["unit_number","Unit"],["city","City"],["province","Province"],["postal_code","Postal code"],["mls_number","MLS number"],
   ["transaction_date","Trade / entry date"],["offer_date","Offer date"],["deposit_date","Deposit date"],["firm_date","Firm date"],["close_date","Closing date"],["sale_price","Purchase amount"],["deposit_amount","Deposit amount"],["condition_list","Schedule A conditions & expiry"],
   ["commission_basis","Commission calculation"],["coop_commission_percent","Co-op commission (%)"],["coop_commission_amount","Co-op commission amount ($)"],
-  ["buyer_name","Buyer name(s) — first and last names"],["buyer_email","Buyer email"],["buyer_phone","Buyer phone"],
+  ["buyer_name","Buyer name(s) — first and last names"],
   ["seller_name","Seller name(s) — first and last names"],
   ["listing_brokerage_name","Listing brokerage"],["listing_brokerage_address","Listing brokerage address"],["listing_brokerage_phone","Listing brokerage phone"],["listing_brokerage_fax","Listing brokerage fax"],["listing_agent_name","Listing agent name"],["listing_agent_phone","Listing agent tel"],["listing_agent_email","Listing agent email"],
   ["buyer_brokerage_name","Co-operating / buyer brokerage"],["buyer_brokerage_address","Buyer brokerage address"],["buyer_brokerage_phone","Buyer brokerage phone"],["buyer_brokerage_fax","Buyer brokerage fax"],["buyer_agent_name","Buyer agent name"],["buyer_agent_phone","Buyer agent tel"],["buyer_agent_email","Buyer agent email"],["notes","Notes for Trade Admin"]
