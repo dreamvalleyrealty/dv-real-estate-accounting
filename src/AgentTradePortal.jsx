@@ -117,7 +117,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      const {data,error:e}=await supabase.from("dv_accounting_agent_trade_submissions").insert([{agent_id:targetAgentId,submitted_by:user.id,payload,status:submit?"SUBMITTED":"DRAFT",submitted_at:submit?new Date().toISOString():null}]).select().single();
      if(e){setError(e.message);setBusy(false);return}row=data;
    }
-   setSelected(row);setSubmissions(old=>[row,...old.filter(x=>x.id!==row.id)]);
+   setSelected(row);if(adminMode)setAdminCreating(false);setSubmissions(old=>[row,...old.filter(x=>x.id!==row.id)]);
    setMessage(submit?"Trade submitted to the Trade Admin Manager for review.":(form.property_address.trim()?"Draft saved.":"Draft created. Upload your documents first; extracted details will appear here for you to review."));
    setBusy(false);await loadDocs(row.id);await load();
  }
@@ -128,7 +128,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    setBusy(true);setError("");
    const {data,error:e}=await supabase.from("dv_accounting_agent_trade_submissions").insert([{agent_id:targetAgentId,submitted_by:user.id,payload:{...form},status:"DRAFT"}]).select().single();
    if(e){setError(e.message);setBusy(false);return null}
-   setSelected(data);setForm(old=>({...blank,...old,...(data.payload||{})}));setSubmissions(old=>[data,...old.filter(x=>x.id!==data.id)]);setBusy(false);return data;
+   setSelected(data);if(adminMode)setAdminCreating(false);setForm(old=>({...blank,...old,...(data.payload||{})}));setSubmissions(old=>[data,...old.filter(x=>x.id!==data.id)]);setBusy(false);return data;
  }
  const lawyerKeys=["seller_lawyer_name","seller_lawyer_firm","seller_lawyer_address","seller_lawyer_phone","seller_lawyer_fax","seller_lawyer_email","buyer_lawyer_name","buyer_lawyer_firm","buyer_lawyer_address","buyer_lawyer_phone","buyer_lawyer_fax","buyer_lawyer_email"];
  async function saveLawyerDetails(e){e?.preventDefault();if(!selected?.id||!supabase)return;const close=form.close_date||selected.payload?.close_date;if(!close){setError("Add the closing date before saving lawyer information.");return}const deadline=new Date(close+"T12:00:00");deadline.setDate(deadline.getDate()-14);if(new Date(new Date().toDateString())>new Date(deadline.toDateString())){setError("Lawyer information must be completed no later than 14 calendar days before closing. The deadline for this trade has passed.");return}setBusy(true);setError("");setMessage("");const payload={...(selected.payload||{}),...Object.fromEntries(lawyerKeys.map(k=>[k,form[k]||""]))};const{data,error:e2}=await supabase.from("dv_accounting_agent_trade_submissions").update({payload,updated_at:new Date().toISOString()}).eq("id",selected.id).select().single();if(e2){setError(e2.message);setBusy(false);return}setSelected(data);setSubmissions(old=>old.map(x=>x.id===data.id?data:x));setForm({...blank,...(data.payload||{})});setMessage("Lawyer information saved.");setBusy(false);}
