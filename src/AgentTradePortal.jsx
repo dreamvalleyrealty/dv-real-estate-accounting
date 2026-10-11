@@ -93,21 +93,33 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    const found={};
    const set=(key,value)=>{value=String(value||"").replace(/^[\s:|.]+|[\s|.]+$/g,"").replace(/\s{2,}/g," ").trim();if(value&&!String(form[key]||"").trim())found[key]=value};
    const firstPage=flat.split(/Page\s+2\s+of\s+\d+/i)[0];
-   const toIso=(day,month,year)=>{const months=["january","february","march","april","may","june","july","august","september","october","november","december"];const mn=months.indexOf(String(month).toLowerCase())+1;let yr=String(year).replace(/\s/g,"");if(yr.length===2)yr="20"+yr;return mn>0&&Number(day)>=1&&Number(day)<=31?yr+"-"+String(mn).padStart(2,"0")+"-"+String(day).padStart(2,"0"):""};
-   const parseDate=(source)=>{const v=String(source||"");let m=v.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\s*\d{2}|\d{2})\b/i);if(m)return toIso(m[1],m[2],m[3]);m=v.match(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/);if(m)return m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0");return ""};
-   const buyer=(firstPage.match(/BUYER\s*:\s*([\s\S]{1,220}?)(?:\(Full legal names of all Buyers\)|SELLER\s*:)/i)||[])[1]||"";const buyerName=buyer.replace(/\s+/g," ").replace(/[.\s]+$/g,"").trim();if(buyerName)set("buyer_name",buyerName);
-   const seller=(firstPage.match(/SELLER\s*:\s*([\s\S]{1,220}?)(?:\(Full legal names of all Sellers\)|REAL PROPERTY\s*:)/i)||[])[1]||"";const sellerName=seller.replace(/\s+/g," ").replace(/[.\s]+$/g,"").trim();if(sellerName)set("seller_name",sellerName);
-   const addressMatch=firstPage.match(/Address\s*:?\s*(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i);
+   const months="January February March April May June July August September October November December".split(" ");
+   const toIso=(day,month,year)=>{const mn=months.findIndex(x=>x.toLowerCase()===String(month).toLowerCase())+1;let yr=String(year||"").replace(/\s/g,"");if(yr.length===2)yr="20"+yr;return mn>0&&Number(day)>0&&Number(day)<=31?yr+"-"+String(mn).padStart(2,"0")+"-"+String(day).padStart(2,"0"):""};
+   const dateFrom=(source)=>{const v=String(source||"");let m=v.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\s*\d{2}|\d{2})\b/i);if(m)return toIso(m[1],m[2],m[3]);m=v.match(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/);if(m)return m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0");return ""};
+   const buyer=(firstPage.match(/BUYER\s*:\s*([\s\S]{1,220}?)(?:\(Full legal names of all Buyers\)|SELLER\s*:)/i)||[])[1]||"";
+   const buyerName=buyer.replace(/\s+/g," ").replace(/[.\s]+$/g,"").trim();if(buyerName)set("buyer_name",buyerName);
+   const seller=(firstPage.match(/SELLER\s*:\s*([\s\S]{1,220}?)(?:\(Full legal names of all Sellers\)|REAL PROPERTY\s*:)/i)||[])[1]||"";
+   const sellerName=seller.replace(/\s+/g," ").replace(/[.\s]+$/g,"").trim();if(sellerName)set("seller_name",sellerName);
+   const addressMatch=firstPage.match(/(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)\s+Address/i)||firstPage.match(/Address\s*:?\s*(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i);
    if(addressMatch)set("property_address",addressMatch[1].replace(/\s+/g," ").trim());
    const address=(found.property_address||form.property_address||"").match(/^(\d+)\s+(.+?),\s*(Toronto(?:\s+E\d{2})?|[^,]+),\s*(?:ON|Ontario)\s+([A-Z]\d[A-Z]\s?\d[A-Z]\d)$/i);
    if(address){set("street_number",address[1]);set("street_name",address[2]);set("city",address[3].replace(/\s+E\d{2}$/i,""));set("province","ON");set("postal_code",address[4].toUpperCase().replace(/\s*/g,""));}
-   const priceSection=(firstPage.match(/PURCHASE PRICE([\s\S]{0,1200}?)(?:DEPOSIT\s*:)/i)||[])[1]||"";
-   const priceTokens=[...priceSection.matchAll(/\$?\s*(\d{1,3}(?:,\d{3})+(?:\.\d{2})?)/g)].map(m=>m[1].replace(/,/g,"").replace(/\.\d{2}$/,""));if(priceTokens.length)set("sale_price",priceTokens[priceTokens.length-1]);
-   const completionSection=(firstPage.match(/COMPLETION DATE([\s\S]{0,450}?)(?:INITIALS OF BUYER|INITIALS OF SELLER|The trademarks|OREA)/i)||[])[1]||"";const close=parseDate(completionSection);if(close)set("close_date",close);
-   const agreementSection=(firstPage.match(/Agreement of Purchase and Sale dated([\s\S]{0,220}?)(?:BUYER\s*:|SELLER\s*:)/i)||[])[1]||"";const offer=parseDate(agreementSection);if(offer)set("offer_date",offer);
-   const accepted=(firstPage.match(/finally accepted by all parties at([\s\S]{0,180}?)(?:\(Signature of Seller or Buyer\)|INFORMATION ON BROKERAGE)/i)||[])[1]||"";const firm=parseDate(accepted);if(firm)set("firm_date",firm);
+   const priceLabel=firstPage.search(/PURCHASE PRICE/i);
+   const priceArea=priceLabel>=0?firstPage.slice(Math.max(0,priceLabel-550),Math.min(firstPage.length,priceLabel+350)):"";
+   const priceTokens=[...priceArea.matchAll(/\b(\d{1,3}(?:,\d{3})+(?:\.\d{2})?)\b/g)].map(m=>m[1].replace(/,/g,"").replace(/\.00$/,""));
+   if(priceTokens.length)set("sale_price",priceTokens[priceTokens.length-1]);
+   const completionLabel=firstPage.search(/COMPLETION DATE/i);
+   const completionArea=completionLabel>=0?firstPage.slice(Math.max(0,completionLabel-250),Math.min(firstPage.length,completionLabel+250)):"";
+   const close=dateFrom(completionArea);if(close)set("close_date",close);
+   const offerLabel=firstPage.search(/Agreement of Purchase and Sale dated/i);
+   const offerArea=offerLabel>=0?firstPage.slice(Math.max(0,offerLabel-160),Math.min(firstPage.length,offerLabel+180)):"";
+   const offer=dateFrom(offerArea);if(offer)set("offer_date",offer);
+   const acceptanceLabel=firstPage.search(/finally accepted by all parties at/i);
+   const acceptanceArea=acceptanceLabel>=0?firstPage.slice(acceptanceLabel,acceptanceLabel+300):"";
+   const firm=dateFrom(acceptanceArea);if(firm)set("firm_date",firm);
    const mls=firstPage.match(/\bMLS\s*(?:#|number|no\.?)?\s*[:#-]?\s*([A-Z0-9-]{5,})\b/i);if(mls)set("mls_number",mls[1]);
    const commission=flat.match(/(?:gross commission|commission amount|commission payable|brokerage commission|total commission)\s*[:\-]?\s*\$?([\d,]+(?:\.\d{2})?)/i);if(commission)set("gross_commission",commission[1].replace(/,/g,""));
+   set("client_name",buyerName);
    return found;
  }
  async function extractSelectedPdf(){
