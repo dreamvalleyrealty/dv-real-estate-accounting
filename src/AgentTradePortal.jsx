@@ -102,7 +102,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const toIso=(day,month,year)=>{const mn=months.findIndex(x=>x.toLowerCase()===String(month).toLowerCase())+1;let yr=String(year||"").replace(/\s/g,"");if(yr.length===2)yr="20"+yr;return mn>0&&Number(day)>0&&Number(day)<=31?yr+"-"+String(mn).padStart(2,"0")+"-"+String(day).padStart(2,"0"):""};
    const dateFrom=(source)=>{const v=String(source||"");const matches=[...v.matchAll(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\s*\d{2}|\d{2})\b/gi)];const slash=[...v.matchAll(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/g)];const all=[...matches.map(m=>({i:m.index,iso:toIso(m[1],m[2],m[3])})),...slash.map(m=>({i:m.index,iso:m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0")}))].sort((a,b)=>a.i-b.i);return all.length?all[all.length-1].iso:""};
    const nameFromSection=(section,role)=>{
-     let value=String(section||"").replace(/^[\s\S]*?\b"+role+"\s*:/i,"");
+     let value=String(section||"").replace(/^[\s\S]*?\b(?:BUYER|SELLER)\s*:/i,"");
      value=value.replace(/\(Full legal names of all (?:Buyers|Sellers)\)/ig," ").replace(/\.{3,}/g," ").replace(/\s+(?:agrees to purchase from|the following)\b[\s\S]*$/i," ").replace(/\s+/g," ").trim();
      value=value.replace(/^[\s,;:.|]+|[\s,;:.|]+$/g,"").trim();
      return /^(?:PROPERTY|agrees to purchase from|the following)$/i.test(value)?"":value;
