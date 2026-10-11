@@ -56,19 +56,6 @@ create index if not exists idx_agent_trade_submissions_agent on public.dv_accoun
 create index if not exists idx_agent_trade_submissions_status on public.dv_accounting_agent_trade_submissions(status, submitted_at);
 create index if not exists idx_agent_trade_documents_submission on public.dv_accounting_agent_trade_documents(submission_id);
 
-do $
-begin
-  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
-     and not exists (
-       select 1 from pg_publication_tables
-       where pubname = 'supabase_realtime'
-         and schemaname = 'public'
-         and tablename = 'dv_accounting_agent_trade_submissions'
-     ) then
-    execute 'alter publication supabase_realtime add table public.dv_accounting_agent_trade_submissions';
-  end if;
-end $;
-
 alter table public.dv_accounting_agent_trade_submissions enable row level security;
 alter table public.dv_accounting_agent_trade_documents enable row level security;
 
