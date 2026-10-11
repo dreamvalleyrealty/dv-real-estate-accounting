@@ -74,7 +74,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      const missing=requiredDocs.filter(([type])=>!docs.some(d=>d.document_type===type)).map(([,label])=>label);
      if(missing.length){setError("Upload the required documents before submitting: "+missing.join(", ")+".");return}
    }
-   if(submit&&(!form.property_address.trim()||!form.close_date||!form.transaction_type)){setError("Before submitting, confirm the property address, transaction type and closing date.");return}
+   if(submit&&(![form.street_number,form.street_name,form.city,form.province,form.postal_code].some(v=>String(v||"").trim())||!form.close_date||!form.transaction_type)){setError("Before submitting, confirm the property address, transaction type and closing date.");return}
    setBusy(true);setError("");setMessage("");
    const computedCommission=form.commission_basis==="AMOUNT"?Number(form.coop_commission_amount||0):Number(form.sale_price||0)*Number(form.coop_commission_percent||0)/100;const payload={...form,property_address:[form.street_number,form.street_name,form.unit_number?("Unit "+form.unit_number):"",form.city,form.province,form.postal_code].filter(Boolean).join(", "),sale_price:form.sale_price===""?null:Number(form.sale_price),gross_commission:computedCommission||null};
    let row=selected;
