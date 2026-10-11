@@ -138,7 +138,10 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const addressMatch=firstPage.match(/(\d+\s+[A-Za-z0-9.\x27-]+(?:\s+[A-Za-z0-9.\x27-]+){0,5}?\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Boulevard|Blvd|Crescent|Cres|Court|Ct|Lane|Ln|Way|Terrace|Trail|Place|Pl)\s+Toronto(?:\s+C\d{1,2})?\s+(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i)||firstPage.match(/(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i)||firstPage.match(/Address\s*:?\s*(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i);
    if(addressMatch){const rawAddress=addressMatch[1].replace(/\.{3,}/g," ").replace(/\s+/g," ").trim();set("property_address",rawAddress);const parsed=rawAddress.match(/^(\d+)\s+(.+?)\s+(Toronto(?:\s+C\d{1,2})?)\s+(ON|Ontario)\s+([A-Z]\d[A-Z])\s?(\d[A-Z]\d)$/i);if(parsed){set("street_number",parsed[1]);const street=parsed[2].match(/^(.+?\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Boulevard|Blvd|Crescent|Cres|Court|Ct|Lane|Ln|Way|Terrace|Trail|Place|Pl))$/i);if(street)set("street_name",street[1]);set("city",parsed[3].replace(/\s+C\d{1,2}$/i,"").trim());set("province",parsed[4].toUpperCase()==="ONTARIO"?"ON":parsed[4].toUpperCase());set("postal_code",(parsed[5]+parsed[6]).toUpperCase());}}
    // Capture only the amount immediately associated with PURCHASE PRICE; never scan into DEPOSIT or later fields.
-   const priceMatch=firstPage.match(/PURCHASE\s+PRICE\s*:?\s*(?:\$\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d{5,})(?!\d)/i);
+   const priceLabelIndex=firstPage.search(/PURCHASE\s+PRICE/i);
+   const priceBefore=priceLabelIndex>=0?firstPage.slice(Math.max(0,priceLabelIndex-180),priceLabelIndex):"";
+   const priceAfter=priceLabelIndex>=0?firstPage.slice(priceLabelIndex,priceLabelIndex+90):"";
+   const priceMatch=priceBefore.match(/(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d{5,})(?:\s*\.00)?\s*$/)||priceAfter.match(/PURCHASE\s+PRICE\s*:?\s*(?:\$\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d{5,})(?!\d)/i);
    if(priceMatch){const amount=Number(priceMatch[1].replace(/,/g,"").replace(/\.00$/,""));if(Number.isFinite(amount)&&amount>=1000)set("sale_price",String(amount));}
    const completionLabel=firstPage.search(/COMPLETION DATE/i);
    const completionArea=completionLabel>=0?firstPage.slice(Math.max(0,completionLabel-250),Math.min(firstPage.length,completionLabel+250)):"";
@@ -148,12 +151,13 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      const before=firstPage.slice(Math.max(0,completionLabel-300),completionLabel);
      const after=firstPage.slice(completionLabel,completionLabel+220);
      const dateParts=[...before.matchAll(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\b/gi)];
-     const dm=dateParts.length?dateParts[dateParts.length-1]:null;
+     const monthFirst=[...before.matchAll(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})\b/gi)];
+     const dm=dateParts.length?{day:dateParts[dateParts.length-1][1],month:dateParts[dateParts.length-1][2]}:monthFirst.length?{day:monthFirst[monthFirst.length-1][2],month:monthFirst[monthFirst.length-1][1]}:null;
      const yearAfter=after.match(/\b(20\d{2})\b/);
      const shortYearAfter=after.match(/\b(2\d)\s+20\b/);
      const shortYearBefore=[...before.matchAll(/\b(2\d)\s*$/g)].pop();
      const year=yearAfter?yearAfter[1]:(shortYearAfter?"20"+shortYearAfter[1]:(shortYearBefore?"20"+shortYearBefore[1]:""));
-     if(dm&&year)close=toIso(dm[1],dm[2],year);
+     if(dm&&year)close=toIso(dm.day,dm.month,year);
    }
    if(close)set("close_date",close);
    // OREA forms often place the agreement date beside a "DATED this" phrase and split date parts across text rows.
@@ -161,6 +165,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    let offerDate=agreementArea?dateFrom(agreementArea[0]):"";
    if(!offerDate){const dated=[...firstPage.matchAll(/\b(?:dated\s+this|this)\s+(\d{1,2})(?:st|nd|rd|th)?\s+day\s+of\s+(January|February|March|April|May|June|July|August|September|October|November|December)[,\s]+(20\s*\d{2}|\d{2})\b/gi)];if(dated.length)offerDate=toIso(dated[dated.length-1][1],dated[dated.length-1][2],dated[dated.length-1][3]);}
    if(!offerDate){const datedMatch=firstPage.match(/(?:DATE|DATED)[\s:,-]{0,30}(\d{1,2})[\/.-](\d{1,2})[\/.-](20\d{2})/i);if(datedMatch)offerDate=datedMatch[3]+"-"+datedMatch[1].padStart(2,"0")+"-"+datedMatch[2].padStart(2,"0");}
+   if(!offerDate){const topDate=firstPage.match(/(?:^|\s)(2\d)\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:\s|$)/i);if(topDate)offerDate=toIso(topDate[3],topDate[2],"20"+topDate[1]);}
    if(offerDate)set("offer_date",offerDate);
    // Fallback for OREA layouts where the amount or date is separated from its heading in extracted PDF text.
    if(!found.sale_price){const priceMatch=firstPage.match(/PURCHASE\s+PRICE[\s\S]{0,180}?(?:\$\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d{5,})(?!\d)/i);if(priceMatch){const amount=Number(priceMatch[1].replace(/,/g,"").replace(/\.00$/,""));if(amount>=1000)set("sale_price",String(amount));}}
