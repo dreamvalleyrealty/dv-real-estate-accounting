@@ -108,9 +108,9 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const addressMatch=firstPage.match(/located at\s+(\d+\s+.+?\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)\s+in the/i)||firstPage.match(/(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)\s+Address/i)||firstPage.match(/Address\s*:?\s*(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i);
    if(addressMatch)set("property_address",addressMatch[1].replace(/\s+/g," ").trim());
    const address=(found.property_address||form.property_address||"").match(/^(\d+)\s+(.+?)\s+(Toronto(?:\s+C?\d{1,2})?|[^,]+?)\s+(?:ON|Ontario)\s+([A-Z]\d[A-Z]\s?\d[A-Z]\d)$/i)|| (found.property_address||form.property_address||"").match(/^(\d+)\s+(.+?),\s*([^,]+),\s*(?:ON|Ontario)\s+([A-Z]\d[A-Z]\s?\d[A-Z]\d)$/i);
-   if(address){set("street_number",address[1]);set("street_name",address[2]);set("city",address[3].replace(/\s+E\d{2}$/i,""));set("province","ON");set("postal_code",address[4].toUpperCase().replace(/\s*/g,""));}
+   if(address){set("street_number",address[1]);set("street_name",address[2]);set("city",address[3].replace(/\s+C?0?\d{1,2}$/i,"").replace(/\s+E\d{2}$/i,""));set("province","ON");set("postal_code",address[4].toUpperCase().replace(/\s*/g,""));}
    const priceLabel=firstPage.search(/PURCHASE PRICE/i);
-   const priceArea=priceLabel>=0?firstPage.slice(Math.max(0,priceLabel-550),Math.min(firstPage.length,priceLabel+350)):"";
+   const priceArea=priceLabel>=0?firstPage.slice(priceLabel,Math.min(firstPage.length,priceLabel+150)):"";
    const priceTokens=[...priceArea.matchAll(/\b(\d{1,3}(?:,\d{3})+(?:\.\d{2})?)\b/g)].map(m=>m[1].replace(/,/g,"").replace(/\.00$/,""));
    if(priceTokens.length)set("sale_price",priceTokens[priceTokens.length-1]);
    const completionLabel=firstPage.search(/COMPLETION DATE/i);
@@ -141,11 +141,12 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const buyerBrokerage=(flat.match(/Co-op\/Buyer Brokerage\s+([A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE)/i)||[])[1]||"";
    if(buyerBrokerage)set("buyer_company",buyerBrokerage.replace(/\s+/g," ").trim());
    if(listingBrokerage)set("seller_company",listingBrokerage.replace(/\s+/g," ").trim());
-   if(buyerBrokerage&&/DREAM VALLEY REALTY/i.test(buyerBrokerage)&&!String(form.side||"").trim())found.side="BUYER";
+   if(buyerBrokerage&&/DREAM VALLEY REALTY/i.test(buyerBrokerage))found.side="BUYER";
    // Preserve useful APS details that have no dedicated fields in this form.
    const deposit=firstPage.match(/DEPOSIT:\s*[\s\S]{0,260}?\b([\d,]+\.00)\b/);
    const legal=firstPage.match(/and legally described as\s+([\s\S]{0,260}?)\s+\(the “property”\)/i);
    const frontage=firstPage.match(/frontage of\s+([\d,.]+)\s+feet[\s\S]{0,100}?depth of\s+([\d,.]+)\s+feet/i);
+   const unit=(firstPage.match(/Unit\s+No\.?\s*(\d+[A-Z]?)/i)||[])[1];if(unit)set("unit_number",unit);
    const extraNotes=[];
    if(deposit)extraNotes.push("APS deposit shown: $"+deposit[1].replace(/,/g,""));
    if(legal)extraNotes.push("Legal description: "+legal[1].replace(/\s+/g," ").replace(/[.]{3,}/g,"").trim());
