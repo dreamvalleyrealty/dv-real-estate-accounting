@@ -350,11 +350,7 @@ function Agents({user,mode="agents",permissions={},setActive}){
     const{data,error}=await supabase.functions.invoke("admin-create-agent-user",{body:{agent_id:agent.id,email:agent.email,password}});
     if(error)throw new Error(error.message||"Could not create the agent login.");
     if(data?.error)throw new Error(data.error);
-    const message="Login created/reset for "+agent.email+"
-
-Temporary password: "+password+"
-
-The agent will be required to change this password on first login.";
+    const message="Login created/reset for "+agent.email+"\n\nTemporary password: "+password+"\n\nThe agent will be required to change this password on first login.";
     setTempResult(message);window.alert(message);
   }catch(err){alert(err?.message||String(err))}finally{setTempBusy(false)}
  }
