@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, Clock3, FileText, Plus, RefreshCw, Send, Upload, XCircle, ExternalLink } from "lucide-react";
 import { supabase } from "./lib/supabase";
+import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 const blank = {
   transaction_number:"", transaction_type:"BUY_SELL", side:"SELLER", property_address:"",
@@ -24,7 +25,7 @@ function statusPill(status){return <span className="pill" style={{background:sta
 
 export default function AgentTradePortal({user,agentId,adminMode=false}) {
  const [submissions,setSubmissions]=useState([]),[docs,setDocs]=useState([]),[agents,setAgents]=useState([]);
- const [selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[file,setFile]=useState(null),[docType,setDocType]=useState("APS");
+ const [selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[file,setFile]=useState(null),[docType,setDocType]=useState("APS"),[extractBusy,setExtractBusy]=useState(false),[extractedPreview,setExtractedPreview]=useState(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[reviewNotes,setReviewNotes]=useState("");
  const [previewUrl,setPreviewUrl]=useState(""),[previewDoc,setPreviewDoc]=useState(null);
  const [filter,setFilter]=useState("SUBMITTED");
@@ -53,8 +54,8 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
  useEffect(()=>{if(!adminMode||!supabase)return;const channel=supabase.channel("dv-agent-trade-submission-alerts").on("postgres_changes",{event:"INSERT",schema:"public",table:"dv_accounting_agent_trade_submissions"},payload=>{if(payload.new?.status==="SUBMITTED"){setMessage("New agent trade submission received. Please review the queue.");load();if(typeof window!=="undefined"&&"Notification" in window&&Notification.permission==="granted")new Notification("Dream Valley — Trade submitted",{body:"An agent submitted a trade for approval."})}}).subscribe();return()=>{supabase.removeChannel(channel)}},[adminMode,load]);
  useEffect(()=>{if(selected?.id)loadDocs(selected.id);else setDocs([])},[selected?.id,loadDocs]);
 
- function startNew(){setSelected(null);setForm({...blank});setMessage("");setError("");}
- function editSubmission(s){setSelected(s);setForm({...blank,...(s.payload||{})});setMessage("");setError("");setReviewNotes(s.review_notes||"");}
+ function startNew(){setSelected(null);setForm({...blank});setFile(null);setExtractedPreview(null);setMessage("");setError("");}
+ function editSubmission(s){setSelected(s);setForm({...blank,...(s.payload||{})});setFile(null);setExtractedPreview(null);setMessage("");setError("");setReviewNotes(s.review_notes||"");}
  async function saveDraft({submit=false}={}){
    if(!supabase||!agentId){setError("Your login is not linked to an active Dream Valley agent record. Ask the administrator to make sure your login email matches your agent profile email.");return}
    if(submit){
@@ -63,7 +64,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
      const missing=requiredDocs.filter(([type])=>!docs.some(d=>d.document_type===type)).map(([,label])=>label);
      if(missing.length){setError("Upload the required documents before submitting: "+missing.join(", ")+".");return}
    }
-   if(!form.property_address.trim()||!form.close_date||!form.transaction_type){setError("Please enter the property address, transaction type and closing date.");return}
+   if(submit&&(!form.property_address.trim()||!form.close_date||!form.transaction_type)){setError("Before submitting, confirm the property address, transaction type and closing date.");return}
    setBusy(true);setError("");setMessage("");
    const payload={...form, sale_price:form.sale_price===""?null:Number(form.sale_price),gross_commission:form.gross_commission===""?null:Number(form.gross_commission)};
    let row=selected;
@@ -75,8 +76,54 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
      if(e){setError(e.message);setBusy(false);return}row=data;
    }
    setSelected(row);setSubmissions(old=>[row,...old.filter(x=>x.id!==row.id)]);
-   setMessage(submit?"Trade submitted to the Trade Admin Manager for review.":"Draft saved.");
+   setMessage(submit?"Trade submitted to the Trade Admin Manager for review.":(form.property_address.trim()?"Draft saved.":"Draft created. Upload your documents first; extracted details will appear here for you to review."));
    setBusy(false);await loadDocs(row.id);await load();
+ }
+ async function ensureDraftForUpload(){
+   if(selected?.id)return selected;
+   if(!supabase||!agentId){setError("Your login is not linked to an active Dream Valley agent record. Ask the administrator to link your login email to your agent profile.");return null}
+   setBusy(true);setError("");
+   const {data,error:e}=await supabase.from("dv_accounting_agent_trade_submissions").insert([{agent_id:agentId,submitted_by:user.id,payload:{...blank},status:"DRAFT"}]).select().single();
+   if(e){setError(e.message);setBusy(false);return null}
+   setSelected(data);setForm({...blank,...(data.payload||{})});setSubmissions(old=>[data,...old.filter(x=>x.id!==data.id)]);setBusy(false);return data;
+ }
+ function parseTradePdf(text){
+   const found={};
+   const firstMatch=(patterns)=>{for(const re of patterns){const m=text.match(re);if(m?.[1])return m[1].trim().replace(/[|]+$/,"")}return ""};
+   const set=(key,val)=>{if(val&&!String(form[key]||"").trim())found[key]=val};
+   set("property_address",firstMatch([/(?:propertys+address|subjects+property|municipals+address)s*[:\n]+([^\n]{5,120})/i]));
+   const address=found.property_address||form.property_address||"";
+   const addr=address.match(/^\s*(\d+[A-Z]?)\s+(.+?)(?:,\s*([^,]+))?(?:,\s*(ON|Ontario|BC|AB|QC|MB|SK|NS|NB|NL|PE|YT|NT|NU))?(?:\s+([A-Z]\d[A-Z][ -]?\d[A-Z]\d))?\s*$/i);
+   if(addr){set("street_number",addr[1]);set("street_name",addr[2]);if(addr[3])set("city",addr[3].trim());if(addr[4])set("province",addr[4].toUpperCase()==="ONTARIO"?"ON":addr[4].toUpperCase());if(addr[5])set("postal_code",addr[5].toUpperCase())}
+   set("mls_number",firstMatch([/(?:MLS(?:\s*(?:#|number|no\.?))?)\s*[:#-]?\s*([A-Z0-9-]{4,})/i]));
+   set("transaction_number",firstMatch([/(?:trade|transaction)\s*(?:#|number|no\.?)\s*[:#-]?\s*([A-Z0-9-]{3,})/i]));
+   set("sale_price",firstMatch([/(?:purchase\s+price|sale\s+price|consideration|rent(?:al)?\s+price)\s*[:$]*\s*\$?\s*([\d,]+(?:\.\d{2})?)/i]).replace(/,/g,""));
+   set("gross_commission",firstMatch([/(?:gross\s+commission|commission\s+(?:amount|payable))\s*[:$]*\s*\$?\s*([\d,]+(?:\.\d{2})?)/i]).replace(/,/g,""));
+   set("close_date",firstMatch([/(?:completion|closing|close)\s+date\s*[:\n]+(\d{4}-\d{2}-\d{2})/i]));
+   set("offer_date",firstMatch([/(?:offer|agreement)\s+date\s*[:\n]+(\d{4}-\d{2}-\d{2})/i]));
+   set("firm_date",firstMatch([/(?:firm\s+date|condition\s+waived\s+date)\s*[:\n]+(\d{4}-\d{2}-\d{2})/i]));
+   set("buyer_name",firstMatch([/(?:buyer|purchaser)\s*(?:name)?\s*[:\n]+([^\n]{3,100})/i]));
+   set("seller_name",firstMatch([/(?:seller|vendor)\s*(?:name)?\s*[:\n]+([^\n]{3,100})/i]));
+   set("buyer_email",firstMatch([/(?:buyer|purchaser)[^\n]{0,30}email\s*[:\n]+([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i]));
+   set("seller_email",firstMatch([/(?:seller|vendor)[^\n]{0,30}email\s*[:\n]+([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i]));
+   const email=text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+   if(email&&!found.buyer_email&&!found.seller_email)set("client_name",email[0]);
+   const date=text.match(/\b(20\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])\b/);
+   if(date&&!found.offer_date)set("offer_date",date[1]+"-"+date[2].padStart(2,"0")+"-"+date[3].padStart(2,"0"));
+   return found;
+ }
+ async function extractSelectedPdf(){
+   if(!file||!String(file.name||"").toLowerCase().endsWith(".pdf")){setError("Select a PDF to extract trade details.");return}
+   setExtractBusy(true);setError("");setMessage("");
+   try{
+     const pdfjs=await import("pdfjs-dist/legacy/build/pdf.mjs");pdfjs.GlobalWorkerOptions.workerSrc=pdfWorkerUrl;
+     const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;let text="";
+     for(let pn=1;pn<=pdf.numPages;pn++){const page=await pdf.getPage(pn),content=await page.getTextContent();text+=content.items.map(x=>x.str||"").join(" ")+"\\n"}
+     if(!text.trim())throw new Error("No selectable text was found. This PDF may be scanned; OCR is needed to read the page images.");
+     const found=parseTradePdf(text);setExtractedPreview({text,fields:found});
+     if(Object.keys(found).length){setForm(old=>({...old,...Object.fromEntries(Object.entries(found).filter(([k,v])=>v&&!String(old[k]||"").trim()))}));setMessage("Found "+Object.keys(found).length+" possible trade field(s). Review the highlighted extraction summary and verify all details before saving.");}
+     else setMessage("PDF text was read, but no familiar trade fields were confidently recognized. You can still attach the document and enter details manually.");
+   }catch(e){setError(e?.message||String(e))}finally{setExtractBusy(false)}
  }
  async function uploadFile(){
    if(!file||!selected?.id||!supabase)return;
