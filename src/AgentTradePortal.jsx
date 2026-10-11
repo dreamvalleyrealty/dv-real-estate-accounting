@@ -284,7 +284,6 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
            </section>
          </div>
        </form>:selected?<div>
-:selected?<div>
          <div className="agent-trade-checks">{[["Property",tradeSummary.property_address],["Transaction",tradeSummary.transaction_type],["Side",tradeSummary.side],["Sale / lease price",tradeSummary.sale_price?money(tradeSummary.sale_price):"Not entered"],["Gross commission",tradeSummary.gross_commission?money(tradeSummary.gross_commission):"Not entered"],["Closing date",displayDate(tradeSummary.close_date)],["Buyer",tradeSummary.buyer_name],["Seller",tradeSummary.seller_name],["MLS number",tradeSummary.mls_number],["Agent notes",tradeSummary.notes]].map(([k,v])=><div className="agent-trade-check" key={k}><b>{k}</b>{v||"—"}</div>)}</div>
          <h3 style={{marginTop:20}}>Supporting documents & information match</h3>
          <p className="agent-trade-muted">Compare each uploaded document with the entered trade details. Mark Match only after verifying the document itself. The system does not claim OCR verification of scanned images.</p>
