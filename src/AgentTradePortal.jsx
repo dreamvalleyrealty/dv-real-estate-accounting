@@ -248,6 +248,13 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
            :key==="notes"?<textarea value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>
            :<input value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>}
          </Field>)}</div>
+         <div style={{marginTop:18,padding:14,border:"1px solid #d0d5dd",borderRadius:10}}>
+           <h3>Upload required documents</h3>
+           <p className="agent-trade-muted">Choose MLS / Listing sheet or Commission confirmation, select files, then upload before submitting.</p>
+           <div className="agent-trade-grid"><Field label="Document type"><select value={docType} onChange={e=>setDocType(e.target.value)}>{docTypes.map(([type,label])=><option key={type} value={type}>{label}</option>)}</select></Field><Field label="Select files"><input type="file" accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx" multiple onChange={e=>setFiles(Array.from(e.target.files||[]))}/></Field></div>
+           <button className="secondary" style={{marginTop:10}} type="button" disabled={!files.length||busy} onClick={uploadFile}><Upload size={16}/> Upload {files.length||""} Selected Document{files.length===1?"":"s"}</button>
+           <div className="agent-trade-muted" style={{marginTop:8}}>{docs.map(d=>d.document_name+" ("+d.document_type+")").join(" · ")||"No documents uploaded yet."}</div>
+         </div>
          {selected?.status==="NEEDS_CHANGES"&&selected.review_notes&&<div className="agent-trade-alert" style={{marginTop:12}}><strong>Trade Admin notes:</strong> {selected.review_notes}</div>}
          <div className="agent-trade-buttons"><button className="secondary" type="submit" disabled={busy}>{busy?"Saving…":"Save Draft"}</button><button className="primary" type="button" disabled={busy||!selected?.id} onClick={()=>saveDraft({submit:true})}><Send size={16}/> {busy?"Submitting…":"Submit for Review"}</button></div>
        </form>:selected?<div>
