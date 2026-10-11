@@ -157,10 +157,10 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const brokerageSection=(flat.split(/INFORMATION ON BROKERAGE\(S\)/i)[1]||"");
    const listingBrokerage=(brokerageSection.match(/([A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE)\s+Listing Brokerage/i)||[])[1]||"";
    const listingPhone=(brokerageSection.match(/(\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4})\s+[A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE\s+Listing Brokerage/i)||[])[1]||"";
-   const listingAgent=(brokerageSection.match(/Listing Brokerage[\s\S]{0,120}?\(Salesperson\/Broker\/Broker of Record Name\)\s+(.+?)\s+(?:DREAM VALLEY REALTY|Co-op\/Buyer Brokerage)/i)||[])[1]||"";
+   const listingAgent=(brokerageSection.match(/Listing Brokerage[\s\S]{0,120}?\(Tel\.No\.\)\s+(.+?)\s+\(Salesperson\/Broker\/Broker of Record Name\)/i)||[])[1]||"";
    const buyerBrokerage=(brokerageSection.match(/([A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE)\s+Co-op\/Buyer Brokerage/i)||[])[1]||"";
    const buyerPhone=(brokerageSection.match(/(\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4})\s+[A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE\s+Co-op\/Buyer Brokerage/i)||[])[1]||"";
-   const buyerAgent=(brokerageSection.match(/Co-op\/Buyer Brokerage[\s\S]{0,120}?\(Salesperson\/Broker\/Broker of Record Name\)\s+(.+?)(?=\s+Property Manager:|\s+ACKNOWLEDGEMENT|$)/i)||[])[1]||"";
+   const buyerAgent=(brokerageSection.match(/Co-op\/Buyer Brokerage[\s\S]{0,120}?\(Tel\.No\.\)\s+(.+?)\s+\(Salesperson\/Broker\/Broker of Record Name\)/i)||[])[1]||"";
    if(listingBrokerage)set("listing_brokerage_name",listingBrokerage.replace(/\s+/g," ").trim());
    if(listingPhone)set("listing_brokerage_phone",listingPhone.trim());
    if(listingAgent)set("listing_agent_name",listingAgent.replace(/\s+/g," ").trim());
