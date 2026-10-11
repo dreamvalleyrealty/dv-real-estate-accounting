@@ -91,7 +91,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    const found={};
    const firstMatch=(patterns)=>{for(const re of patterns){const m=text.match(re);if(m?.[1])return m[1].trim().replace(/[|]+$/,"")}return ""};
    const set=(key,val)=>{if(val&&!String(form[key]||"").trim())found[key]=val};
-   set("property_address",firstMatch([/(?:propertys+address|subjects+property|municipals+address)s*[:\n]+([^\n]{5,120})/i]));
+   set("property_address",firstMatch([/(?:property\\s+address|subject\\s+property|municipal\\s+address)s*[:\n]+([^\n]{5,120})/i]));
    const address=found.property_address||form.property_address||"";
    const addr=address.match(/^\s*(\d+[A-Z]?)\s+(.+?)(?:,\s*([^,]+))?(?:,\s*(ON|Ontario|BC|AB|QC|MB|SK|NS|NB|NL|PE|YT|NT|NU))?(?:\s+([A-Z]\d[A-Z][ -]?\d[A-Z]\d))?\s*$/i);
    if(addr){set("street_number",addr[1]);set("street_name",addr[2]);if(addr[3])set("city",addr[3].trim());if(addr[4])set("province",addr[4].toUpperCase()==="ONTARIO"?"ON":addr[4].toUpperCase());if(addr[5])set("postal_code",addr[5].toUpperCase())}
@@ -118,7 +118,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    try{
      const pdfjs=await import("pdfjs-dist/legacy/build/pdf.mjs");pdfjs.GlobalWorkerOptions.workerSrc=pdfWorkerUrl;
      const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;let text="";
-     for(let pn=1;pn<=pdf.numPages;pn++){const page=await pdf.getPage(pn),content=await page.getTextContent();text+=content.items.map(x=>x.str||"").join(" ")+"\\n"}
+     for(let pn=1;pn<=pdf.numPages;pn++){const page=await pdf.getPage(pn),content=await page.getTextContent();const rows=new Map();for(const item of content.items){const v=String(item.str||"").trim();if(!v)continue;const y=Math.round((item.transform?.[5]||0)/2)*2;const row=rows.get(y)||[];row.push(v);rows.set(y,row)}text+=[...rows.entries()].sort((a,b)=>b[0]-a[0]).map(([,parts])=>parts.join(" ")).join("\n")+"\n";}
      if(!text.trim())throw new Error("No selectable text was found. This PDF may be scanned; OCR is needed to read the page images.");
      const found=parseTradePdf(text);setExtractedPreview({text,fields:found});
      if(Object.keys(found).length){setForm(old=>({...old,...Object.fromEntries(Object.entries(found).filter(([k,v])=>v&&!String(old[k]||"").trim()))}));setMessage("Found "+Object.keys(found).length+" possible trade field(s). Review the highlighted extraction summary and verify all details before saving.");}
