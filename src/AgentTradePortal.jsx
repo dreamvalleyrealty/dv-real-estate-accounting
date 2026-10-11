@@ -95,11 +95,11 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    const firstPage=flat.split(/Page\s+2\s+of\s+\d+/i)[0];
    const months="January February March April May June July August September October November December".split(" ");
    const toIso=(day,month,year)=>{const mn=months.findIndex(x=>x.toLowerCase()===String(month).toLowerCase())+1;let yr=String(year||"").replace(/\s/g,"");if(yr.length===2)yr="20"+yr;return mn>0&&Number(day)>0&&Number(day)<=31?yr+"-"+String(mn).padStart(2,"0")+"-"+String(day).padStart(2,"0"):""};
-   const dateFrom=(source)=>{const v=String(source||"");let m=v.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\s*\d{2}|\d{2})\b/i);if(m)return toIso(m[1],m[2],m[3]);m=v.match(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/);if(m)return m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0");return ""};
-   const buyer=(firstPage.match(/BUYER\s*:\s*([\s\S]{1,220}?)(?:\(Full legal names of all Buyers\)|SELLER\s*:)/i)||[])[1]||"";
-   const buyerName=buyer.replace(/\s+/g," ").replace(/[.\s]+$/g,"").trim();if(buyerName)set("buyer_name",buyerName);
-   const seller=(firstPage.match(/SELLER\s*:\s*([\s\S]{1,220}?)(?:\(Full legal names of all Sellers\)|REAL PROPERTY\s*:)/i)||[])[1]||"";
-   const sellerName=seller.replace(/\s+/g," ").replace(/[.\s]+$/g,"").trim();if(sellerName)set("seller_name",sellerName);
+   const dateFrom=(source)=>{const v=String(source||"");const matches=[...v.matchAll(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\s*\d{2}|\d{2})\b/gi)];const slash=[...v.matchAll(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/g)];const all=[...matches.map(m=>({i:m.index,iso:toIso(m[1],m[2],m[3])})),...slash.map(m=>({i:m.index,iso:m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0")}))].sort((a,b)=>a.i-b.i);return all.length?all[all.length-1].iso:""};
+   const buyerBefore=(firstPage.match(/([A-Z][A-Za-zÀ-ÿ-]+\s+[A-Z][A-Za-zÀ-ÿ-]+(?:,\s*[A-Z][A-Za-zÀ-ÿ-]+\s+[A-Z][A-Za-zÀ-ÿ-]+)?)\s+BUYER\s*:/i)||[])[1]||"";
+   const buyerName=buyerBefore.replace(/\s+/g," ").trim();if(buyerName)set("buyer_name",buyerName);
+   const sellerBefore=(firstPage.match(/([A-Z][A-Za-zÀ-ÿ-]+(?:\s+[A-Z][A-Za-zÀ-ÿ-]+){1,3})\s+SELLER\s*:/i)||[])[1]||"";
+   const sellerName=sellerBefore.replace(/\s+/g," ").trim();if(sellerName)set("seller_name",sellerName);
    const addressMatch=firstPage.match(/(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)\s+Address/i)||firstPage.match(/Address\s*:?\s*(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i);
    if(addressMatch)set("property_address",addressMatch[1].replace(/\s+/g," ").trim());
    const address=(found.property_address||form.property_address||"").match(/^(\d+)\s+(.+?),\s*(Toronto(?:\s+E\d{2})?|[^,]+),\s*(?:ON|Ontario)\s+([A-Z]\d[A-Z]\s?\d[A-Z]\d)$/i);
