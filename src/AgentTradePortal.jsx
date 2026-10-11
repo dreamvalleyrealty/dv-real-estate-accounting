@@ -83,9 +83,9 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    if(selected?.id)return selected;
    if(!supabase||!agentId){setError("Your login is not linked to an active Dream Valley agent record. Ask the administrator to link your login email to your agent profile.");return null}
    setBusy(true);setError("");
-   const {data,error:e}=await supabase.from("dv_accounting_agent_trade_submissions").insert([{agent_id:agentId,submitted_by:user.id,payload:{...blank},status:"DRAFT"}]).select().single();
+   const {data,error:e}=await supabase.from("dv_accounting_agent_trade_submissions").insert([{agent_id:agentId,submitted_by:user.id,payload:{...form},status:"DRAFT"}]).select().single();
    if(e){setError(e.message);setBusy(false);return null}
-   setSelected(data);setForm({...blank,...(data.payload||{})});setSubmissions(old=>[data,...old.filter(x=>x.id!==data.id)]);setBusy(false);return data;
+   setSelected(data);setForm(old=>({...blank,...(data.payload||{}),...old}));setSubmissions(old=>[data,...old.filter(x=>x.id!==data.id)]);setBusy(false);return data;
  }
  function parseTradePdf(text){
    const found={};
