@@ -87,29 +87,51 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    if(e){setError(e.message);setBusy(false);return null}
    setSelected(data);setForm(old=>({...blank,...(data.payload||{}),...old}));setSubmissions(old=>[data,...old.filter(x=>x.id!==data.id)]);setBusy(false);return data;
  }
- function parseTradePdf(text){
-   const found={};
-   const firstMatch=(patterns)=>{for(const re of patterns){const m=text.match(re);if(m?.[1])return m[1].trim().replace(/[|]+$/,"")}return ""};
-   const set=(key,val)=>{if(val&&!String(form[key]||"").trim())found[key]=val};
-   set("property_address",firstMatch([/(?:property\s+address|subject\s+property|municipal\s+address)\s*[:\n]+([^\n]{5,120})/i]));
-   const address=found.property_address||form.property_address||"";
-   const addr=address.match(/^\s*(\d+[A-Z]?)\s+(.+?)(?:,\s*([^,]+))?(?:,\s*(ON|Ontario|BC|AB|QC|MB|SK|NS|NB|NL|PE|YT|NT|NU))?(?:\s+([A-Z]\d[A-Z][ -]?\d[A-Z]\d))?\s*$/i);
-   if(addr){set("street_number",addr[1]);set("street_name",addr[2]);if(addr[3])set("city",addr[3].trim());if(addr[4])set("province",addr[4].toUpperCase()==="ONTARIO"?"ON":addr[4].toUpperCase());if(addr[5])set("postal_code",addr[5].toUpperCase())}
-   set("mls_number",firstMatch([/(?:MLS(?:\s*(?:#|number|no\.?))?)\s*[:#-]?\s*([A-Z0-9-]{4,})/i]));
-   set("transaction_number",firstMatch([/(?:trade|transaction)\s*(?:#|number|no\.?)\s*[:#-]?\s*([A-Z0-9-]{3,})/i]));
-   set("sale_price",firstMatch([/(?:purchase\s+price|sale\s+price|consideration|rent(?:al)?\s+price)\s*[:$]*\s*\$?\s*([\d,]+(?:\.\d{2})?)/i]).replace(/,/g,""));
-   set("gross_commission",firstMatch([/(?:gross\s+commission|commission\s+(?:amount|payable))\s*[:$]*\s*\$?\s*([\d,]+(?:\.\d{2})?)/i]).replace(/,/g,""));
-   set("close_date",firstMatch([/(?:completion|closing|close)\s+date\s*[:\n]+(\d{4}-\d{2}-\d{2})/i]));
-   set("offer_date",firstMatch([/(?:offer|agreement)\s+date\s*[:\n]+(\d{4}-\d{2}-\d{2})/i]));
-   set("firm_date",firstMatch([/(?:firm\s+date|condition\s+waived\s+date)\s*[:\n]+(\d{4}-\d{2}-\d{2})/i]));
-   set("buyer_name",firstMatch([/(?:buyer|purchaser)\s*(?:name)?\s*[:\n]+([^\n]{3,100})/i]));
-   set("seller_name",firstMatch([/(?:seller|vendor)\s*(?:name)?\s*[:\n]+([^\n]{3,100})/i]));
-   set("buyer_email",firstMatch([/(?:buyer|purchaser)[^\n]{0,30}email\s*[:\n]+([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i]));
-   set("seller_email",firstMatch([/(?:seller|vendor)[^\n]{0,30}email\s*[:\n]+([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i]));
-   const email=text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-   if(email&&!found.buyer_email&&!found.seller_email)set("client_name",email[0]);
-   const date=text.match(/\b(20\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])\b/);
-   if(date&&!found.offer_date)set("offer_date",date[1]+"-"+date[2].padStart(2,"0")+"-"+date[3].padStart(2,"0"));
+ function parseTradePdf(rawText){
+   const text=String(rawText||"").replace(/\u00a0/g," ").replace(/[.…·]{3,}/g," ").replace(/[ \t]+/g," ").replace(/\s*\n\s*/g,"\n");
+   const lines=text.split(/\n+/).map(v=>v.trim()).filter(Boolean),found={};
+   const set=(key,val)=>{val=String(val||"").replace(/^[\s:|#.-]+|[\s|.]+$/g,"").replace(/\s{2,}/g," ").trim();if(val&&!String(form[key]||"").trim())found[key]=val};
+   const labelValue=(labels,nextLabels=[])=>{
+     const re=new RegExp("(?:"+labels.join("|")+")\\s*[:\\-]?\\s*([\\s\\S]{1,220}?)"+(nextLabels.length?"(?="+nextLabels.join("|")+"|$)":"(?=\\n|$)"),"i");
+     const m=text.match(re);return m?m[1].split(/\n/).map(x=>x.trim()).filter(Boolean).join(" ").replace(/^[.…·\s]+|[.…·\s]+$/g,"").trim():"";
+   };
+   const moneyFrom=s=>{const m=String(s||"").match(/(?:CDN\\$\\s*)?\\$?\\s*([0-9]{1,3}(?:,[0-9]{3})+(?:\\.\\d{2})?|[0-9]{5,}(?:\\.\\d{2})?)/);return m?m[1].replace(/,/g,""):""};
+   const dateFrom=s=>{
+     const v=String(s||"").replace(/[.…·]/g," ").replace(/\s+/g," ").trim();let m=v.match(/\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b/);
+     if(m)return m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0");
+     m=v.match(/\b(\d{1,2})[-/](\d{1,2})[-/](20\d{2})\b/);
+     if(m)return m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0");
+     m=v.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s*,?\s*(20\d{2})\b/i);
+     if(!m)m=v.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(20\d{2})\b/i);
+     if(m){const months=["january","february","march","april","may","june","july","august","september","october","november","december"];const day=/^\d/.test(m[1])?m[1]:m[2],month=/^\d/.test(m[1])?m[2]:m[1];return m[3]+"-"+String(months.indexOf(month.toLowerCase())+1).padStart(2,"0")+"-"+String(day).padStart(2,"0")}
+     return "";
+   };
+   const address=labelValue(["REAL PROPERTY:\\s*Address","PROPERTY ADDRESS","SUBJECT PROPERTY","MUNICIPAL ADDRESS"],["fronting on","PURCHASE PRICE","DEPOSIT","LEGAL DESCRIPTION"]);
+   set("property_address",address);
+   const addr=(address||form.property_address||"").match(/^\s*(\d+[A-Z]?)\s+(.+?),\s*([^,]+),\s*(ON|ONTARIO|BC|AB|QC|MB|SK|NS|NB|NL|PE|YT|NT|NU)\s+([A-Z]\d[A-Z]\s?\d[A-Z]\d)\s*$/i);
+   if(addr){set("street_number",addr[1]);set("street_name",addr[2]);set("city",addr[3]);set("province",addr[4].toUpperCase()==="ONTARIO"?"ON":addr[4].toUpperCase());set("postal_code",addr[5].toUpperCase().replace(/\s*/g,""))}
+   set("mls_number",(text.match(/\bMLS\s*(?:#|number|no\.?)?\s*[:#-]?\s*([A-Z]\d{7,}|[A-Z0-9-]{5,})\b/i)||[])[1]);
+   set("transaction_number",(text.match(/\b(?:trade|transaction)\s*(?:#|number|no\.?)\s*[:#-]?\s*([A-Z0-9-]{3,})\b/i)||[])[1]);
+   const priceContext=labelValue(["PURCHASE PRICE","SALE PRICE","CONSIDERATION","RENTAL PRICE","MONTHLY RENT"],["DEPOSIT","IRREVOCABILITY","COMPLETION DATE","DEFINITIONS"]);
+   let price=moneyFrom(priceContext);if(!price){const candidates=[...text.matchAll(/\b(?:1[0-9]{5,}|[2-9][0-9]{5,})\b/g)].map(m=>m[0]);price=candidates.find(x=>Number(x)>=10000)||""}set("sale_price",price);
+   set("gross_commission",moneyFrom(labelValue(["GROSS COMMISSION","COMMISSION AMOUNT","COMMISSION PAYABLE","BROKERAGE COMMISSION","TOTAL COMMISSION"],["HST","TAX","GST","BUYER","SELLER"])));
+   set("close_date",dateFrom(labelValue(["COMPLETION DATE","COMPLETION","CLOSING DATE","CLOSE DATE","POSSESSION DATE"],["INITIALS OF BUYER","INITIALS OF SELLER","IRREVOCABILITY","DEPOSIT","SCHEDULE"])));
+   set("offer_date",dateFrom(labelValue(["AGREEMENT OF PURCHASE AND SALE dated","AGREEMENT DATE","OFFER DATE","DATE OF OFFER"],["BUYER","SELLER","REAL PROPERTY","PURCHASE PRICE"])));
+   set("firm_date",dateFrom(labelValue(["FIRM DATE","CONDITIONS WAIVED","CONDITION WAIVER DATE","UNCONDITIONAL DATE"],["COMPLETION DATE","INITIALS","SCHEDULE"])));
+   const names=(label,next)=>{
+     let value=labelValue([label],next);
+     value=value.replace(/\b(?:agrees to purchase from|the following|for use in the Province|full legal names of all buyers|full legal names of all sellers)\b[\s\S]*$/i,"").replace(/^[.…·\s]+|[.…·\s]+$/g,"").trim();
+     if(value.length>100)value=value.slice(0,100).trim();
+     if(!value||/^(full legal names|name of buyer|name of seller|dollars|the following)$/i.test(value))return "";
+     return value;
+   };
+   set("buyer_name",names("BUYER",["SELLER","REAL PROPERTY","PURCHASE PRICE","DEPOSIT","for use in the Province"]));
+   set("seller_name",names("SELLER",["REAL PROPERTY","PURCHASE PRICE","DEPOSIT","IRREVOCABILITY","for use in the Province"]));
+   const emails=[...text.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)].map(m=>m[0]);
+   const phones=[...text.matchAll(/(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/g)].map(m=>m[0]);
+   if(emails.length===1)set("buyer_email",emails[0]);if(phones.length===1)set("buyer_phone",phones[0]);
+   const postal=text.match(/\b([A-Z]\d[A-Z][ -]?\d[A-Z]\d)\b/i);if(postal)set("postal_code",postal[1].toUpperCase().replace(/\s*/g,""));
+   if(/\bOntario\b|\bON\b/i.test(text))set("province","ON");
    return found;
  }
  async function extractSelectedPdf(){
