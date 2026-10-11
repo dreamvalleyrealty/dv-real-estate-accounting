@@ -7,7 +7,7 @@ const blank = {
   transaction_number:"", transaction_type:"BUY_SELL", side:"SELLER", property_address:"",
   street_number:"", street_name:"", unit_number:"", city:"", province:"ON", postal_code:"",
   mls_number:"", transaction_date:new Date().toISOString().slice(0,10), offer_date:"", deposit_date:"",
-  firm_date:"", close_date:"", sale_price:"", gross_commission:"", commission_basis:"PERCENT", coop_commission_percent:"", coop_commission_amount:"",
+  firm_date:"", close_date:"", sale_price:"", deposit_amount:"", condition_list:"", gross_commission:"", commission_basis:"PERCENT", coop_commission_percent:"", coop_commission_amount:"",
   buyer_name:"", buyer_email:"", buyer_phone:"", buyer_company:"DREAM VALLEY REALTY INC., BROKERAGE",
   seller_name:"", listing_brokerage_name:"", listing_brokerage_address:"", listing_brokerage_phone:"", listing_brokerage_fax:"", listing_agent_name:"", listing_agent_phone:"", listing_agent_email:"",
   buyer_brokerage_name:"DREAM VALLEY REALTY INC., BROKERAGE", buyer_brokerage_address:"", buyer_brokerage_phone:"(416) 951-9929", buyer_brokerage_fax:"", buyer_agent_name:"", buyer_agent_phone:"", buyer_agent_email:"", notes:""
@@ -18,7 +18,7 @@ const displayDate = v => v ? new Date(v+"T12:00:00").toLocaleDateString("en-CA")
 const inputFields = [
   ["transaction_number","Trade number"],["transaction_type","Transaction type"],["side","Representation side"],
   ["street_number","Street number"],["street_name","Street name"],["unit_number","Unit"],["city","City"],["province","Province"],["postal_code","Postal code"],["mls_number","MLS number"],
-  ["transaction_date","Trade / entry date"],["offer_date","Offer date"],["deposit_date","Deposit date"],["firm_date","Firm date"],["close_date","Closing date"],["sale_price","Sale / lease price"],
+  ["transaction_date","Trade / entry date"],["offer_date","Offer date"],["deposit_date","Deposit date"],["firm_date","Firm date"],["close_date","Closing date"],["sale_price","Purchase amount"],["deposit_amount","Deposit amount"],["condition_list","Schedule A conditions & expiry"],
   ["commission_basis","Commission calculation"],["coop_commission_percent","Co-op commission (%)"],["coop_commission_amount","Co-op commission amount ($)"],
   ["buyer_name","Buyer name(s) — first and last names"],["buyer_email","Buyer email"],["buyer_phone","Buyer phone"],
   ["seller_name","Seller name(s) — first and last names"],
@@ -148,13 +148,32 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      if(dm&&year)close=toIso(dm[1],dm[2],year);
    }
    if(close)set("close_date",close);
-   const agreementDate=(firstPage.match(/Agreement of Purchase and Sale dated this\s+(\d{1,2})\s+day of\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\s*\d{2}|\d{2})/i)||[]);if(agreementDate.length){const agreementIso=toIso(agreementDate[1],agreementDate[2],agreementDate[3]);set("transaction_date",agreementIso);set("offer_date",agreementIso);}
    const acceptanceLabel=flat.search(/finally accepted by all parties at/i);
-   // E-sign PDFs commonly print the timestamp immediately BEFORE the acceptance label.
+   // The acceptance date is the reference point for conditions expressed in banking/business days.
    const acceptanceArea=acceptanceLabel>=0?flat.slice(Math.max(0,acceptanceLabel-180),acceptanceLabel+300):"";
-   const firm=dateFrom(acceptanceArea);if(firm)set("firm_date",firm);
-   const mls=firstPage.match(/\bMLS\s*(?:#|number|no\.?)?\s*[:#-]?\s*([A-Z0-9-]{5,})\b/i);if(mls)set("mls_number",mls[1]);
-   const commission=flat.match(/(?:gross commission|commission amount|commission payable|brokerage commission|total commission)\s*[:\-]?\s*\$?([\d,]+(?:\.\d{2})?)/i);if(commission)set("gross_commission",commission[1].replace(/,/g,""));
+   const acceptanceDate=dateFrom(acceptanceArea);
+   const addBankingDays=(iso,count)=>{if(!iso)return "";const d=new Date(iso+"T12:00:00Z");let added=0;const easter=(year)=>{const a=year%19,b=Math.floor(year/100),c=year%100,d1=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d1-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),month=Math.floor((h+l-7*m+114)/31),day=((h+l-7*m+114)%31)+1;return new Date(Date.UTC(year,month-1,day));};const holiday=(x)=>{const y=x.getUTCFullYear(),m=x.getUTCMonth()+1,day=x.getUTCDate(),dow=x.getUTCDay();const nth=(month,n,weekday)=>{const first=new Date(Date.UTC(y,month-1,1));return 1+((weekday-first.getUTCDay()+7)%7)+(n-1)*7};const last=(month,weekday)=>{const lastDay=new Date(Date.UTC(y,month,0));return lastDay.getUTCDate()-((lastDay.getUTCDay()-weekday+7)%7)};const easterSunday=easter(y),goodFriday=new Date(easterSunday);goodFriday.setUTCDate(goodFriday.getUTCDate()-2);const victoria=last(5,1);const thanksgiving=nth(10,2,1);return (m===1&&day===1)||(m===2&&day===nth(2,3,1))||(x.getTime()===goodFriday.getTime())||(m===5&&day===victoria)||(m===7&&day===1)||(m===9&&day===nth(9,1,1))||(m===10&&day===thanksgiving)||(m===12&&(day===25||day===26));};while(added<count){d.setUTCDate(d.getUTCDate()+1);const day=d.getUTCDay();if(day!==0&&day!==6&&!holiday(d))added++;}return d.toISOString().slice(0,10)};
+   const deposit=(firstPage.match(/DEPOSIT:\s*[\s\S]{0,260}?\b([\d,]+\.00)\b/i)||[])[1];if(deposit)set("deposit_amount",deposit.replace(/,/g,"").replace(/\.00$/,""));
+   const brokerageSection=(flat.split(/INFORMATION ON BROKERAGE\(S\)/i)[1]||"");
+   const listingBrokerage=(brokerageSection.match(/([A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE)\s+Listing Brokerage/i)||[])[1]||"";
+   const listingPhone=(brokerageSection.match(/(\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4})\s+[A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE\s+Listing Brokerage/i)||[])[1]||"";
+   const listingAgent=(brokerageSection.match(/Listing Brokerage[\s\S]{0,120}?\(Salesperson\/Broker\/Broker of Record Name\)\s+(.+?)\s+(?:DREAM VALLEY REALTY|Co-op\/Buyer Brokerage)/i)||[])[1]||"";
+   if(listingBrokerage)set("listing_brokerage_name",listingBrokerage.replace(/\s+/g," ").trim());
+   if(listingPhone)set("listing_brokerage_phone",listingPhone.trim());
+   if(listingAgent)set("listing_agent_name",listingAgent.replace(/\s+/g," ").trim());
+   if(listingPhone)set("listing_agent_phone",listingPhone.trim());
+   const buyerBrokerage=(brokerageSection.match(/([A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE)\s+Co-op\/Buyer Brokerage/i)||[])[1]||"";
+   if(buyerBrokerage)set("buyer_brokerage_name",buyerBrokerage.replace(/\s+/g," ").trim());
+   if(buyerBrokerage&&/DREAM VALLEY REALTY/i.test(buyerBrokerage))found.side="BUYER";
+   const scheduleText=flat.slice(Math.max(0,flat.lastIndexOf("Schedule A")));
+   const mortgage=scheduleText.match(/MORTGAGE:\s*([\s\S]*?)(?=PROPERTY INSPECTION:|STATUS CERTIFICATE:|APPRAISAL:|CONDITION ON CLOSING:|$)/i);
+   const inspection=scheduleText.match(/PROPERTY INSPECTION:\s*([\s\S]*?)(?=STATUS CERTIFICATE:|APPRAISAL:|BUYER VISITS:|CONDITION ON CLOSING:|$)/i);
+   const status=scheduleText.match(/STATUS CERTIFICATE:\s*([\s\S]*?)(?=APPRAISAL:|BUYER VISITS:|CHATTELS AND FIXTURES:|CONDITION ON CLOSING:|$)/i);
+   const conditions=[];
+   if(mortgage){const expiry=addBankingDays(acceptanceDate,5);conditions.push("Mortgage financing — "+(expiry?"expires "+expiry:"expires by 11:59 p.m. on the 5th banking day after acceptance; confirm acceptance date"))}
+   if(inspection){const expiry=addBankingDays(acceptanceDate,5);conditions.push("Property inspection — "+(expiry?"expires "+expiry:"expires by 11:59 p.m. on the 5th banking day after acceptance; confirm acceptance date"))}
+   if(status){const delivery=addBankingDays(acceptanceDate,10);conditions.push("Status certificate review — expires by 11:59 p.m. on the 2nd business day after the buyer receives the status certificate and attachments; receipt date required"+(delivery?"; seller delivery deadline "+delivery:"; seller delivery deadline is 10 business days after acceptance"))}
+   if(conditions.length)set("condition_list",conditions.join("\n"));
    // Brokerage names are printed in the OREA brokerage-information section, with the role label before the name.
    const brokerageSection=(flat.split(/INFORMATION ON BROKERAGE\(S\)/i)[1]||"");
    const listingBrokerage=(brokerageSection.match(/([A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE)\s+Listing Brokerage/i)||[])[1]||"";
@@ -163,22 +182,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    if(listingBrokerage)set("listing_brokerage_name",listingBrokerage.replace(/\s+/g," ").trim());
    if(buyerBrokerage&&/DREAM VALLEY REALTY/i.test(buyerBrokerage))found.side="BUYER";
    // Preserve useful APS details that have no dedicated fields in this form.
-   const deposit=firstPage.match(/DEPOSIT:\s*[\s\S]{0,260}?\b([\d,]+\.00)\b/);
-   const legal=firstPage.match(/and legally described as\s+([\s\S]{0,260}?)\s+\(the “property”\)/i);
-   const frontage=firstPage.match(/frontage of\s+([\d,.]+)\s+feet[\s\S]{0,100}?depth of\s+([\d,.]+)\s+feet/i);
    const unit=(firstPage.match(/Unit\s+No\.?\s*(\d+[A-Z]?)/i)||firstPage.match(/\b(\d+[A-Z]?)\s+Unit\s+a unit in the condominium/i)||firstPage.match(/\b(\d+[A-Z]?)\s+Unit\b/i)||firstPage.match(/\b(\d{1,5})\s+Unit\s+(?:a unit|in the condominium)/i)||[])[1];if(unit)set("unit_number",unit);
-   const extraNotes=[];
-   if(deposit)extraNotes.push("APS deposit shown: $"+deposit[1].replace(/,/g,""));
-   if(legal)extraNotes.push("Legal description: "+legal[1].replace(/\s+/g," ").replace(/[.]{3,}/g,"").trim());
-   if(frontage)extraNotes.push("Lot dimensions shown: "+frontage[1]+" ft frontage × "+frontage[2]+" ft depth");
-   const chattels=(text.match(/CHATTELS INCLUDED:[^\n]*\n([\s\S]{0,900}?)\n\s*Unless otherwise stated/i)||[])[1];if(chattels){const clean=chattels.split("\n").map(line=>line.replace(/\.{3,}/g," ").trim()).filter(line=>line&&!/^[\s.,;:]+$/.test(line)).join(" ").replace(/\s+/g," ").trim();if(clean)extraNotes.push("Chattels included: "+clean); }
-   const fixtures=(text.match(/FIXTURES EXCLUDED:[^\n]*\n([\s\S]{0,450}?)\n\s*6\.\s*RENTAL ITEMS/i)||[])[1];if(fixtures){const clean=fixtures.split("\n").map(line=>line.replace(/\.{3,}/g," ").trim()).filter(line=>line&&!/^[\s.,;:]+$/.test(line)).join(" ").replace(/\s+/g," ").trim();if(clean)extraNotes.push("Fixtures excluded: "+clean); }
-   const rentalSection=text.match(/RENTAL ITEMS[\s\S]{0,900}?\n\s*(NONE)\b/i);if(rentalSection)extraNotes.push("Rental items: "+rentalSection[1].toUpperCase());
-   const common=(firstPage.match(/Property are approximately\s*\$?\s*([\d,]+\.\d{2})\s+per month/i)||[])[1];if(common)extraNotes.push("Monthly condo common expenses: $"+common);
-   const parking=(firstPage.match(/at an additional cost of:\s*\$?\s*([\d,]+\.\d{2})/i)||[])[1];if(parking)extraNotes.push("Separate parking maintenance fee: $"+parking);
-   const condo=(firstPage.match(/being\s+(TSCC)\s+Condominium Plan No\s*(\d+)/i)||[]);if(condo.length)extraNotes.push("Condominium corporation: "+condo[1]+" "+condo[2]);
-   const parkingSpace=(firstPage.match(/Parking Space\(s\)\s*([\s\S]{0,80}?)(?:Locker\(s\)|together with Seller)/i)||[])[1];if(parkingSpace)extraNotes.push("Parking details: "+parkingSpace.replace(/\s+/g," ").trim());
-   if(extraNotes.length)set("notes",extraNotes.join("\n"));
    return found;
  }
  async function extractSelectedPdf(){
@@ -274,7 +278,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
            :key==="commission_basis"?<select value={form[key]||"PERCENT"} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}><option value="PERCENT">Percentage of sale price</option><option value="AMOUNT">Fixed dollar amount</option></select>
            :["transaction_date","offer_date","deposit_date","firm_date","close_date"].includes(key)?<input type="date" value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>
            :["sale_price","coop_commission_percent","coop_commission_amount"].includes(key)?<input type="number" min="0" step={key==="coop_commission_percent"?"0.01":".01"} value={form[key]??""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>
-           :key==="notes"?<textarea value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>
+           :["notes","condition_list"].includes(key)?<textarea rows={key==="condition_list"?5:2} value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>
            :<input value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>}
          </Field>)}</div>
          <div style={{marginTop:18,padding:14,border:"1px solid #d0d5dd",borderRadius:10}}>
@@ -299,7 +303,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
           <div className="agent-trade-grid"><Field label="Document type"><select value={docType} onChange={e=>setDocType(e.target.value)}><option value="APS">Agreement of Purchase and Sale / Lease</option><option value="MLS">MLS / Listing sheet</option><option value="COMMISSION">Commission confirmation</option><option value="ID">Other required compliance document</option><option value="OTHER">Other supporting document</option></select></Field><Field label="Select file"><input type="file" accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx" onChange={e=>setFiles(Array.from(e.target.files||[]))} multiple/></Field></div>
           <button className="secondary" style={{marginTop:10}} type="button" disabled={!files.length||busy} onClick={uploadFile}><Upload size={16}/> Upload {files.length||""} Selected Document{files.length===1?"":"s"}</button><div className="agent-trade-muted" style={{marginTop:6}}>Select multiple PDF, JPG, PNG, TIFF or Word files (maximum 25 MB each). Choose a document type for this batch; upload another batch to use a different type.</div>
         </div>}
-         {isSuperAdmin&&<form onSubmit={adminSaveTrade} style={{marginTop:18}}><h3>Edit trade details (Super Admin)</h3><div className="agent-trade-grid">{inputFields.map(([key,label])=><Field key={key} label={label}>{key==="transaction_number"?<input value={form[key]||"Assigned automatically when the trade is created"} readOnly />:key==="transaction_type"?<select value={form[key]||"BUY_SELL"} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}><option value="BUY_SELL">Buy / Sell</option><option value="LEASE">Lease</option></select>:key==="side"?<select value={form[key]||"SELLER"} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}>{[["SELLER","Listing / Seller side"],["BUYER","Buyer side"],["LANDLORD","Landlord side"],["TENANT","Tenant side"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>:[ "transaction_date","offer_date","firm_date","close_date"].includes(key)?<input type="date" value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>:["sale_price","gross_commission"].includes(key)?<input type="number" min="0" step=".01" value={form[key]??""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>:key==="notes"?<textarea value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>:<input value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>}</Field>)}</div><div className="agent-trade-buttons"><button className="primary" type="submit" disabled={busy}>Save Trade Changes</button><button className="secondary" type="button" disabled={busy} onClick={adminDeleteTrade}>Delete Trade</button></div></form>}
+         {isSuperAdmin&&<form onSubmit={adminSaveTrade} style={{marginTop:18}}><h3>Edit trade details (Super Admin)</h3><div className="agent-trade-grid">{inputFields.map(([key,label])=><Field key={key} label={label}>{key==="transaction_number"?<input value={form[key]||"Assigned automatically when the trade is created"} readOnly />:key==="transaction_type"?<select value={form[key]||"BUY_SELL"} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}><option value="BUY_SELL">Buy / Sell</option><option value="LEASE">Lease</option></select>:key==="side"?<select value={form[key]||"SELLER"} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}>{[["SELLER","Listing / Seller side"],["BUYER","Buyer side"],["LANDLORD","Landlord side"],["TENANT","Tenant side"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>:[ "transaction_date","offer_date","firm_date","close_date","deposit_date"].includes(key)?<input type="date" value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>:["sale_price","deposit_amount","gross_commission"].includes(key)?<input type="number" min="0" step=".01" value={form[key]??""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}:["notes","condition_list"].includes(key)?<textarea rows={key==="condition_list"?5:2} value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>:<input value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>}</Field>)}</div><div className="agent-trade-buttons"><button className="primary" type="submit" disabled={busy}>Save Trade Changes</button><button className="secondary" type="button" disabled={busy} onClick={adminDeleteTrade}>Delete Trade</button></div></form>}
          {adminMode&&selected.status==="SUBMITTED"&&<div style={{marginTop:18}}><Field label="Review notes (required when requesting changes)"><textarea value={reviewNotes} onChange={e=>setReviewNotes(e.target.value)} placeholder="List any missing document or mismatch to correct."/></Field><div className="agent-trade-buttons"><button className="secondary" disabled={busy} onClick={()=>review("NEEDS_CHANGES")}>Request Changes</button><button className="primary" disabled={busy||!docs.length||docs.some(d=>!["MATCH","NOT_APPLICABLE"].includes(d.match_status))||mismatchCount>0} onClick={()=>review("APPROVED")}><CheckCircle2 size={16}/> Approve & Create Transaction</button></div><p className="agent-trade-muted">Approval creates a DRAFT transaction linked to this agent so accounting can complete billing, commission calculations and payout workflow.</p></div>}
          {selected.status==="APPROVED"&&<div className="agent-trade-success" style={{marginTop:14}}>This trade was approved and transferred to the Transactions workflow. Transaction ID: {selected.transaction_id||"—"}</div>}
        </div>:null}
