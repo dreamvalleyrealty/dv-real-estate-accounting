@@ -111,13 +111,17 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    const completionLabel=firstPage.search(/COMPLETION DATE/i);
    const completionArea=completionLabel>=0?firstPage.slice(Math.max(0,completionLabel-250),Math.min(firstPage.length,completionLabel+250)):"";
    let close=dateFrom(completionArea);
-   // OREA Form 100 often extracts the day/month before the label and the year after it.
+   // OREA Form 100 extracts the day/month and year on separate text rows around the COMPLETION DATE label.
    if(!close&&completionLabel>=0){
-     const before=firstPage.slice(Math.max(0,completionLabel-180),completionLabel);
-     const after=firstPage.slice(completionLabel,completionLabel+180);
-     const dm=before.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s*$/i);
-     const yr=after.match(/\b20\s*(\d{2})\b/);
-     if(dm&&yr)close=toIso(dm[1],dm[2],yr[1]);
+     const before=firstPage.slice(Math.max(0,completionLabel-300),completionLabel);
+     const after=firstPage.slice(completionLabel,completionLabel+220);
+     const dateParts=[...before.matchAll(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\b/gi)];
+     const dm=dateParts.length?dateParts[dateParts.length-1]:null;
+     const yearAfter=after.match(/\b(20\d{2})\b/);
+     const shortYearAfter=after.match(/\b(2\d)\s+20\b/);
+     const shortYearBefore=[...before.matchAll(/\b(2\d)\s*$/g)].pop();
+     const year=yearAfter?yearAfter[1]:(shortYearAfter?"20"+shortYearAfter[1]:(shortYearBefore?"20"+shortYearBefore[1]:""));
+     if(dm&&year)close=toIso(dm[1],dm[2],year);
    }
    if(close)set("close_date",close);
    const offerLabel=firstPage.search(/Agreement of Purchase and Sale dated/i);
