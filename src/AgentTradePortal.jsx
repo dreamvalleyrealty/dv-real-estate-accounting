@@ -56,6 +56,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
  function editSubmission(s){setSelected(s);setForm({...blank,...(s.payload||{})});setMessage("");setError("");setReviewNotes(s.review_notes||"");}
  async function saveDraft({submit=false}={}){
    if(!supabase||!agentId){setError("Your login is not linked to an active Dream Valley agent record. Ask the administrator to make sure your login email matches your agent profile email.");return}
+   if(submit&&(!selected?.id||docs.length===0)){setError("Save the draft and upload at least one supporting document before submitting for review.");return}
    if(!form.property_address.trim()||!form.close_date||!form.transaction_type){setError("Please enter the property address, transaction type and closing date.");return}
    setBusy(true);setError("");setMessage("");
    const payload={...form, sale_price:form.sale_price===""?null:Number(form.sale_price),gross_commission:form.gross_commission===""?null:Number(form.gross_commission)};
