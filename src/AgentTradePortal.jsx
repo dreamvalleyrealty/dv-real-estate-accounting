@@ -92,10 +92,10 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    const lines=text.split(/\n+/).map(v=>v.trim()).filter(Boolean),found={};
    const set=(key,val)=>{val=String(val||"").replace(/^[\s:|#.-]+|[\s|.]+$/g,"").replace(/\s{2,}/g," ").trim();if(val&&!String(form[key]||"").trim())found[key]=val};
    const labelValue=(labels,nextLabels=[])=>{
-     const re=new RegExp("(?:"+labels.join("|")+")\\s*[:\\-]?\\s*([\\s\\S]{1,220}?)"+(nextLabels.length?"(?="+nextLabels.join("|")+"|$)":"(?=\\n|$)"),"i");
+     const re=new RegExp("(?:"+labels.join("|")+")\s*[:\-]?\s*([\s\S]{1,220}?)"+(nextLabels.length?"(?="+nextLabels.join("|")+"|$)":"(?=\n|$)"),"i");
      const m=text.match(re);return m?m[1].split(/\n/).map(x=>x.trim()).filter(Boolean).join(" ").replace(/^[.…·\s]+|[.…·\s]+$/g,"").trim():"";
    };
-   const moneyFrom=s=>{const m=String(s||"").match(/(?:CDN\\$\\s*)?\\$?\\s*([0-9]{1,3}(?:,[0-9]{3})+(?:\\.\\d{2})?|[0-9]{5,}(?:\\.\\d{2})?)/);return m?m[1].replace(/,/g,""):""};
+   const moneyFrom=s=>{const m=String(s||"").match(/(?:CDN\$\s*)?\$?\s*([0-9]{1,3}(?:,[0-9]{3})+(?:\.\d{2})?|[0-9]{5,}(?:\.\d{2})?)/);return m?m[1].replace(/,/g,""):""};
    const dateFrom=s=>{
      const v=String(s||"").replace(/[.…·]/g," ").replace(/\s+/g," ").trim();let m=v.match(/\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b/);
      if(m)return m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0");
@@ -106,7 +106,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
      if(m){const months=["january","february","march","april","may","june","july","august","september","october","november","december"];const day=/^\d/.test(m[1])?m[1]:m[2],month=/^\d/.test(m[1])?m[2]:m[1];return m[3]+"-"+String(months.indexOf(month.toLowerCase())+1).padStart(2,"0")+"-"+String(day).padStart(2,"0")}
      return "";
    };
-   const address=labelValue(["REAL PROPERTY:\\s*Address","PROPERTY ADDRESS","SUBJECT PROPERTY","MUNICIPAL ADDRESS"],["fronting on","PURCHASE PRICE","DEPOSIT","LEGAL DESCRIPTION"]);
+   const address=labelValue(["REAL PROPERTY:\s*Address","PROPERTY ADDRESS","SUBJECT PROPERTY","MUNICIPAL ADDRESS"],["fronting on","PURCHASE PRICE","DEPOSIT","LEGAL DESCRIPTION"]);
    set("property_address",address);
    const addr=(address||form.property_address||"").match(/^\s*(\d+[A-Z]?)\s+(.+?),\s*([^,]+),\s*(ON|ONTARIO|BC|AB|QC|MB|SK|NS|NB|NL|PE|YT|NT|NU)\s+([A-Z]\d[A-Z]\s?\d[A-Z]\d)\s*$/i);
    if(addr){set("street_number",addr[1]);set("street_name",addr[2]);set("city",addr[3]);set("province",addr[4].toUpperCase()==="ONTARIO"?"ON":addr[4].toUpperCase());set("postal_code",addr[5].toUpperCase().replace(/\s*/g,""))}
