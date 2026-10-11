@@ -124,12 +124,12 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const sellerName=nameBeforeLabel("SELLER");
    if(buyerName)set("buyer_name",buyerName);
    if(sellerName)set("seller_name",sellerName);
-   const addressMatch=firstPage.match(/(\d+\s+[A-Za-z0-9.\x27-]+(?:\s+[A-Za-z0-9.\x27-]+){0,5}?\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Boulevard|Blvd|Crescent|Cres|Court|Ct|Lane|Ln|Way|Terrace|Trail|Place|Pl)\s+Toronto(?:\s+C\d{1,2})?\s+(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i)||firstPage.match(/located at\s+(.{1,220}?)\s+in the/i)||firstPage.match(/(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)\s+Address/i)||firstPage.match(/Address\s*:?\s*(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i);
-   if(addressMatch){const rawAddress=addressMatch[1].replace(/\.{3,}/g," ").replace(/\s+/g," ").trim();set("property_address",rawAddress);const parsed=rawAddress.match(/^(\d+)\s+(.+?\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Boulevard|Blvd|Crescent|Cres|Court|Ct|Lane|Ln|Way|Terrace|Trail|Place|Pl))\s+(Toronto(?:\s+C\d{1,2})?)\s+(ON|Ontario)\s+([A-Z]\d[A-Z])\s?(\d[A-Z]\d)$/i);if(parsed){set("street_number",parsed[1]);set("street_name",parsed[2]);set("city",parsed[3].replace(/\s+C\d{1,2}$/i,"").trim());set("province",parsed[4].toUpperCase()==="ONTARIO"?"ON":parsed[4].toUpperCase());set("postal_code",(parsed[5]+parsed[6]).toUpperCase());}else{const postal=(rawAddress.match(/\b([A-Z]\d[A-Z])\s*(\d[A-Z]\d)\b/i)||[]);if(postal){set("province","ON");set("postal_code",String(postal[1]||"").concat(String(postal[2]||"")).toUpperCase());}}}
+   const addressMatch=firstPage.match(/(\d+\s+[A-Za-z0-9.\x27-]+(?:\s+[A-Za-z0-9.\x27-]+){0,5}?\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Boulevard|Blvd|Crescent|Cres|Court|Ct|Lane|Ln|Way|Terrace|Trail|Place|Pl)\s+Toronto(?:\s+C\d{1,2})?\s+(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i)||firstPage.match(/(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i)||firstPage.match(/Address\s*:?\s*(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i);
+   if(addressMatch){const rawAddress=addressMatch[1].replace(/\.{3,}/g," ").replace(/\s+/g," ").trim();set("property_address",rawAddress);const parsed=rawAddress.match(/^(\d+)\s+(.+?)\s+(Toronto(?:\s+C\d{1,2})?)\s+(ON|Ontario)\s+([A-Z]\d[A-Z])\s?(\d[A-Z]\d)$/i);if(parsed){set("street_number",parsed[1]);const street=parsed[2].match(/^(.+?\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Boulevard|Blvd|Crescent|Cres|Court|Ct|Lane|Ln|Way|Terrace|Trail|Place|Pl))$/i);if(street)set("street_name",street[1]);set("city",parsed[3].replace(/\s+C\d{1,2}$/i,"").trim());set("province",parsed[4].toUpperCase()==="ONTARIO"?"ON":parsed[4].toUpperCase());set("postal_code",(parsed[5]+parsed[6]).toUpperCase());}}
    const priceLabel=firstPage.search(/PURCHASE PRICE/i);
-   const priceArea=priceLabel>=0?firstPage.slice(priceLabel,Math.min(firstPage.length,priceLabel+150)):"";
-   const priceTokens=[...priceArea.matchAll(/\b(\d{1,3}(?:,\d{3})+(?:\.\d{2})?)\b/g)].map(m=>m[1].replace(/,/g,"").replace(/\.00$/,""));
-   if(priceTokens.length)set("sale_price",priceTokens[priceTokens.length-1]);
+   const priceArea=priceLabel>=0?firstPage.slice(priceLabel,Math.min(firstPage.length,priceLabel+240)):"";
+   const priceTokens=[...priceArea.matchAll(/(?:\$\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d{5,}(?:\.\d{2})?)/g)].map(m=>m[1].replace(/,/g,"").replace(/\.00$/,""));
+   if(priceTokens.length)set("sale_price",priceTokens[0]);
    const completionLabel=firstPage.search(/COMPLETION DATE/i);
    const completionArea=completionLabel>=0?firstPage.slice(Math.max(0,completionLabel-250),Math.min(firstPage.length,completionLabel+250)):"";
    let close=dateFrom(completionArea);
@@ -157,14 +157,14 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const brokerageSection=(flat.split(/INFORMATION ON BROKERAGE\(S\)/i)[1]||"");
    const listingBrokerage=(brokerageSection.match(/([A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE)\s+Listing Brokerage/i)||[])[1]||"";
    const buyerBrokerage=(brokerageSection.match(/([A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE)\s+Co-op\/Buyer Brokerage/i)||[])[1]||"";
-   if(buyerBrokerage)set("buyer_company",buyerBrokerage.replace(/\s+/g," ").trim());
-   if(listingBrokerage)set("seller_company",listingBrokerage.replace(/\s+/g," ").trim());
+   if(buyerBrokerage)set("buyer_brokerage_name",buyerBrokerage.replace(/\s+/g," ").trim());
+   if(listingBrokerage)set("listing_brokerage_name",listingBrokerage.replace(/\s+/g," ").trim());
    if(buyerBrokerage&&/DREAM VALLEY REALTY/i.test(buyerBrokerage))found.side="BUYER";
    // Preserve useful APS details that have no dedicated fields in this form.
    const deposit=firstPage.match(/DEPOSIT:\s*[\s\S]{0,260}?\b([\d,]+\.00)\b/);
    const legal=firstPage.match(/and legally described as\s+([\s\S]{0,260}?)\s+\(the “property”\)/i);
    const frontage=firstPage.match(/frontage of\s+([\d,.]+)\s+feet[\s\S]{0,100}?depth of\s+([\d,.]+)\s+feet/i);
-   const unit=(firstPage.match(/Unit\s+No\.?\s*(\d+[A-Z]?)/i)||firstPage.match(/\b(\d+[A-Z]?)\s+Unit\s+a unit in the condominium/i)||firstPage.match(/\b(\d+[A-Z]?)\s+Unit\b/i)||[])[1];if(unit)set("unit_number",unit);
+   const unit=(firstPage.match(/Unit\s+No\.?\s*(\d+[A-Z]?)/i)||firstPage.match(/\b(\d+[A-Z]?)\s+Unit\s+a unit in the condominium/i)||firstPage.match(/\b(\d+[A-Z]?)\s+Unit\b/i)||firstPage.match(/\b(\d{1,5})\s+Unit\s+(?:a unit|in the condominium)/i)||[])[1];if(unit)set("unit_number",unit);
    const extraNotes=[];
    if(deposit)extraNotes.push("APS deposit shown: $"+deposit[1].replace(/,/g,""));
    if(legal)extraNotes.push("Legal description: "+legal[1].replace(/\s+/g," ").replace(/[.]{3,}/g,"").trim());
