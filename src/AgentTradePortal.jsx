@@ -137,8 +137,9 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const mls=firstPage.match(/\bMLS\s*(?:#|number|no\.?)?\s*[:#-]?\s*([A-Z0-9-]{5,})\b/i);if(mls)set("mls_number",mls[1]);
    const commission=flat.match(/(?:gross commission|commission amount|commission payable|brokerage commission|total commission)\s*[:\-]?\s*\$?([\d,]+(?:\.\d{2})?)/i);if(commission)set("gross_commission",commission[1].replace(/,/g,""));
    // Brokerage names are printed in the OREA brokerage-information section, with the role label before the name.
-   const listingBrokerage=(flat.match(/Listing Brokerage\s+([A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE)/i)||[])[1]||"";
-   const buyerBrokerage=(flat.match(/Co-op\/Buyer Brokerage\s+([A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE)/i)||[])[1]||"";
+   const brokerageSection=(flat.split(/INFORMATION ON BROKERAGE\(S\)/i)[1]||"");
+   const listingBrokerage=(brokerageSection.match(/([A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE)\s+Listing Brokerage/i)||[])[1]||"";
+   const buyerBrokerage=(brokerageSection.match(/([A-Z][A-Z0-9 &.,-]+?\s+BROKERAGE)\s+Co-op\/Buyer Brokerage/i)||[])[1]||"";
    if(buyerBrokerage)set("buyer_company",buyerBrokerage.replace(/\s+/g," ").trim());
    if(listingBrokerage)set("seller_company",listingBrokerage.replace(/\s+/g," ").trim());
    if(buyerBrokerage&&/DREAM VALLEY REALTY/i.test(buyerBrokerage))found.side="BUYER";
