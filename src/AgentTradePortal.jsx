@@ -91,7 +91,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    const found={};
    const firstMatch=(patterns)=>{for(const re of patterns){const m=text.match(re);if(m?.[1])return m[1].trim().replace(/[|]+$/,"")}return ""};
    const set=(key,val)=>{if(val&&!String(form[key]||"").trim())found[key]=val};
-   set("property_address",firstMatch([/(?:property\\s+address|subject\\s+property|municipal\\s+address)s*[:\n]+([^\n]{5,120})/i]));
+   set("property_address",firstMatch([/(?:property\s+address|subject\s+property|municipal\s+address)\s*[:\n]+([^\n]{5,120})/i]));
    const address=found.property_address||form.property_address||"";
    const addr=address.match(/^\s*(\d+[A-Z]?)\s+(.+?)(?:,\s*([^,]+))?(?:,\s*(ON|Ontario|BC|AB|QC|MB|SK|NS|NB|NL|PE|YT|NT|NU))?(?:\s+([A-Z]\d[A-Z][ -]?\d[A-Z]\d))?\s*$/i);
    if(addr){set("street_number",addr[1]);set("street_name",addr[2]);if(addr[3])set("city",addr[3].trim());if(addr[4])set("province",addr[4].toUpperCase()==="ONTARIO"?"ON":addr[4].toUpperCase());if(addr[5])set("postal_code",addr[5].toUpperCase())}
