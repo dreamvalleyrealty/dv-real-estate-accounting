@@ -318,6 +318,7 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,trustTran
  }
  async function issue(){
   if(!supabase)return;
+  if(!arReady){setError("Payment blocked — record the full commission AR receipt in the Commission Trust account and link it to this transaction before issuing.");return}
   if(method==="EFT"&&!reference.trim()){setError("Enter the EFT payment reference before issuing.");return}
   if(method==="CHEQUE"&&!reference.trim()){setError("Enter the cheque number before issuing.");return}
   setBusy(true);setError("");
