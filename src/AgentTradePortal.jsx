@@ -133,6 +133,20 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    if(emails.length===1)set("buyer_email",emails[0]);if(phones.length===1)set("buyer_phone",phones[0]);
    const postal=text.match(/\b([A-Z]\d[A-Z][ -]?\d[A-Z]\d)\b/i);if(postal)set("postal_code",postal[1].toUpperCase().replace(/\s*/g,""));
    if(/\bOntario\b|\bON\b/i.test(text))set("province","ON");
+   // OREA Form 100-specific overrides: use the actual filled values on page 1, not the first number in the PDF.
+   const apsPage=text.split(/Page 2 of 8|Page 2 of 6|Page 2 of 9/i)[0];
+   const apsBuyer=apsPage.match(/BUYER\s*:[\s\S]{0,350}?([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,4},\s*[A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,4})\s+agrees to purchase from/i);
+   if(apsBuyer&&!String(form.buyer_name||'').trim())found.buyer_name=apsBuyer[1].replace(/\s+/g,' ').trim();
+   const apsSeller=apsPage.match(/SELLER\s*:[\s\S]{0,350}?([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,4})\s+the following/i);
+   if(apsSeller&&!String(form.seller_name||'').trim())found.seller_name=apsSeller[1].replace(/\s+/g,' ').trim();
+   const priceSection=(apsPage.match(/PURCHASE PRICE([\s\S]{0,700}?)(?:DEPOSIT\s*:)/i)||[])[1]||'';
+   const revisedPrices=[...priceSection.matchAll(/\b\d{1,3}(?:,\d{3})+(?:\.\d{2})?\b/g)].map(m=>m[0].replace(/,/g,'').replace(/\.\d{2}$/,''));
+   if(revisedPrices.length&&!String(form.sale_price||'').trim())found.sale_price=revisedPrices[revisedPrices.length-1];
+   const completionSection=(apsPage.match(/COMPLETION DATE([\s\S]{0,320}?)(?:INITIALS OF BUYER|INITIALS OF SELLER|The trademarks)/i)||[])[1]||'';
+   let completion='';
+   let completionMatch=completionSection.match(/\b(\d{1,2})\s+day of\s+([A-Za-z]+)[\s\S]{0,60}?\b(20\s*\d{2}|\d{2})\b/i);
+   if(completionMatch){const monthNames=['january','february','march','april','may','june','july','august','september','october','november','december'];const month=monthNames.indexOf(completionMatch[2].toLowerCase())+1;let year=completionMatch[3].replace(/\s/g,'');if(year.length===2)year='20'+year;if(month>0)completion=year+'-'+String(month).padStart(2,'0')+'-'+completionMatch[1].padStart(2,'0')}
+   if(completion&&!String(form.close_date||'').trim())found.close_date=completion;
    return found;
  }
  async function extractSelectedPdf(){
