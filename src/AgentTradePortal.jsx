@@ -101,10 +101,18 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const months="January February March April May June July August September October November December".split(" ");
    const toIso=(day,month,year)=>{const mn=months.findIndex(x=>x.toLowerCase()===String(month).toLowerCase())+1;let yr=String(year||"").replace(/\s/g,"");if(yr.length===2)yr="20"+yr;return mn>0&&Number(day)>0&&Number(day)<=31?yr+"-"+String(mn).padStart(2,"0")+"-"+String(day).padStart(2,"0"):""};
    const dateFrom=(source)=>{const v=String(source||"");const matches=[...v.matchAll(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\s*\d{2}|\d{2})\b/gi)];const slash=[...v.matchAll(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/g)];const all=[...matches.map(m=>({i:m.index,iso:toIso(m[1],m[2],m[3])})),...slash.map(m=>({i:m.index,iso:m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0")}))].sort((a,b)=>a.i-b.i);return all.length?all[all.length-1].iso:""};
-   const buyerBefore=(()=>{const lines=text.split("\n").map(x=>x.trim()).filter(Boolean);const i=lines.findIndex(x=>/\bBUYER\s*:/.test(x));for(const line of lines.slice(i+1,i+6)){if(/Full legal names of all Buyers/i.test(line)||/^\.*$/.test(line))continue;const candidate=line.replace(/\.{3,}/g," ").replace(/\s+agrees to purchase from[\s\S]*$/i,"").replace(/^[\s,.;:]+|[\s,.;:]+$/g,"").trim();if(candidate&&!/^(agrees to purchase from|the following)$/i.test(candidate)&&!/^\(Full legal names/i.test(candidate))return candidate;}return "";})();
-   const buyerName=buyerBefore.replace(/\.{3,}/g," ").replace(/\s+/g," ").replace(/\(Full legal names of all Buyers\)/i,"").replace(/^[\s,.;:]+|[\s,.;:]+$/g,"").trim();if(buyerName)set("buyer_name",buyerName);
-   const sellerBefore=(()=>{const lines=text.split("\n").map(x=>x.trim()).filter(Boolean);const i=lines.findIndex(x=>/\bSELLER\s*:/.test(x));for(const line of lines.slice(i+1,i+6)){if(/Full legal names of all Sellers/i.test(line)||/^\.*$/.test(line))continue;const candidate=line.replace(/\.{3,}/g," ").replace(/\s+the following[\s\S]*$/i,"").replace(/^[\s,.;:]+|[\s,.;:]+$/g,"").trim();if(candidate&&!/^(agrees to purchase from|the following)$/i.test(candidate)&&!/^\(Full legal names/i.test(candidate))return candidate;}return "";})();
-   const sellerName=sellerBefore.replace(/\.{3,}/g," ").replace(/\s+/g," ").replace(/\(Full legal names of all Sellers\)/i,"").replace(/^[\s,.;:]+|[\s,.;:]+$/g,"").trim();if(sellerName)set("seller_name",sellerName);
+   const nameFromSection=(section,role)=>{
+     let value=String(section||"").replace(/^[\s\S]*?\b"+role+"\s*:/i,"");
+     value=value.replace(/\(Full legal names of all (?:Buyers|Sellers)\)/ig," ").replace(/\.{3,}/g," ").replace(/\s+(?:agrees to purchase from|the following)\b[\s\S]*$/i," ").replace(/\s+/g," ").trim();
+     value=value.replace(/^[\s,;:.|]+|[\s,;:.|]+$/g,"").trim();
+     return /^(?:PROPERTY|agrees to purchase from|the following)$/i.test(value)?"":value;
+   };
+   const buyerSection=(text.match(/\bBUYER\s*:[\s\S]{0,700}?\bSELLER\s*:/i)||[])[0]||"";
+   const sellerSection=(text.match(/\bSELLER\s*:[\s\S]{0,700}?\bPROPERTY\s*:/i)||[])[0]||"";
+   const buyerName=nameFromSection(buyerSection,"BUYER");
+   const sellerName=nameFromSection(sellerSection,"SELLER");
+   if(buyerName)set("buyer_name",buyerName);
+   if(sellerName)set("seller_name",sellerName);
    const addressMatch=firstPage.match(/located at\s+(\d+\s+.+?\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)\s+in the/i)||firstPage.match(/(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)\s+Address/i)||firstPage.match(/Address\s*:?\s*(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i);
    if(addressMatch)set("property_address",addressMatch[1].replace(/\s+/g," ").trim());
    const address=(found.property_address||form.property_address||"").match(/^(\d+)\s+(.+?)\s+(Toronto(?:\s+C?\d{1,2})?|[^,]+?)\s+(?:ON|Ontario)\s+([A-Z]\d[A-Z]\s?\d[A-Z]\d)$/i)|| (found.property_address||form.property_address||"").match(/^(\d+)\s+(.+?),\s*([^,]+),\s*(?:ON|Ontario)\s+([A-Z]\d[A-Z]\s?\d[A-Z]\d)$/i);
