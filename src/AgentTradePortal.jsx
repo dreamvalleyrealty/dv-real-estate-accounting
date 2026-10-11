@@ -127,10 +127,10 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const addressMatch=firstPage.match(/(\d+\s+[A-Za-z0-9.\x27-]+(?:\s+[A-Za-z0-9.\x27-]+){0,5}?\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Boulevard|Blvd|Crescent|Cres|Court|Ct|Lane|Ln|Way|Terrace|Trail|Place|Pl)\s+Toronto(?:\s+C\d{1,2})?\s+(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i)||firstPage.match(/(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i)||firstPage.match(/Address\s*:?\s*(\d+\s+[^,]{3,100},\s*[^,]{2,70},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i);
    if(addressMatch){const rawAddress=addressMatch[1].replace(/\.{3,}/g," ").replace(/\s+/g," ").trim();set("property_address",rawAddress);const parsed=rawAddress.match(/^(\d+)\s+(.+?)\s+(Toronto(?:\s+C\d{1,2})?)\s+(ON|Ontario)\s+([A-Z]\d[A-Z])\s?(\d[A-Z]\d)$/i);if(parsed){set("street_number",parsed[1]);const street=parsed[2].match(/^(.+?\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Boulevard|Blvd|Crescent|Cres|Court|Ct|Lane|Ln|Way|Terrace|Trail|Place|Pl))$/i);if(street)set("street_name",street[1]);set("city",parsed[3].replace(/\s+C\d{1,2}$/i,"").trim());set("province",parsed[4].toUpperCase()==="ONTARIO"?"ON":parsed[4].toUpperCase());set("postal_code",(parsed[5]+parsed[6]).toUpperCase());}}
    const priceLabel=firstPage.search(/PURCHASE PRICE/i);
-   const priceArea=priceLabel>=0?firstPage.slice(priceLabel,Math.min(firstPage.length,priceLabel+500)):"";
-   const priceTokens=[...priceArea.matchAll(/(?:\$\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d{5,}(?:\.\d{2})?)/g)].map(m=>Number(m[1].replace(/,/g,"").replace(/\.00$/,""))).filter(v=>Number.isFinite(v)&&v>0);
-   // OREA layouts can interleave the deposit amount before the printed purchase-price amount in PDF text order.
-   // Use the largest plausible amount in the purchase-price block, not simply the first extracted number.
+   const depositLabel=priceLabel>=0?firstPage.slice(priceLabel).search(/\bDEPOSIT\s*:/i):-1;
+   const priceArea=priceLabel>=0?firstPage.slice(priceLabel,depositLabel>0?priceLabel+depositLabel:Math.min(firstPage.length,priceLabel+220)):"";
+   const priceTokens=[...priceArea.matchAll(/(?:\$\s*)?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d{5,}(?:\.\d{2})?)/g)].map(m=>Number(m[1].replace(/,/g,"").replace(/\.00$/,""))).filter(v=>Number.isFinite(v)&&v>=1000);
+   // Read the amount from the PURCHASE PRICE section only; the DEPOSIT section must never supply sale_price.
    if(priceTokens.length)set("sale_price",String(Math.max(...priceTokens)));
    const completionLabel=firstPage.search(/COMPLETION DATE/i);
    const completionArea=completionLabel>=0?firstPage.slice(Math.max(0,completionLabel-250),Math.min(firstPage.length,completionLabel+250)):"";
