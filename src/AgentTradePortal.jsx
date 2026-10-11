@@ -167,7 +167,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    setBusy(true);setError("");let uploaded=0;
    for(const currentFile of filesToUpload){
      const safe=currentFile.name.replace(/[^a-zA-Z0-9._-]/g,"_");
-     const path=${user.id}+"/"+draft.id+"/"+Date.now()+"-"+uploaded+"-"+safe;
+     const path=`${user.id}/${draft.id}/${Date.now()}-${uploaded}-${safe}`;
      const {error:upError}=await supabase.storage.from("dv-trade-documents").upload(path,currentFile,{upsert:false,contentType:currentFile.type||"application/octet-stream"});
      if(upError){setError("Uploaded "+uploaded+" file(s); "+currentFile.name+" failed: "+upError.message);break}
      const {data,error:e}=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:docType,document_name:currentFile.name,storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id}]).select().single();
