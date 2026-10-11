@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2, Clock3, FileText, Plus, RefreshCw, Send, Upl
 import { supabase } from "./lib/supabase";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
-const AGENT_PORTAL_VERSION = "0.6.117";
+const AGENT_PORTAL_VERSION = "0.6.118";
 
 const blank = {
   transaction_number:"", transaction_type:"BUY_SELL", side:"SELLER", dvr_lead:false, property_address:"",
@@ -242,18 +242,26 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
        const parsed=addr.match(/^(\d+)\s+(.+)$/);if(parsed){set("street_number",parsed[1]);set("street_name",parsed[2].replace(/\s*,\s*$/,""));}
        set("city","Toronto");set("province","ON");const pc=raw.match(/\b([A-Z]\d[A-Z])\s?(\d[A-Z]\d)\b/i);if(pc)set("postal_code",(pc[1]+pc[2]).toUpperCase());
      }
-     const tenantArea=flat.match(/(?:TENANT(?:S)?|LESSEE(?:S)?)\s*\(?s?\)?\s*:?\s*([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,6})/i);
-     const landlordArea=flat.match(/(?:LANDLORD(?:S)?|LESSOR(?:S)?)\s*\(?s?\)?\s*:?\s*([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,5})/i);
-     if(tenantArea)set("buyer_name",tenantArea[1].trim());
+     // Read the value after the explicit field label only. Never infer a name from nearby prose such as "Tenant hereby offers..." or "ADDRESS OF LANDLORD".
+     const tenantArea=flat.match(/\bTENANT\s*:\s*([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,5})(?=\s*(?:\(|LANDLORD\s*:|ADDRESS\s+OF\s+LANDLORD|$))/i);
+     const landlordArea=flat.match(/\bLANDLORD\s*:\s*([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,3})(?=\s*(?:\(|ADDRESS\s+OF\s+LANDLORD|PREMISES\s*:|$))/i);
+     if(tenantArea){set("buyer_name",tenantArea[1].trim());set("side","TENANT");}
      if(landlordArea)set("seller_name",landlordArea[1].trim());
-     const rentArea=flat.match(/(?:RENT|MONTHLY\s+RENT)\s*:?\s*(?:\$\s*)?([\d,]+(?:\.\d{2})?)/i);
+     // OREA Form 400 places the amount after descriptive wording ("the sum of ... Dollars (CDN) $2,400.00").
+     const rentArea=flat.match(/\bRENT\b[\s\S]{0,260}?(?:\(\s*CDN\s*\)\s*)?\$\s*([\d,]+(?:\.\d{2})?)/i)
+       ||flat.match(/\bRENT\b[\s\S]{0,260}?\b([\d,]+\.\d{2})\b/i);
      if(rentArea){const rent=Number(rentArea[1].replace(/,/g,""));if(rent>0)set("sale_price",String(rent));}
-     const leaseDeposit=flat.match(/(?:DEPOSIT|SECURITY\s+DEPOSIT)\s*:?\s*(?:\$\s*)?([\d,]+(?:\.\d{2})?)/i);
+     // The deposit holder clause may precede the amount, so anchor the search to the deposit section.
+     const leaseDepositArea=flat.match(/DEPOSIT\s+AND\s+PREPAID\s+RENT[\s\S]{0,500}/i);
+     const leaseDeposit=leaseDepositArea&&leaseDepositArea[0].match(/(?:CDN\)?\s*)?\$\s*([\d,]+(?:\.\d{2})?)/i);
      if(leaseDeposit){const amount=Number(leaseDeposit[1].replace(/,/g,""));if(amount>0)set("deposit_amount",String(amount));}
-     const startArea=flat.match(/(?:TERM\s+OF\s+TENANCY|COMMENCEMENT\s+DATE|LEASE\s+COMMENCEMENT|START\s+DATE)[\s\S]{0,160}/i);
+     const startArea=flat.match(/(?:TERM\s+OF\s+LEASE|TERM\s+OF\s+TENANCY|COMMENCEMENT\s+DATE|LEASE\s+COMMENCEMENT|START\s+DATE)[\s\S]{0,180}/i);
      const startDate=startArea?dateFrom(startArea[0]):"";
      if(startDate)set("close_date",startDate);
-     const coop=flat.match(/(?:co-operating\s+brokerage|cooperating\s+brokerage)[\s\S]{0,180}?(?:half\s+month'?s?\s+rent|one\s+half\s+month'?s?\s+rent)/i);
+     const acceptance=flat.match(/finally\s+accepted\s+by\s+all\s+parties\s+at[\s\S]{0,100}/i);
+     const acceptanceDate=acceptance?dateFrom(acceptance[0]):"";
+     if(acceptanceDate)set("transaction_date",acceptanceDate);
+     const coop=flat.match(/(?:co-operating\s+brokerage|cooperating\s+brokerage)[\s\S]{0,220}?(?:half\s+month'?s?\s+rent|one\s+half\s+month'?s?\s+rent)/i);
      if(coop&&found.sale_price)set("coop_commission_amount",String(Number(found.sale_price)/2));
    }
    return found;
