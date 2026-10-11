@@ -3,6 +3,8 @@ import { AlertCircle, CheckCircle2, Clock3, FileText, Plus, RefreshCw, Send, Upl
 import { supabase } from "./lib/supabase";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
+const AGENT_PORTAL_VERSION = "0.6.117";
+
 const blank = {
   transaction_number:"", transaction_type:"BUY_SELL", side:"SELLER", dvr_lead:false, property_address:"",
   street_number:"", street_name:"", unit_number:"", city:"", province:"ON", postal_code:"",
@@ -353,6 +355,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      </section>
    </div>
    {previewUrl&&<div className="agent-trade-preview"><div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}><strong>{previewDoc?.document_name}</strong><button className="secondary" style={{marginLeft:"auto"}} onClick={()=>{setPreviewUrl("");setPreviewDoc(null)}}><X size={16}/> Close preview</button></div><iframe title="Trade document preview" src={previewUrl}/></div>}
+   <div className="agent-trade-muted" style={{textAlign:"right",fontSize:11,paddingTop:4}}>DV Accounting · Agent Portal v{AGENT_PORTAL_VERSION}</div>
  </div>
 }
 function ClipboardPlaceholder(){return <AlertCircle size={26}/>}
