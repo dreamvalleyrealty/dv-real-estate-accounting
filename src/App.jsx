@@ -451,11 +451,7 @@ function Agents({user,mode="agents",permissions={},setActive}){
  async function deletePaidCommission(id){
   if(!isSuperAdmin)return;
   const c=comm.rows.find(x=>x.id===id); const tx=t.rows.find(x=>x.id===c?.transaction_id); const label=tx?.transaction_number||"this commission";
-  if(!window.confirm("SUPER ADMIN ONLY
-
-This will completely delete the paid commission, its commission cheque and related commission charges, then return the transaction to Finalized so it can be recalculated and paid again.
-
-Continue for "+label+"?"))return;
+  if(!window.confirm("SUPER ADMIN ONLY\n\nThis will completely delete the paid commission, its commission cheque and related commission charges, then return the transaction to Finalized so it can be recalculated and paid again.\n\nContinue for "+label+"?"))return;
   const{error}=await supabase.rpc("dv_accounting_delete_paid_commission",{p_commission_id:id});
   if(error)return alert(error.message);
   alert("Paid commission deleted. The transaction is ready to be finalized/closed again and the commission can be recalculated.");
