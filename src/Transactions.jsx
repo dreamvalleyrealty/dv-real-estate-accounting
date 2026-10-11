@@ -31,6 +31,7 @@ async function downloadSinglePagePdf(html,filename,selector,kind){
    if(page){page.style.height="auto";page.style.maxHeight="none";page.style.overflow="visible";page.style.width="100%"}
    el.style.width="100%";
   }else{el.style.width="8.14in";el.style.height="auto";el.style.minHeight="0";el.style.margin="0";el.style.overflow="visible"}
+  el.style.removeProperty(kind==="trade"?"--trade-size":"--invoice-size");
   const targetHeight=10.55*96;
   let low=6.5,high=kind==="trade"?19:18,best=low;
   const setSize=size=>doc.body.style.setProperty(kind==="trade"?"--trade-size":"--invoice-size",size+"px");
