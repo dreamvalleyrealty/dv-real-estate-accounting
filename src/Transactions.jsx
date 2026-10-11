@@ -257,11 +257,12 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
  {tradePreviewHtml&&<div className="overlay"><div className="modal tx-modal" style={{maxWidth:1100,maxHeight:"96vh",display:"flex",flexDirection:"column"}}><div className="modalhead"><h2>Trade Record Preview</h2><button type="button" className="iconbtn" onClick={()=>setTradePreviewHtml("")}>×</button></div><div className="notice" style={{margin:"10px 14px 0"}}>Review the trade record below. <b>Save as PDF</b> downloads a one-page Letter portrait PDF directly. Use <b>Print Trade Record</b> to print.</div><iframe title="Trade Record Preview" srcDoc={tradePreviewHtml} style={{width:"100%",height:"min(68vh,720px)",minHeight:420,border:0,background:"#fff",flex:"1 1 auto"}}/><div className="modalactions" style={{display:"flex",justifyContent:"flex-end",gap:8,flexWrap:"wrap"}}><button type="button" className="secondary" onClick={()=>setTradePreviewHtml("")}>Close</button><button type="button" className="secondary" onClick={()=>printTradeRecordFromPreview("pdf")}><Printer size={16}/> Save as PDF</button><button type="button" className="primary" onClick={()=>printTradeRecordFromPreview("print")}><Printer size={16}/> Print Trade Record</button></div></div></div>} <div className="tx-footer"><button type="button" className="secondary" onClick={onClose}>Cancel</button><div className="tx-footer-right">{tab>0&&<button type="button" className="secondary" onClick={()=>setTab(t=>t-1)}><ChevronLeft size={16}/> Previous</button>}{tab<5&&<button type="button" className="secondary" onClick={()=>setTab(t=>t+1)}>Next <ChevronRight size={16}/></button>}<button type="submit" className="primary" disabled={busy}><Save size={16}/>{busy?"Saving...":initial?"Save Changes":"Save Transaction"}</button><button type="button" className="secondary" disabled={busy} onClick={()=>save(null,true)}>Save & Close</button></div></div>
  </form></div>
 }
-function TransactionWorkspaceInner(){
+function TransactionWorkspaceInner({selectedTransactionId,onTransactionOpened}){
  const[rows,setRows]=useState([]),[q,setQ]=useState(""),[show,setShow]=useState(false),[editing,setEditing]=useState(null),[loadError,setLoadError]=useState(""),[dftTarget,setDftTarget]=useState(null),[dftBusy,setDftBusy]=useState(false),[dftForm,setDftForm]=useState({bank_account_id:"",date:today(),method:"CHEQUE",reference:"",authority:"",authorized:false}),[closeTarget,setCloseTarget]=useState(null),[closeBusy,setCloseBusy]=useState(false),[closeForm,setCloseForm]=useState({received:"NO",date:today(),amount:"",bank_account_id:"",reference:""}),[invoiceTarget,setInvoiceTarget]=useState(null),[invoiceData,setInvoiceData]=useState(null),[invoiceBusy,setInvoiceBusy]=useState(false);
  const bankRows=useRows("dv_accounting_bank_accounts").rows;const dftBankRows=bankRows.filter(b=>b.active!==false&&b.account_type==="REAL_ESTATE_TRUST");const commissionBankRows=bankRows.filter(b=>b.active!==false&&b.account_type==="COMMISSION_TRUST");
  const load=async()=>{if(!supabase)return;setLoadError("");const{data,error}=await supabase.from("dv_accounting_transactions").select("*").order("transaction_date",{ascending:false});if(error){setLoadError(error.message);return}setRows(Array.isArray(data)?data:[])};
  useEffect(()=>{load()},[]);
+ useEffect(()=>{if(!selectedTransactionId||!rows.length)return;const match=rows.find(row=>String(row.id)===String(selectedTransactionId));if(match){setEditing(match);setShow(true);onTransactionOpened?.()}},[selectedTransactionId,rows,onTransactionOpened]);
  const filtered=rows.filter(x=>[x.transaction_number,x.property_address,x.client_name,x.agent_name].join(" ").toLowerCase().includes(q.toLowerCase()));
  function invoiceHtml(d){
  const body=(d.lines||[]).map(x=>'<tr><td>'+x.label+'</td><td>'+x.rate+'</td><td class="money">'+cash(x.amount)+'</td></tr>').join("");
@@ -289,6 +290,6 @@ class TransactionErrorBoundary extends Component {
   return this.props.children;
  }
 }
-export default function TransactionWorkspace(){
- return <TransactionErrorBoundary><TransactionWorkspaceInner/></TransactionErrorBoundary>;
+export default function TransactionWorkspace({selectedTransactionId,onTransactionOpened}){
+ return <TransactionErrorBoundary><TransactionWorkspaceInner selectedTransactionId={selectedTransactionId} onTransactionOpened={onTransactionOpened}/></TransactionErrorBoundary>;
 }
