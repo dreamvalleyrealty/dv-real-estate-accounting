@@ -88,65 +88,29 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    setSelected(data);setForm(old=>({...blank,...(data.payload||{}),...old}));setSubmissions(old=>[data,...old.filter(x=>x.id!==data.id)]);setBusy(false);return data;
  }
  function parseTradePdf(rawText){
-   const text=String(rawText||"").replace(/\u00a0/g," ").replace(/[.…·]{3,}/g," ").replace(/[ \t]+/g," ").replace(/\s*\n\s*/g,"\n");
-   const lines=text.split(/\n+/).map(v=>v.trim()).filter(Boolean),found={};
-   const set=(key,val)=>{val=String(val||"").replace(/^[\s:|#.-]+|[\s|.]+$/g,"").replace(/\s{2,}/g," ").trim();if(val&&!String(form[key]||"").trim())found[key]=val};
-   const labelValue=(labels,nextLabels=[])=>{
-     const esc=v=>String(v).replace(/[.*+?^$()|[\]\\]/g,"\\$&");
-     const re=new RegExp("(?:"+labels.map(esc).join("|")+")\\s*[:\\-]?\\s*([\\s\\S]{1,220}?)"+(nextLabels.length?"(?="+nextLabels.map(esc).join("|")+"|$)":"(?=\\n|$)"),"i");
-     const m=text.match(re);return m?m[1].split(/\\n/).map(x=>x.trim()).filter(Boolean).join(" ").replace(/^[.…·\\s]+|[.…·\\s]+$/g,"").trim():"";
-   };
-   const moneyFrom=s=>{const m=String(s||"").match(/(?:CDN\$\s*)?\$?\s*([0-9]{1,3}(?:,[0-9]{3})+(?:\.\d{2})?|[0-9]{5,}(?:\.\d{2})?)/);return m?m[1].replace(/,/g,""):""};
-   const dateFrom=s=>{
-     const v=String(s||"").replace(/[.…·]/g," ").replace(/\s+/g," ").trim();let m=v.match(/\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b/);
-     if(m)return m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0");
-     m=v.match(/\b(\d{1,2})[-/](\d{1,2})[-/](20\d{2})\b/);
-     if(m)return m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0");
-     m=v.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s*,?\s*(20\d{2})\b/i);
-     if(!m)m=v.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(20\d{2})\b/i);
-     if(m){const months=["january","february","march","april","may","june","july","august","september","october","november","december"];const day=/^\d/.test(m[1])?m[1]:m[2],month=/^\d/.test(m[1])?m[2]:m[1];return m[3]+"-"+String(months.indexOf(month.toLowerCase())+1).padStart(2,"0")+"-"+String(day).padStart(2,"0")}
-     return "";
-   };
-   const address=labelValue(["REAL PROPERTY:\s*Address","PROPERTY ADDRESS","SUBJECT PROPERTY","MUNICIPAL ADDRESS"],["fronting on","PURCHASE PRICE","DEPOSIT","LEGAL DESCRIPTION"]);
-   set("property_address",address);
-   const addr=(address||form.property_address||"").match(/^\s*(\d+[A-Z]?)\s+(.+?),\s*([^,]+),\s*(ON|ONTARIO|BC|AB|QC|MB|SK|NS|NB|NL|PE|YT|NT|NU)\s+([A-Z]\d[A-Z]\s?\d[A-Z]\d)\s*$/i);
-   if(addr){set("street_number",addr[1]);set("street_name",addr[2]);set("city",addr[3]);set("province",addr[4].toUpperCase()==="ONTARIO"?"ON":addr[4].toUpperCase());set("postal_code",addr[5].toUpperCase().replace(/\s*/g,""))}
-   set("mls_number",(text.match(/\bMLS\s*(?:#|number|no\.?)?\s*[:#-]?\s*([A-Z]\d{7,}|[A-Z0-9-]{5,})\b/i)||[])[1]);
-   set("transaction_number",(text.match(/\b(?:trade|transaction)\s*(?:#|number|no\.?)\s*[:#-]?\s*([A-Z0-9-]{3,})\b/i)||[])[1]);
-   const priceContext=labelValue(["PURCHASE PRICE","SALE PRICE","CONSIDERATION","RENTAL PRICE","MONTHLY RENT"],["DEPOSIT","IRREVOCABILITY","COMPLETION DATE","DEFINITIONS"]);
-   let price=moneyFrom(priceContext);if(!price){const candidates=[...text.matchAll(/\b(?:1[0-9]{5,}|[2-9][0-9]{5,})\b/g)].map(m=>m[0]);price=candidates.find(x=>Number(x)>=10000)||""}set("sale_price",price);
-   set("gross_commission",moneyFrom(labelValue(["GROSS COMMISSION","COMMISSION AMOUNT","COMMISSION PAYABLE","BROKERAGE COMMISSION","TOTAL COMMISSION"],["HST","TAX","GST","BUYER","SELLER"])));
-   set("close_date",dateFrom(labelValue(["COMPLETION DATE","COMPLETION","CLOSING DATE","CLOSE DATE","POSSESSION DATE"],["INITIALS OF BUYER","INITIALS OF SELLER","IRREVOCABILITY","DEPOSIT","SCHEDULE"])));
-   set("offer_date",dateFrom(labelValue(["AGREEMENT OF PURCHASE AND SALE dated","AGREEMENT DATE","OFFER DATE","DATE OF OFFER"],["BUYER","SELLER","REAL PROPERTY","PURCHASE PRICE"])));
-   set("firm_date",dateFrom(labelValue(["FIRM DATE","CONDITIONS WAIVED","CONDITION WAIVER DATE","UNCONDITIONAL DATE"],["COMPLETION DATE","INITIALS","SCHEDULE"])));
-   const names=(label,next)=>{
-     let value=labelValue([label],next);
-     value=value.replace(/\b(?:agrees to purchase from|the following|for use in the Province|full legal names of all buyers|full legal names of all sellers)\b[\s\S]*$/i,"").replace(/^[.…·\s]+|[.…·\s]+$/g,"").trim();
-     if(value.length>100)value=value.slice(0,100).trim();
-     if(!value||/^(full legal names|name of buyer|name of seller|dollars|the following)$/i.test(value))return "";
-     return value;
-   };
-   set("buyer_name",names("BUYER",["SELLER","REAL PROPERTY","PURCHASE PRICE","DEPOSIT","for use in the Province"]));
-   set("seller_name",names("SELLER",["REAL PROPERTY","PURCHASE PRICE","DEPOSIT","IRREVOCABILITY","for use in the Province"]));
-   const emails=[...text.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)].map(m=>m[0]);
-   const phones=[...text.matchAll(/(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/g)].map(m=>m[0]);
-   if(emails.length===1)set("buyer_email",emails[0]);if(phones.length===1)set("buyer_phone",phones[0]);
-   const postal=text.match(/\b([A-Z]\d[A-Z][ -]?\d[A-Z]\d)\b/i);if(postal)set("postal_code",postal[1].toUpperCase().replace(/\s*/g,""));
-   if(/\bOntario\b|\bON\b/i.test(text))set("province","ON");
-   // OREA Form 100-specific overrides: use the actual filled values on page 1, not the first number in the PDF.
-   const apsPage=text.split(/Page 2 of 8|Page 2 of 6|Page 2 of 9/i)[0];
-   const apsBuyer=apsPage.match(/BUYER\s*:[\s\S]{0,350}?([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,4},\s*[A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,4})\s+agrees to purchase from/i);
-   if(apsBuyer&&!String(form.buyer_name||'').trim())found.buyer_name=apsBuyer[1].replace(/\s+/g,' ').trim();
-   const apsSeller=apsPage.match(/SELLER\s*:[\s\S]{0,350}?([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,4})\s+the following/i);
-   if(apsSeller&&!String(form.seller_name||'').trim())found.seller_name=apsSeller[1].replace(/\s+/g,' ').trim();
-   const priceSection=(apsPage.match(/PURCHASE PRICE([\s\S]{0,700}?)(?:DEPOSIT\s*:)/i)||[])[1]||'';
-   const revisedPrices=[...priceSection.matchAll(/\b\d{1,3}(?:,\d{3})+(?:\.\d{2})?\b/g)].map(m=>m[0].replace(/,/g,'').replace(/\.\d{2}$/,''));
-   if(revisedPrices.length&&!String(form.sale_price||'').trim())found.sale_price=revisedPrices[revisedPrices.length-1];
-   const completionSection=(apsPage.match(/COMPLETION DATE([\s\S]{0,320}?)(?:INITIALS OF BUYER|INITIALS OF SELLER|The trademarks)/i)||[])[1]||'';
-   let completion='';
-   let completionMatch=completionSection.match(/\b(\d{1,2})\s+day of\s+([A-Za-z]+)[\s\S]{0,60}?\b(20\s*\d{2}|\d{2})\b/i);
-   if(completionMatch){const monthNames=['january','february','march','april','may','june','july','august','september','october','november','december'];const month=monthNames.indexOf(completionMatch[2].toLowerCase())+1;let year=completionMatch[3].replace(/\s/g,'');if(year.length===2)year='20'+year;if(month>0)completion=year+'-'+String(month).padStart(2,'0')+'-'+completionMatch[1].padStart(2,'0')}
-   if(completion&&!String(form.close_date||'').trim())found.close_date=completion;
+   const text=String(rawText||"").replace(/\u00a0/g," ").replace(/\r/g,"").replace(/[ \t]+/g," ").replace(/[.…·]{2,}/g," ");
+   const flat=text.replace(/\s+/g," ").trim();
+   const found={};
+   const set=(key,value)=>{value=String(value||"").replace(/^[\s:|.]+|[\s|.]+$/g,"").replace(/\s{2,}/g," ").trim();if(value&&!String(form[key]||"").trim())found[key]=value};
+   const firstPage=flat.split(/Page 2 of 8|Page 2 of 6|Page 2 of 9/i)[0];
+   const parseOreaDate=(source)=>{let m=String(source||"").match(/\b(\d{1,2})\s+day of\s+(January|February|March|April|May|June|July|August|September|October|November|December)[\s\S]{0,80}?\b(20\s*\d{2}|\d{2})\b/i);if(!m)return "";const months=["january","february","march","april","may","june","july","august","september","october","november","december"];const mn=months.indexOf(m[2].toLowerCase())+1;let yr=m[3].replace(/\s/g,"");if(yr.length===2)yr="20"+yr;if(mn<1)return "";return yr+"-"+String(mn).padStart(2,"0")+"-"+m[1].padStart(2,"0")};
+   const buyerMatch=firstPage.match(/BUYER\s*:[\s\S]{0,500}?([A-Z][A-Za-zÀ-ÿ\- ]{2,80}?)\s+agrees to purchase from/i);
+   if(buyerMatch)set("buyer_name",buyerMatch[1].replace(/^[.\s]+|[.\s]+$/g,"").replace(/\s+/g," "));
+   const sellerMatch=firstPage.match(/SELLER\s*:[\s\S]{0,500}?([A-Z][A-Za-zÀ-ÿ\- ]{2,80}?)\s+the following/i);
+   if(sellerMatch)set("seller_name",sellerMatch[1].replace(/^[.\s]+|[.\s]+$/g,"").replace(/\s+/g," "));
+   const addressMatch=firstPage.match(/Address\s*:?\s*(\d+\s+[^,]{3,90},\s*[^,]{2,50},\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i);
+   if(addressMatch)set("property_address",addressMatch[1].replace(/\s+/g," ").trim());
+   const addr=(found.property_address||form.property_address||"").match(/^(\d+)\s+(.+?),\s*([^,]+),\s*(?:ON|Ontario)\s+([A-Z]\d[A-Z]\s?\d[A-Z]\d)$/i);
+   if(addr){set("street_number",addr[1]);set("street_name",addr[2]);set("city",addr[3]);set("province","ON");set("postal_code",addr[4].toUpperCase().replace(/\s*/g,""));}
+   const priceSection=(firstPage.match(/PURCHASE PRICE([\s\S]{0,900}?)(?:DEPOSIT\s*:)/i)||[])[1]||"";
+   const priceTokens=[...priceSection.matchAll(/\$?\s*(\d{1,3}(?:,\d{3})+(?:\.\d{2})?)/g)].map(m=>m[1].replace(/,/g,"").replace(/\.\d{2}$/,""));
+   if(priceTokens.length)set("sale_price",priceTokens[priceTokens.length-1]);
+   const completionSection=(firstPage.match(/COMPLETION DATE([\s\S]{0,450}?)(?:INITIALS OF BUYER|INITIALS OF SELLER|The trademarks|OREA)/i)||[])[1]||"";
+   const completion=parseOreaDate(completionSection);if(completion)set("close_date",completion);
+   const agreementSection=(firstPage.match(/Agreement of Purchase and Sale dated([\s\S]{0,220}?)(?:BUYER\s*:|SELLER\s*:)/i)||[])[1]||"";
+   const offerDate=parseOreaDate(agreementSection);if(offerDate)set("offer_date",offerDate);
+   const mls=firstPage.match(/\bMLS\s*(?:#|number|no\.?)?\s*[:#-]?\s*([A-Z0-9-]{5,})\b/i);if(mls)set("mls_number",mls[1]);
+   const commission=flat.match(/(?:gross commission|commission amount|commission payable|brokerage commission|total commission)\s*[:\-]?\s*\$?([\d,]+(?:\.\d{2})?)/i);if(commission)set("gross_commission",commission[1].replace(/,/g,""));
    return found;
  }
  async function extractSelectedPdf(){
