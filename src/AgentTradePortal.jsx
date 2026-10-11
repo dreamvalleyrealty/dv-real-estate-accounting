@@ -6,19 +6,24 @@ import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 const blank = {
   transaction_number:"", transaction_type:"BUY_SELL", side:"SELLER", property_address:"",
   street_number:"", street_name:"", unit_number:"", city:"", province:"ON", postal_code:"",
-  mls_number:"", transaction_date:new Date().toISOString().slice(0,10), offer_date:"",
-  firm_date:"", close_date:"", sale_price:"", gross_commission:"", client_name:"",
-  buyer_name:"", buyer_email:"", buyer_phone:"", buyer_company:"",
-  seller_name:"", seller_email:"", seller_phone:"", seller_company:"", notes:""
+  mls_number:"", transaction_date:new Date().toISOString().slice(0,10), offer_date:"", deposit_date:"",
+  firm_date:"", close_date:"", sale_price:"", gross_commission:"", commission_basis:"PERCENT", coop_commission_percent:"", coop_commission_amount:"",
+  buyer_name:"", buyer_email:"", buyer_phone:"", buyer_company:"DREAM VALLEY REALTY INC., BROKERAGE",
+  seller_name:"", listing_brokerage_name:"", listing_brokerage_address:"", listing_brokerage_phone:"", listing_brokerage_fax:"", listing_agent_name:"", listing_agent_phone:"", listing_agent_email:"",
+  buyer_brokerage_name:"DREAM VALLEY REALTY INC., BROKERAGE", buyer_brokerage_address:"", buyer_brokerage_phone:"(416) 951-9929", buyer_brokerage_fax:"", buyer_agent_name:"", buyer_agent_phone:"", buyer_agent_email:"", notes:""
 };
 const labelStatus = s => ({DRAFT:"Draft",SUBMITTED:"Awaiting review",NEEDS_CHANGES:"Changes requested",APPROVED:"Approved / transferred"}[s]||s||"Draft");
 const money = v => new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(v||0));
 const displayDate = v => v ? new Date(v+"T12:00:00").toLocaleDateString("en-CA") : "—";
 const inputFields = [
-  ["transaction_number","Agent reference / trade number"],["transaction_type","Transaction type"],["side","Representation side"],
-  ["property_address","Full property address"],["street_number","Street number"],["street_name","Street name"],["unit_number","Unit"],["city","City"],["province","Province"],["postal_code","Postal code"],["mls_number","MLS number"],["transaction_date","Trade / entry date"],["offer_date","Offer date"],["firm_date","Firm date"],["close_date","Closing date"],["sale_price","Sale / lease price"],["gross_commission","Expected gross commission"],["client_name","Client / party summary"],
-  ["buyer_name","Buyer name"],["buyer_email","Buyer email"],["buyer_phone","Buyer phone"],["buyer_company","Buyer company"],
-  ["seller_name","Seller name"],["seller_email","Seller email"],["seller_phone","Seller phone"],["seller_company","Seller company"],["notes","Notes for Trade Admin"]
+  ["transaction_number","Trade number"],["transaction_type","Transaction type"],["side","Representation side"],
+  ["street_number","Street number"],["street_name","Street name"],["unit_number","Unit"],["city","City"],["province","Province"],["postal_code","Postal code"],["mls_number","MLS number"],
+  ["transaction_date","Trade / entry date"],["offer_date","Offer date"],["deposit_date","Deposit date"],["firm_date","Firm date"],["close_date","Closing date"],["sale_price","Sale / lease price"],
+  ["commission_basis","Commission calculation"],["coop_commission_percent","Co-op commission (%)"],["coop_commission_amount","Co-op commission amount ($)"],
+  ["buyer_name","Buyer name(s) — first and last names"],["buyer_email","Buyer email"],["buyer_phone","Buyer phone"],
+  ["seller_name","Seller name(s) — first and last names"],
+  ["listing_brokerage_name","Listing brokerage"],["listing_brokerage_address","Listing brokerage address"],["listing_brokerage_phone","Listing brokerage phone"],["listing_brokerage_fax","Listing brokerage fax"],["listing_agent_name","Listing agent name"],["listing_agent_phone","Listing agent tel"],["listing_agent_email","Listing agent email"],
+  ["buyer_brokerage_name","Co-operating / buyer brokerage"],["buyer_brokerage_address","Buyer brokerage address"],["buyer_brokerage_phone","Buyer brokerage phone"],["buyer_brokerage_fax","Buyer brokerage fax"],["buyer_agent_name","Buyer agent name"],["buyer_agent_phone","Buyer agent tel"],["buyer_agent_email","Buyer agent email"],["notes","Notes for Trade Admin"]
 ];
 function Field({label,children}) { return <label className="agent-trade-field"><span>{label}</span>{children}</label> }
 function statusPill(status){return <span className="pill" style={{background:status==="APPROVED"?"#e8f7ee":status==="SUBMITTED"?"#fff3d9":status==="NEEDS_CHANGES"?"#fff0f0":"#edf1f7",color:status==="APPROVED"?"#167344":status==="SUBMITTED"?"#875600":status==="NEEDS_CHANGES"?"#b42318":"#344054"}}>{labelStatus(status)}</span>}
