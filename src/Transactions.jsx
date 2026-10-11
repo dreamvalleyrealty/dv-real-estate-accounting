@@ -1,5 +1,5 @@
 import {Component,useEffect,useMemo,useState} from "react";
-import {Plus,Save,RefreshCw,Search,FileText,AlertCircle,Printer,Trash2,ChevronLeft,ChevronRight,Building2,Users} from "lucide-react";
+import {Plus,Save,RefreshCw,Search,FileText,AlertCircle,Printer,Trash2,ChevronLeft,ChevronRight,Building2,Users,Landmark} from "lucide-react";
 import {supabase} from "./lib/supabase";
 
 const PROVINCES=[["AB","Alberta"],["BC","British Columbia"],["MB","Manitoba"],["NB","New Brunswick"],["NL","Newfoundland and Labrador"],["NS","Nova Scotia"],["NT","Northwest Territories"],["NU","Nunavut"],["ON","Ontario"],["PE","Prince Edward Island"],["QC","Quebec"],["SK","Saskatchewan"],["YT","Yukon"]];
