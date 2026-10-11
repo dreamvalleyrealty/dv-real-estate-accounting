@@ -129,9 +129,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      if(dm&&year)close=toIso(dm[1],dm[2],year);
    }
    if(close)set("close_date",close);
-   const agreementDate=(firstPage.match(/Agreement of Purchase and Sale dated this\s+(\d{1,2})\s+day of\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\s*\d{2}|\d{2})/i)||[]);if(agreementDate.length)set("transaction_date",toIso(agreementDate[1],agreementDate[2],agreementDate[3]));
-   const offerArea=offerLabel>=0?firstPage.slice(Math.max(0,offerLabel-160),Math.min(firstPage.length,offerLabel+180)):"";
-   const offer=dateFrom(offerArea);if(offer)set("offer_date",offer);
+   const agreementDate=(firstPage.match(/Agreement of Purchase and Sale dated this\s+(\d{1,2})\s+day of\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\s*\d{2}|\d{2})/i)||[]);if(agreementDate.length){const agreementIso=toIso(agreementDate[1],agreementDate[2],agreementDate[3]);set("transaction_date",agreementIso);set("offer_date",agreementIso);}
    const acceptanceLabel=flat.search(/finally accepted by all parties at/i);
    // E-sign PDFs commonly print the timestamp immediately BEFORE the acceptance label.
    const acceptanceArea=acceptanceLabel>=0?flat.slice(Math.max(0,acceptanceLabel-180),acceptanceLabel+300):"";
