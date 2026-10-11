@@ -229,6 +229,33 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    if(conditions.length)set("condition_list",conditions.join("\n"));
    // Preserve useful APS details that have no dedicated fields in this form.
    const unit=(firstPage.match(/Unit\s+No\.?\s*(\d+[A-Z]?)/i)||firstPage.match(/\b(\d+[A-Z]?)\s+Unit\s+a unit in the condominium/i)||firstPage.match(/\b(\d+[A-Z]?)\s+Unit\b/i)||firstPage.match(/\b(\d{1,5})\s+Unit\s+(?:a unit|in the condominium)/i)||[])[1];if(unit)set("unit_number",unit);
+   // OREA Agreement to Lease support: lease PDFs use landlord/tenant and monthly rent labels rather than buyer/seller and purchase price.
+   const leaseDoc=/AGREEMENT\s+TO\s+LEASE|AGREEMENT\s+OF\s+LEASE|RESIDENTIAL\s+TENANCY/i.test(flat);
+   if(leaseDoc){
+     set("transaction_type","LEASE");
+     const leaseAddress=flat.match(/(?:PREMISES|PROPERTY\s+ADDRESS|ADDRESS)\s*:?\s*((?:Unit\s*\d+[, ]+)?\d+\s+[^,]{2,90}?,?\s*Toronto\s*,?\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i)
+       ||flat.match(/((?:Unit\s*\d+[, ]+)?\d+\s+[A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+){0,5}\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Boulevard|Blvd|Crescent|Cres|Court|Ct|Lane|Ln|Way|Terrace|Trail|Place|Pl),?\s*Toronto,?\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)/i);
+     if(leaseAddress){
+       const raw=leaseAddress[1].replace(/\s*,\s*/g,", ").replace(/\s+/g," ").trim();set("property_address",raw);
+       const unit=raw.match(/\bUnit\s*#?\s*(\w+)/i);if(unit)set("unit_number",unit[1]);
+       const addr=raw.replace(/^Unit\s*#?\s*\w+[, ]*/i,"").replace(/,?\s*Toronto,?\s*(?:ON|Ontario)\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d$/i,"").trim();
+       const parsed=addr.match(/^(\d+)\s+(.+)$/);if(parsed){set("street_number",parsed[1]);set("street_name",parsed[2].replace(/\s*,\s*$/,""));}
+       set("city","Toronto");set("province","ON");const pc=raw.match(/\b([A-Z]\d[A-Z])\s?(\d[A-Z]\d)\b/i);if(pc)set("postal_code",(pc[1]+pc[2]).toUpperCase());
+     }
+     const tenantArea=flat.match(/(?:TENANT(?:S)?|LESSEE(?:S)?)\s*\(?s?\)?\s*:?\s*([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,6})/i);
+     const landlordArea=flat.match(/(?:LANDLORD(?:S)?|LESSOR(?:S)?)\s*\(?s?\)?\s*:?\s*([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){1,5})/i);
+     if(tenantArea)set("buyer_name",tenantArea[1].trim());
+     if(landlordArea)set("seller_name",landlordArea[1].trim());
+     const rentArea=flat.match(/(?:RENT|MONTHLY\s+RENT)\s*:?\s*(?:\$\s*)?([\d,]+(?:\.\d{2})?)/i);
+     if(rentArea){const rent=Number(rentArea[1].replace(/,/g,""));if(rent>0)set("sale_price",String(rent));}
+     const leaseDeposit=flat.match(/(?:DEPOSIT|SECURITY\s+DEPOSIT)\s*:?\s*(?:\$\s*)?([\d,]+(?:\.\d{2})?)/i);
+     if(leaseDeposit){const amount=Number(leaseDeposit[1].replace(/,/g,""));if(amount>0)set("deposit_amount",String(amount));}
+     const startArea=flat.match(/(?:TERM\s+OF\s+TENANCY|COMMENCEMENT\s+DATE|LEASE\s+COMMENCEMENT|START\s+DATE)[\s\S]{0,160}/i);
+     const startDate=startArea?dateFrom(startArea[0]):"";
+     if(startDate)set("close_date",startDate);
+     const coop=flat.match(/(?:co-operating\s+brokerage|cooperating\s+brokerage)[\s\S]{0,180}?(?:half\s+month'?s?\s+rent|one\s+half\s+month'?s?\s+rent)/i);
+     if(coop&&found.sale_price)set("coop_commission_amount",String(Number(found.sale_price)/2));
+   }
    return found;
  }
  async function extractSelectedPdf(){
