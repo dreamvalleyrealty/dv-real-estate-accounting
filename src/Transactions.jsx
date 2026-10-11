@@ -183,7 +183,7 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
    if(trust.we_hold_deposit==="YES"&&trust.received==="YES"&&trust.amount){setMessage("Transaction saved. You can print the trust deposit receipt.");setTimeout(()=>{},0)}else setMessage("Transaction saved.");
    onPartialSaved?.({id:txId,...payload});
    if(closeAfterSave)onSaved?.({id:txId,...payload});
-  }catch(err){const detail=err?.message||"Unable to save transaction.";if(txId&&payload){setMessage("Transaction "+(payload.transaction_number||"") +" was saved, but a related detail could not be saved: "+detail+". The transaction remains in the list. Correct the detail and save again.");}else setMessage("Transaction was not saved: "+detail+". No transaction record was created. Check the database error and confirm the required transaction workspace migrations have been run.");}
+  }catch(err){const detail=err?.message||"Unable to save transaction.";if(txId&&payload){setMessage("Transaction "+(payload.transaction_number||"") +" was saved, but a related detail could not be saved: "+detail+". The transaction remains open so you can correct the detail and continue.");setSavedTransactionId(txId);setBusy(false);return;}else setMessage("Transaction was not saved: "+detail+". No transaction record was created. Check the database error and confirm the required transaction workspace migrations have been run.");}
   setBusy(false)
  }
  function printReceipt(){
