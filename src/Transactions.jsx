@@ -46,7 +46,7 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
  const payableTotal=payableBase+payableHst;
  const depositTotal=Number(trust.amount||0);
  const activeCommissionBanks=bankRows.filter(x=>x.active!==false&&x.account_type==="COMMISSION_TRUST");
- useEffect(()=>{setTrust(t=>({...t,we_hold_deposit:form.is_own_listing==="YES"?"YES":"NO",held_by:form.is_own_listing==="YES"?ownCompany:(brokersToSave[0]?.company_name||"")}))},[form.is_own_listing, ownCompany, brokers[0]?.company_name]);
+ useEffect(()=>{setTrust(t=>({...t,we_hold_deposit:form.is_own_listing==="YES"?"YES":"NO",held_by:form.is_own_listing==="YES"?ownCompany:(brokers[0]?.company_name||"")}))},[form.is_own_listing, ownCompany, brokers[0]?.company_name]);
  useEffect(()=>{if(!initial?.id||!supabase)return;let cancelled=false;(async()=>{const [p,c,b,t,cm,ai]=await Promise.all([
   supabase.from("dv_accounting_transaction_people").select("*").eq("transaction_id",initial.id),
   supabase.from("dv_accounting_transaction_conditions").select("*").eq("transaction_id",initial.id),
