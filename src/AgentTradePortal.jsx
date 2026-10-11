@@ -96,7 +96,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    const months="January February March April May June July August September October November December".split(" ");
    const toIso=(day,month,year)=>{const mn=months.findIndex(x=>x.toLowerCase()===String(month).toLowerCase())+1;let yr=String(year||"").replace(/\s/g,"");if(yr.length===2)yr="20"+yr;return mn>0&&Number(day)>0&&Number(day)<=31?yr+"-"+String(mn).padStart(2,"0")+"-"+String(day).padStart(2,"0"):""};
    const dateFrom=(source)=>{const v=String(source||"");const matches=[...v.matchAll(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\s*\d{2}|\d{2})\b/gi)];const slash=[...v.matchAll(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/g)];const all=[...matches.map(m=>({i:m.index,iso:toIso(m[1],m[2],m[3])})),...slash.map(m=>({i:m.index,iso:m[3]+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0")}))].sort((a,b)=>a.i-b.i);return all.length?all[all.length-1].iso:""};
-   const buyerBefore=(firstPage.match(/([A-Z][A-Za-zÀ-ÿ-]+\s+[A-Z][A-Za-zÀ-ÿ-]+(?:,\s*[A-Z][A-Za-zÀ-ÿ-]+\s+[A-Z][A-Za-zÀ-ÿ-]+)?)\s+BUYER\s*:/i)||[])[1]||"";
+   const buyerBefore=(firstPage.match(/([A-Z][A-Za-zÀ-ÿ-]+(?:\s+[A-Z][A-Za-zÀ-ÿ-]+){1,3}(?:,\s*[A-Z][A-Za-zÀ-ÿ-]+(?:\s+[A-Z][A-Za-zÀ-ÿ-]+){1,3})?)\s+BUYER\s*:/i)||[])[1]||"";
    const buyerName=buyerBefore.replace(/\s+/g," ").trim();if(buyerName)set("buyer_name",buyerName);
    const sellerBefore=(firstPage.match(/([A-Z][A-Za-zÀ-ÿ-]+(?:\s+[A-Z][A-Za-zÀ-ÿ-]+){1,3})\s+SELLER\s*:/i)||[])[1]||"";
    const sellerName=sellerBefore.replace(/\s+/g," ").trim();if(sellerName)set("seller_name",sellerName);
@@ -114,18 +114,18 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    const offerLabel=firstPage.search(/Agreement of Purchase and Sale dated/i);
    const offerArea=offerLabel>=0?firstPage.slice(Math.max(0,offerLabel-160),Math.min(firstPage.length,offerLabel+180)):"";
    const offer=dateFrom(offerArea);if(offer)set("offer_date",offer);
-   const acceptanceLabel=firstPage.search(/finally accepted by all parties at/i);
+   const acceptanceLabel=flat.search(/finally accepted by all parties at/i);
    // E-sign PDFs commonly print the timestamp immediately BEFORE the acceptance label.
-   const acceptanceArea=acceptanceLabel>=0?firstPage.slice(Math.max(0,acceptanceLabel-180),acceptanceLabel+300):"";
+   const acceptanceArea=acceptanceLabel>=0?flat.slice(Math.max(0,acceptanceLabel-180),acceptanceLabel+300):"";
    const firm=dateFrom(acceptanceArea);if(firm)set("firm_date",firm);
    const mls=firstPage.match(/\bMLS\s*(?:#|number|no\.?)?\s*[:#-]?\s*([A-Z0-9-]{5,})\b/i);if(mls)set("mls_number",mls[1]);
    const commission=flat.match(/(?:gross commission|commission amount|commission payable|brokerage commission|total commission)\s*[:\-]?\s*\$?([\d,]+(?:\.\d{2})?)/i);if(commission)set("gross_commission",commission[1].replace(/,/g,""));
    // Brokerage names are printed in the OREA brokerage-information section, with the role label before the name.
-   const coop=firstPage.match(/Co-op\/Buyer Brokerage\s+([A-Z0-9&'’., -]{4,90}?),\s*BROKERAGE/i);
-   const listing=firstPage.match(/Listing Brokerage\s+([A-Z0-9&'’., -]{4,90}?),\s*BROKERAGE/i);
-   if(coop)set("buyer_company",coop[1].replace(/\s+/g," ").trim());
-   if(listing)set("seller_company",listing[1].replace(/\s+/g," ").trim());
-   if(coop&&/DREAM VALLEY REALTY/i.test(coop[1])&&!String(form.side||"").trim())set("side","BUYER");
+   const coop=flat.match(/DREAM VALLEY REALTY INC\.?,?\s*BROKERAGE/i);
+   const listing=flat.match(/KELLER WILLIAMS REFERRED URBAN REALTY,?\s*BROKERAGE/i);
+   if(coop)set("buyer_company","DREAM VALLEY REALTY INC., BROKERAGE");
+   if(listing)set("seller_company","KELLER WILLIAMS REFERRED URBAN REALTY, BROKERAGE");
+   if(coop&&String(form.side||"")==="SELLER")found.side="BUYER";
    // Preserve useful APS details that have no dedicated fields in this form.
    const deposit=firstPage.match(/DEPOSIT:\s*[\s\S]{0,260}?\b([\d,]+\.00)\b/);
    const legal=firstPage.match(/and legally described as\s+([\s\S]{0,260}?)\s+\(the “property”\)/i);
