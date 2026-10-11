@@ -115,10 +115,26 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
    const offerArea=offerLabel>=0?firstPage.slice(Math.max(0,offerLabel-160),Math.min(firstPage.length,offerLabel+180)):"";
    const offer=dateFrom(offerArea);if(offer)set("offer_date",offer);
    const acceptanceLabel=firstPage.search(/finally accepted by all parties at/i);
-   const acceptanceArea=acceptanceLabel>=0?firstPage.slice(acceptanceLabel,acceptanceLabel+300):"";
+   // E-sign PDFs commonly print the timestamp immediately BEFORE the acceptance label.
+   const acceptanceArea=acceptanceLabel>=0?firstPage.slice(Math.max(0,acceptanceLabel-180),acceptanceLabel+300):"";
    const firm=dateFrom(acceptanceArea);if(firm)set("firm_date",firm);
    const mls=firstPage.match(/\bMLS\s*(?:#|number|no\.?)?\s*[:#-]?\s*([A-Z0-9-]{5,})\b/i);if(mls)set("mls_number",mls[1]);
    const commission=flat.match(/(?:gross commission|commission amount|commission payable|brokerage commission|total commission)\s*[:\-]?\s*\$?([\d,]+(?:\.\d{2})?)/i);if(commission)set("gross_commission",commission[1].replace(/,/g,""));
+   // Brokerage names are printed in the OREA brokerage-information section, with the role label before the name.
+   const coop=firstPage.match(/Co-op\/Buyer Brokerage\s+([A-Z0-9&'’., -]{4,90}?),\s*BROKERAGE/i);
+   const listing=firstPage.match(/Listing Brokerage\s+([A-Z0-9&'’., -]{4,90}?),\s*BROKERAGE/i);
+   if(coop)set("buyer_company",coop[1].replace(/\s+/g," ").trim());
+   if(listing)set("seller_company",listing[1].replace(/\s+/g," ").trim());
+   if(coop&&/DREAM VALLEY REALTY/i.test(coop[1])&&!String(form.side||"").trim())set("side","BUYER");
+   // Preserve useful APS details that have no dedicated fields in this form.
+   const deposit=firstPage.match(/DEPOSIT:\s*[\s\S]{0,260}?\b([\d,]+\.00)\b/);
+   const legal=firstPage.match(/and legally described as\s+([\s\S]{0,260}?)\s+\(the “property”\)/i);
+   const frontage=firstPage.match(/frontage of\s+([\d,.]+)\s+feet[\s\S]{0,100}?depth of\s+([\d,.]+)\s+feet/i);
+   const extraNotes=[];
+   if(deposit)extraNotes.push("APS deposit shown: $"+deposit[1].replace(/,/g,""));
+   if(legal)extraNotes.push("Legal description: "+legal[1].replace(/\s+/g," ").replace(/[.]{3,}/g,"").trim());
+   if(frontage)extraNotes.push("Lot dimensions shown: "+frontage[1]+" ft frontage × "+frontage[2]+" ft depth");
+   if(extraNotes.length)set("notes",extraNotes.join("\n"));
    set("client_name",buyerName);
    return found;
  }
@@ -193,7 +209,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false}) {
          <div className="agent-trade-checks">{[["APS","Agreement of Purchase and Sale / Lease"],["MLS","MLS / Listing sheet"],["COMMISSION","Commission confirmation"]].map(([type,label])=><div className="agent-trade-check" key={type}><b>{docType===type?"Selected document type": "Required document"}</b>{label}</div>)}</div>
          <div className="agent-trade-grid"><Field label="Document type"><select value={docType} onChange={e=>setDocType(e.target.value)}><option value="APS">Agreement of Purchase and Sale / Lease</option><option value="MLS">MLS / Listing sheet</option><option value="COMMISSION">Commission confirmation</option><option value="ID">Other required compliance document</option><option value="OTHER">Other supporting document</option></select></Field><Field label="Choose PDF or document"><input type="file" accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx" onChange={e=>{setFile(e.target.files?.[0]||null);setExtractedPreview(null);setError("");setMessage("")}}/></Field></div>
          <div className="agent-trade-buttons">{file&&String(file.name||"").toLowerCase().endsWith(".pdf")&&<button className="secondary" type="button" disabled={extractBusy||busy} onClick={extractSelectedPdf}><FileText size={16}/>{extractBusy?"Reading PDF...":"Extract Details from PDF"}</button>}<button className="primary" type="button" disabled={!file||busy} onClick={uploadFile}><Upload size={16}/> Upload & Start Trade</button></div>
-         {extractedPreview&&<div className="agent-trade-success" style={{marginTop:12}}>Extracted {Object.keys(extractedPreview.fields).length} possible field(s). Details were filled only where fields were blank. Review and correct them after upload, then continue to trade details.<details style={{marginTop:8}}><summary>View extracted PDF text</summary><textarea readOnly rows={7} value={extractedPreview.text} style={{width:"100%",marginTop:8}}/></details></div>}
+         {extractedPreview&&<div className="agent-trade-success" style={{marginTop:12}}>Extracted {Object.keys(extractedPreview.fields).length} possible field(s). Details were filled only where fields were blank. Review and correct them after upload, then continue to trade details.{Object.keys(extractedPreview.fields).length>0&&<ul style={{margin:"8px 0",paddingLeft:20}}>{Object.entries(extractedPreview.fields).map(([key,value])=><li key={key}><b>{inputFields.find(([field])=>field===key)?.[1]||key}:</b> {String(value)}</li>)}</ul>}<details style={{marginTop:8}}><summary>View extracted PDF text</summary><textarea readOnly rows={7} value={extractedPreview.text} style={{width:"100%",marginTop:8}}/></details></div>}
          <p className="agent-trade-muted" style={{marginTop:10}}>Scanned PDFs may require OCR and may not yield text. Extracted values are suggestions, not verified legal or transaction details. Always check them against the original documents.</p>
        </div>:!adminMode&&selected&&["DRAFT","NEEDS_CHANGES"].includes(selected.status)?<form onSubmit={e=>{e.preventDefault();saveDraft()}}>
          <div className="agent-trade-grid">{inputFields.map(([key,label])=><Field key={key} label={label}>
