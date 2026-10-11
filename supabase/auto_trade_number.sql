@@ -21,6 +21,8 @@ declare
   next_number integer;
 begin
   if tg_op = 'UPDATE' then
+    new.trade_number := old.trade_number;
+    new.payload := coalesce(new.payload, '{}'::jsonb) || jsonb_build_object('transaction_number', old.trade_number);
     return new;
   end if;
 
