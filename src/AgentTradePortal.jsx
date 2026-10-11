@@ -265,7 +265,24 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      const pdfjs=await import("pdfjs-dist/legacy/build/pdf.mjs");pdfjs.GlobalWorkerOptions.workerSrc=pdfWorkerUrl;
      const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;let text="";
      for(let pn=1;pn<=pdf.numPages;pn++){const page=await pdf.getPage(pn),content=await page.getTextContent();const rows=new Map();for(const item of content.items){const v=String(item.str||"").trim();if(!v)continue;const y=Math.round((item.transform?.[5]||0)/2)*2;const row=rows.get(y)||[];row.push(v);rows.set(y,row)}text+=[...rows.entries()].sort((a,b)=>b[0]-a[0]).map(([,parts])=>parts.join(" ")).join("\n")+"\n";}
-     if(!text.trim())throw new Error("No selectable text was found. This PDF may be scanned; OCR is needed to read the page images.");
+     // DigiSign/OREA PDFs may contain only signature stamps as selectable text. OCR page images when the text layer is too sparse to extract transaction fields.
+     const usefulText=/AGREEMENT\\s+TO\\s+LEASE|AGREEMENT\\s+OF\\s+PURCHASE|PURCHASE\\s+PRICE|MONTHLY\\s+RENT|LANDLORD|TENANT|PROPERTY\\s+ADDRESS|COMPLETION\\s+DATE/i.test(text);
+     if(text.trim().length<350||!usefulText){
+       const {createWorker}=await import("tesseract.js");
+       const worker=await createWorker("eng");
+       try{
+         let ocrText="";
+         for(let pn=1;pn<=pdf.numPages;pn++){
+           const page=await pdf.getPage(pn),viewport=page.getViewport({scale:1.8});
+           const canvas=document.createElement("canvas");canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+           const context=canvas.getContext("2d");await page.render({canvasContext:context,viewport}).promise;
+           const result=await worker.recognize(canvas);ocrText+="\\n"+String(result?.data?.text||"");
+           canvas.width=0;canvas.height=0;
+         }
+         if(ocrText.trim().length>text.trim().length)text=ocrText;
+       }finally{await worker.terminate();}
+     }
+     if(!text.trim())throw new Error("Could not read text from this PDF, even with OCR. Try a clearer scan or enter the details manually.");
      const found=parseTradePdf(text);setExtractedPreview({text,fields:found});
      if(Object.keys(found).length){setForm(old=>({...old,...Object.fromEntries(Object.entries(found).filter(([k,v])=>v&&!String(old[k]||"").trim()))}));setMessage("Found "+Object.keys(found).length+" possible trade field(s). Review the highlighted extraction summary and verify all details before saving.");}
      else setMessage("PDF text was read, but no familiar trade fields were confidently recognized. You can still attach the document and enter details manually.");
