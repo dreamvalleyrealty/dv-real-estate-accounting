@@ -69,6 +69,9 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  async function saveDraft({submit=false}={}){
    if(!supabase||!agentId){setError("Your login is not linked to an active Dream Valley agent record. Ask the administrator to make sure your login email matches your agent profile email.");return}
    if(submit){
+     const requiredFields=[["street_number","Street number"],["street_name","Street name"],["city","City"],["province","Province"],["postal_code","Postal code"],["close_date","Closing date"],["sale_price","Purchase amount"],["deposit_amount","Deposit amount"],["buyer_name","Buyer name"],["seller_name","Seller name"],["listing_brokerage_name","Listing brokerage"],["listing_brokerage_phone","Listing brokerage phone"],["listing_agent_name","Listing agent name"],["listing_agent_phone","Listing agent phone"],["buyer_brokerage_name","Buyer brokerage"],["buyer_brokerage_phone","Buyer brokerage phone"],["buyer_agent_name","Buyer agent name"],["buyer_agent_phone","Buyer agent phone"],["condition_list","Schedule A conditions"]];
+     const missingFields=requiredFields.filter(([key])=>!String(form[key]||"").trim()).map(([,label])=>label);
+     if(missingFields.length){setError("Complete the highlighted required fields before submitting: "+missingFields.join(", ")+".");return}
      if(!selected?.id){setError("Save this trade as a draft first, then upload the required documents.");return}
      const requiredDocs=docTypes.filter(([type])=>requiredTypes.includes(type));
      const missing=requiredDocs.filter(([type])=>!docs.some(d=>d.document_type===type)).map(([,label])=>label);
