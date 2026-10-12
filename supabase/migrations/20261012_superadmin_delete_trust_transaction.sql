@@ -49,7 +49,7 @@ BEGIN
     RAISE EXCEPTION 'Only posted trust transactions can be deleted through this workflow.';
   END IF;
 
-  SELECT count(*), min(bt.id) INTO v_bank_count, v_bank_id
+  SELECT count(*) INTO v_bank_count
   FROM public.dv_accounting_bank_transactions bt
   WHERE bt.bank_account_id = v_tt.bank_account_id
     AND bt.transaction_date = v_tt.ledger_date
@@ -57,9 +57,18 @@ BEGIN
     AND coalesce(bt.description, '') = coalesce(v_tt.description, '')
     AND coalesce(bt.reference, '') = coalesce(v_tt.reference, '');
 
-  IF v_bank_count <> 1 OR v_bank_id IS NULL THEN
+  IF v_bank_count <> 1 THEN
     RAISE EXCEPTION 'Could not identify exactly one matching bank entry. No records were deleted.';
   END IF;
+
+  SELECT bt.id INTO v_bank_id
+  FROM public.dv_accounting_bank_transactions bt
+  WHERE bt.bank_account_id = v_tt.bank_account_id
+    AND bt.transaction_date = v_tt.ledger_date
+    AND abs(coalesce(bt.amount, 0)) = abs(coalesce(v_tt.amount, 0))
+    AND coalesce(bt.description, '') = coalesce(v_tt.description, '')
+    AND coalesce(bt.reference, '') = coalesce(v_tt.reference, '')
+  LIMIT 1;
 
   IF EXISTS (SELECT 1 FROM public.dv_accounting_bank_transactions
              WHERE id = v_bank_id AND coalesce(reconciled, false) = true) THEN
