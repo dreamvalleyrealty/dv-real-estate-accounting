@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { PDFDocument } from "pdf-lib";
 import { AlertCircle, CheckCircle2, Clock3, FileText, Plus, RefreshCw, Send, Upload, XCircle, ExternalLink, X } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
-const AGENT_PORTAL_VERSION = "0.6.126";
+const AGENT_PORTAL_VERSION = "0.6.127";
 
 const blank = {
   transaction_number:"", transaction_type:"BUY_SELL", side:"SELLER", dvr_lead:false, property_address:"",
@@ -34,6 +35,7 @@ function statusPill(status){return <span className="pill" style={{background:sta
 export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAdmin=false}) {
  const [submissions,setSubmissions]=useState([]),[docs,setDocs]=useState([]),[agents,setAgents]=useState([]);
  const [selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[file,setFile]=useState(null),[files,setFiles]=useState([]),[docType,setDocType]=useState("APS"),[extractBusy,setExtractBusy]=useState(false),[extractedPreview,setExtractedPreview]=useState(null);
+ const [bulkFile,setBulkFile]=useState(null),[bulkGroups,setBulkGroups]=useState([]),[bulkBusy,setBulkBusy]=useState(false),[bulkOriginal,setBulkOriginal]=useState(true);
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[reviewNotes,setReviewNotes]=useState("");
  const [previewUrl,setPreviewUrl]=useState(""),[previewDoc,setPreviewDoc]=useState(null);
  const [filter,setFilter]=useState("SUBMITTED");
@@ -349,6 +351,79 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    if(uploaded===filesToUpload.length){setFile(null);setFiles([]);setMessage(uploaded===1?"Document uploaded.":uploaded+" documents uploaded.");}
    setBusy(false);if(draft.id)await loadDocs(draft.id);
  }
+ async function analyzeBulkPdf(){
+   if(!bulkFile||!/\.pdf$/i.test(bulkFile.name)){setError("Choose a PDF file to split.");return}
+   setBulkBusy(true);setError("");setMessage("");setBulkGroups([]);
+   try{
+     const pdfjs=await import("pdfjs-dist/legacy/build/pdf.mjs");pdfjs.GlobalWorkerOptions.workerSrc=pdfWorkerUrl;
+     const sourceBytes=new Uint8Array(await bulkFile.arrayBuffer());
+     const source=await pdfjs.getDocument({data:sourceBytes}).promise;
+     const master=docTypes.filter(([type])=>(requirementsBySide?.[form.side]?.types||requiredTypes).includes(type));
+     const detect=(raw)=>{
+       const t=String(raw||"").toUpperCase().replace(/\s+/g," ");
+       const tests=[
+        ["APS",/AGREEMENT OF PURCHASE AND SALE|OREA\s*(?:FORM\s*)?100|FORM\s*100|AGREEMENT TO LEASE|OREA\s*(?:FORM\s*)?400|FORM\s*400/],
+        ["MLS",/MLS\s*(?:LISTING|DATA)|PROPERTY LISTING|LISTING INFORMATION|LISTING AGREEMENT|OREA\s*(?:FORM\s*)?200|FORM\s*200/],
+        ["COMMISSION",/COMMISSION CONFIRMATION|COMMISSION AGREEMENT|CO-OPERATING BROKERAGE COMMISSION|COOPERATING BROKERAGE COMMISSION|OREA\s*(?:FORM\s*)?320|FORM\s*320/],
+        ["ID",/IDENTIFICATION|PROOF OF IDENTITY|FINTRAC|CLIENT IDENTIFICATION|VERIFICATION OF IDENTITY/],
+        ["OTHER",/SCHEDULE\s+[A-Z0-9]|AMENDMENT TO AGREEMENT|WAIVER OF CONDITION|NOTICE OF FULFILLMENT|OREA\s*(?:FORM\s*)?120|FORM\s*120/]
+       ];
+       for(const [id,re] of tests){if(re.test(t)&&master.some(([type])=>type===id))return id}
+       for(const [id,label] of master){const words=String(label).toUpperCase().split(/[^A-Z0-9]+/).filter(w=>w.length>3&&!["FORM","DOCUMENT","SUPPORTING","AGREEMENT"].includes(w));if(words.length&&words.some(w=>t.includes(w)))return id}
+       return null;
+     };
+     const pages=[];let previous=null;
+     for(let pn=1;pn<=source.numPages;pn++){
+       const page=await source.getPage(pn),content=await page.getTextContent();
+       let text=content.items.map(x=>String(x.str||"")).join(" ");
+       if(text.trim().length<35){
+         try{const {createWorker}=await import("tesseract.js");const worker=await createWorker("eng");try{const viewport=page.getViewport({scale:1.35}),canvas=document.createElement("canvas");canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);await page.render({canvasContext:canvas.getContext("2d"),viewport}).promise;const ocr=await worker.recognize(canvas);text=String(ocr?.data?.text||text);canvas.width=0;canvas.height=0;}finally{await worker.terminate();}}catch(_){}
+       }
+       const detected=detect(text);if(detected)previous=detected;
+       pages.push({page:pn,type:detected||previous||"OTHER",confidence:detected?"Likely":previous?"Inherited":"Review"});
+     }
+     const groups=[];
+     for(const p of pages){const last=groups[groups.length-1];if(last&&last.type===p.type&&last.end===p.page-1){last.end=p.page;last.pages.push(p.page);if(p.confidence==="Review")last.confidence="Review"}else groups.push({id:groups.length+1,type:p.type,start:p.page,end:p.page,pages:[p.page],confidence:p.confidence})}
+     setBulkGroups(groups.map(g=>({...g,label:master.find(([id])=>id===g.type)?.[1]||g.type})));
+     if(groups.length)setMessage("Detected "+groups.length+" document section(s) across "+source.numPages+" pages. Review every page range and document type before saving.");
+     else setError("No pages were detected. You can still upload the original PDF normally.");
+   }catch(e){setError("Could not analyze PDF: "+(e?.message||String(e)))}finally{setBulkBusy(false)}
+ }
+ function updateBulkGroup(id,patch){setBulkGroups(old=>old.map(g=>g.id===id?{...g,...patch,label:patch.type!==undefined?(docTypes.find(([t])=>t===patch.type)?.[1]||patch.type):g.label}:g))}
+ async function saveSplitDocuments(){
+   if(!bulkFile||!bulkGroups.length||!supabase){setError("Choose and analyze a PDF first.");return}
+   if(bulkGroups.some(g=>!g.type||!Number.isInteger(Number(g.start))||!Number.isInteger(Number(g.end))||Number(g.start)<1||Number(g.end)<Number(g.start))){setError("Check each document type and page range.");return}
+   const sorted=[...bulkGroups].sort((a,b)=>Number(a.start)-Number(b.start));
+   for(let i=1;i<sorted.length;i++){if(Number(sorted[i].start)<=Number(sorted[i-1].end)){setError("Page ranges overlap. Each page can belong to only one split document.");return}}
+   const draft=await ensureDraftForUpload();if(!draft)return;
+   setBulkBusy(true);setError("");setMessage("");
+   const uploadedPaths=[];
+   try{
+     const originalBytes=new Uint8Array(await bulkFile.arrayBuffer());
+     const source=await PDFDocument.load(originalBytes);
+     const tasks=[];
+     if(bulkOriginal)tasks.push({type:"BULK_ORIGINAL",name:bulkFile.name,blob:new Blob([originalBytes],{type:"application/pdf"})});
+     for(const g of sorted){
+       const out=await PDFDocument.create(),indices=[];for(let pn=Number(g.start);pn<=Number(g.end);pn++)indices.push(pn-1);
+       const copied=await out.copyPages(source,indices);copied.forEach(p=>out.addPage(p));
+       const bytes=await out.save();const label=docTypes.find(([id])=>id===g.type)?.[1]||g.type;
+       const clean=label.replace(/[^a-zA-Z0-9._-]+/g,"_").slice(0,70)||g.type;
+       tasks.push({type:g.type,name:clean+"_pages_"+g.start+"-"+g.end+".pdf",blob:new Blob([bytes],{type:"application/pdf"})});
+     }
+     let uploaded=0;
+     for(const task of tasks){
+       const safe=task.name.replace(/[^a-zA-Z0-9._-]/g,"_"),path=String(user.id)+"/"+String(draft.id)+"/"+Date.now()+"-split-"+uploaded+"-"+safe;
+       const {error:upError}=await supabase.storage.from("dv-trade-documents").upload(path,task.blob,{upsert:false,contentType:"application/pdf"});
+       if(upError)throw new Error("Upload failed for "+task.name+": "+upError.message);
+       uploadedPaths.push(path);
+       const {data,error:e}=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:task.type,document_name:task.name,storage_path:path,mime_type:"application/pdf",file_size:task.blob.size,uploaded_by:user.id}]).select().single();
+       if(e)throw new Error("Could not register "+task.name+": "+e.message);
+       setDocs(old=>[...old,data]);uploaded++;
+     }
+     setBulkFile(null);setBulkGroups([]);setMessage("Saved "+sorted.length+" split document(s)"+(bulkOriginal?" and retained the original PDF":"")+".");if(draft.id)await loadDocs(draft.id);
+   }catch(e){if(uploadedPaths.length)await supabase.storage.from("dv-trade-documents").remove(uploadedPaths);setError("Split upload did not complete: "+(e?.message||String(e))+". Please check the trade documents before retrying.");}
+   finally{setBulkBusy(false)}
+ }
  async function openDoc(doc){
    const {data,error:e}=await supabase.storage.from("dv-trade-documents").createSignedUrl(doc.storage_path,3600);
    if(e){setError(e.message);return}setPreviewDoc(doc);setPreviewUrl(data.signedUrl);
@@ -411,6 +486,23 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
              <Field label="Choose PDF or document"><input type="file" accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx" onChange={e=>{setFile(e.target.files?.[0]||null);setExtractedPreview(null);setError("");setMessage("")}}/></Field>
              <div className="agent-trade-buttons">{file&&String(file.name||"").toLowerCase().endsWith(".pdf")&&<button className="secondary" type="button" disabled={extractBusy||busy} onClick={extractSelectedPdf}><FileText size={16}/>{extractBusy?"Reading PDF...":"Extract PDF to Form"}</button>}<button className="primary" type="button" disabled={!file||busy} onClick={uploadFile}><Upload size={16}/> {selected?"Upload Document":"Upload & Save Draft"}</button></div>
              {extractedPreview&&<div className="agent-trade-success" style={{marginTop:12}}>Read PDF and suggested {Object.keys(extractedPreview.fields).length} field(s). Review the highlighted fields on the right.{Object.keys(extractedPreview.fields).length>0&&<ul style={{margin:"8px 0",paddingLeft:20}}>{Object.entries(extractedPreview.fields).map(([key,value])=><li key={key}><b>{inputFields.find(([field])=>field===key)?.[1]||key}:</b> {String(value)}</li>)}</ul>}<details style={{marginTop:8}}><summary>View extracted PDF text</summary><textarea readOnly rows={7} value={extractedPreview.text} style={{width:"100%",marginTop:8}}/></details></div>}
+             <details style={{marginTop:12,border:"1px solid #d0d5dd",borderRadius:8,padding:10}}>
+              <summary style={{fontWeight:700,cursor:"pointer"}}>Upload &amp; Split Combined PDF</summary>
+              <p className="agent-trade-muted">Upload a package containing multiple forms. The system detects likely form titles/numbers and page ranges. Review and correct the results before saving. This is assisted detection, not guaranteed AI classification.</p>
+              <Field label="Combined PDF"><input type="file" accept=".pdf,application/pdf" onChange={e=>{setBulkFile(e.target.files?.[0]||null);setBulkGroups([]);setError("");setMessage("")}}/></Field>
+              <label style={{display:"flex",alignItems:"center",gap:7,fontSize:13,margin:"8px 0"}}><input type="checkbox" checked={bulkOriginal} onChange={e=>setBulkOriginal(e.target.checked)}/> Keep the original combined PDF in the trade archive</label>
+              <button className="secondary" type="button" disabled={!bulkFile||bulkBusy||busy} onClick={analyzeBulkPdf}><FileText size={15}/>{bulkBusy?"Analyzing…":"Analyze & Detect Forms"}</button>
+              {bulkGroups.length>0&&<div style={{marginTop:10}}>
+               <p className="agent-trade-muted">Review the detected sections. Page ranges must not overlap. Unrecognized pages are marked for review.</p>
+               <div style={{display:"grid",gap:7}}>{bulkGroups.map(g=><div key={g.id} style={{border:"1px solid #e4e7ec",borderRadius:7,padding:8,display:"grid",gridTemplateColumns:"minmax(140px,1fr) 62px 62px",gap:7,alignItems:"end"}}>
+                <Field label={"Document "+g.id}><select value={g.type} onChange={e=>updateBulkGroup(g.id,{type:e.target.value})}>{docTypes.map(([type,label])=><option key={type} value={type}>{label}</option>)}<option value="OTHER">Other / Review</option></select></Field>
+                <Field label="From page"><input type="number" min="1" value={g.start} onChange={e=>updateBulkGroup(g.id,{start:e.target.value})}/></Field>
+                <Field label="To page"><input type="number" min="1" value={g.end} onChange={e=>updateBulkGroup(g.id,{end:e.target.value})}/></Field>
+                <small className="agent-trade-muted" style={{gridColumn:"1 / -1"}}>{g.confidence==="Likely"?"Title/form number detected":g.confidence==="Inherited"?"Assumed continuation of previous form":"Please verify classification"} · {g.end-g.start+1} page(s)</small>
+               </div>)}</div>
+               <button className="primary" type="button" style={{marginTop:10}} disabled={bulkBusy||busy} onClick={saveSplitDocuments}><Upload size={15}/> Split &amp; Save Documents</button>
+              </div>}
+             </details>
              <p className="agent-trade-muted" style={{marginTop:10}}>Scanned PDFs may require OCR. Extracted values are suggestions and must be checked against the original APS.</p>
              {selected&&<><h3>Attached documents</h3>{docs.map(d=><div className="agent-trade-doc" key={d.id}><div><strong>{d.document_name}</strong><div className="agent-trade-muted">{d.document_type}</div></div><button className="secondary" type="button" onClick={()=>openDoc(d)}><ExternalLink size={14}/> View</button></div>)}</>}
              {selected&&<><Field label="Additional document type"><select value={docType} onChange={e=>setDocType(e.target.value)}>{docTypes.map(([type,label])=><option key={type} value={type}>{label}</option>)}</select></Field><Field label="Select additional files"><input type="file" accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx" multiple onChange={e=>setFiles(Array.from(e.target.files||[]))}/></Field><button className="secondary" style={{marginTop:10}} type="button" disabled={!files.length||busy} onClick={uploadFile}><Upload size={16}/> Upload {files.length||""} Selected Document{files.length===1?"":"s"}</button></>}
