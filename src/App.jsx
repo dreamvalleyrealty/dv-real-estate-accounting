@@ -206,7 +206,8 @@ function Banking(){
  const a=useRows("dv_accounting_bank_accounts"),t=useRows("dv_accounting_bank_transactions"),r=useRows("dv_accounting_reconciliations"),tt=useRows("dv_accounting_trust_transactions"),tl=useRows("dv_accounting_trust_liabilities"),trades=useRows("dv_accounting_transactions");
  const[show,setShow]=useState(false),[recShow,setRecShow]=useState(false),[payOtherShow,setPayOtherShow]=useState(false);
  const[form,setForm]=useState({bank_account_id:"",transaction_id:"",ledger_date:today(),direction:"DEPOSIT",client_name:"",matter:"",description:"",amount:"",reference:""});
- const[rec,setRec]=useState({bank_account_id:"",period_end:today(),statement_balance:""});\n const[payOther,setPayOther]=useState({bank_account_id:"",transaction_id:"",ledger_date:today(),client_name:"",matter:"",payee_name:"",description:"Payment to cooperating brokerage",amount:"",reference:""});
+ const[rec,setRec]=useState({bank_account_id:"",period_end:today(),statement_balance:""});
+ const[payOther,setPayOther]=useState({bank_account_id:"",transaction_id:"",ledger_date:today(),client_name:"",matter:"",payee_name:"",description:"Payment to cooperating brokerage",amount:"",reference:""});
  const trustAccounts=a.rows.filter(x=>x.account_type==="REAL_ESTATE_TRUST"||x.account_type==="COMMISSION_TRUST");
  const balance=id=>Number(a.rows.find(x=>x.id===id)?.opening_balance||0)+t.rows.filter(x=>x.bank_account_id===id).reduce((s,x)=>s+Number(x.amount||0),0);
  const liability=(type,client,matter)=>tl.rows.filter(x=>x.trust_account_type===type&&(!client||x.client_name===client)&&(!matter||x.matter===matter)).reduce((s,x)=>s+(x.direction==="RECEIVABLE"?1:-1)*Number(x.amount||0),0);
