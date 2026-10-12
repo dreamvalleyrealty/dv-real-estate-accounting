@@ -5495,3 +5495,16 @@ select c.id,'LISTING_DOCUMENT_REQUIREMENTS',
 '[{"code":"LISTING_AGREEMENT","label":"Listing Agreement","required":true},{"code":"MLS_DATA","label":"MLS Data / Listing Information","required":true},{"code":"PROPERTY_DETAILS","label":"Property Details / Feature Sheet","required":true},{"code":"SELLER_DIRECTION","label":"Seller Direction / Authorization","required":true},{"code":"ID_FINTRAC","label":"Identification / FINTRAC","required":true},{"code":"OTHER","label":"Other Supporting Documents","required":false}]'::jsonb
 from public.dv_accounting_companies c
 on conflict (company_id,key) do nothing;
+
+
+-- Listing multi-agent assignments and admin listing creation
+-- Listing submission support for multiple representing agents and admin-created drafts.
+alter table public.dv_accounting_listing_submissions
+  add column if not exists additional_agent_ids jsonb not null default '[]'::jsonb;
+
+drop policy if exists "listing submissions admin create" on public.dv_accounting_listing_submissions;
+create policy "listing submissions admin create"
+on public.dv_accounting_listing_submissions
+for insert to authenticated
+with check (public.dv_accounting_is_trade_admin());
+
