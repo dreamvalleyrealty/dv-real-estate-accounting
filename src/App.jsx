@@ -11,7 +11,7 @@ import SellerSettlements from "./SellerSettlements";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
-const APP_VERSION = "0.6.183";
+const APP_VERSION = "0.6.184";
 const nav=[["Dashboard",LayoutDashboard,"dashboard.view"],["Transactions",ArrowLeftRight,"transactions.view"],["Trade Submissions",ClipboardCheck,"transactions.edit"],["Listings",FileText,"transactions.edit"],["Contacts",Users,"contacts.view"],["Banking & Reconciliation",Landmark,"banking.view"],["Expenses & A/P",ReceiptText,"expenses.view"],["Agents",Users,"agents.view"],["Agent Rankings",BarChart3,"agents.view"],["Agent Fees & Plans",ReceiptText,"fees.view"],["Commission Payroll",ReceiptText,"commission.view"],["Staff Payroll",Clock3,"staff.view"],["HST / Tax",Percent,"tax.view"],["Reports",BarChart3,"reports.view"],["Compliance & Month End",ClipboardCheck,"compliance.view"],["Recent Audit Log",ShieldCheck,"settings.view"],["Settings",Settings,"settings.view"]];
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(n||0));
 const today=()=>new Date().toISOString().slice(0,10);
