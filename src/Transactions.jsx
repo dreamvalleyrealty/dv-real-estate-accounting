@@ -86,8 +86,12 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
  const agentTotalPayable=Math.round((agentFee.netPayable+agentHstAmount)*100)/100;
  const ownCompany=companyRows.length?companyRows[0]?.name||"Dream Valley Realty Inc., Brokerage":"Dream Valley Realty Inc., Brokerage";
  const activeBanks=bankRows.filter(x=>x.active!==false&&x.account_type==="REAL_ESTATE_TRUST");
- const inbound=commissions.reduce((s,c)=>s+(c.settlement_direction==="RECEIVABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0):0),0);
- const inboundHst=commissions.reduce((s,c)=>s+(c.settlement_direction==="RECEIVABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0)*Number(c.hst_rate||13)/100:0),0);
+ // Only Dream Valley's represented side is brokerage revenue and the basis for agent payroll.
+ // On a seller/landlord listing-side trade, the LISTING row is ours; on a buyer/tenant-side trade, the BUYER row is ours.
+ const ownCommissionSide=["SELLER","LANDLORD","LISTING"].includes(String(form.side||"").toUpperCase())?"LISTING":"BUYER";
+ const commissionLineAmount=c=>Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0);
+ const inbound=commissions.reduce((s,c)=>s+(String(c.side||"").toUpperCase()===ownCommissionSide?commissionLineAmount(c):0),0);
+ const inboundHst=commissions.reduce((s,c)=>s+(String(c.side||"").toUpperCase()===ownCommissionSide?commissionLineAmount(c)*Number(c.hst_rate||13)/100:0),0);
  const receivableHst=inboundHst;
  const receivableTotal=inbound+receivableHst;
  const payableBase=commissions.reduce((s,c)=>s+(c.settlement_direction==="PAYABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0):0),0);
