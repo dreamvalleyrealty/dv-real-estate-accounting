@@ -3798,7 +3798,7 @@ alter table public.dv_accounting_transactions
   add column if not exists commission_approved_at timestamptz,
   add column if not exists commission_approved_amount numeric(14,2) not null default 0,
   add column if not exists commission_approved_agent_payable numeric(14,2) not null default 0,
-  add column if not exists commission_payroll_status text default 'PENDING';
+  add column if not exists commission_payroll_status text not null default 'NOT_READY';
 
 create index if not exists idx_dv_accounting_tx_listing on public.dv_accounting_transactions(listing_id);
 create index if not exists idx_dv_accounting_tx_agent on public.dv_accounting_transactions(agent_id);
