@@ -145,8 +145,10 @@ export default function Listings({user,agentId,adminMode=false}){
      const source=await PDFDocument.load(await item.sourceFile.arrayBuffer());
      const output=await PDFDocument.create();
      const copied=await output.copyPages(source,Array.from({length:end-start+1},(_,i)=>start-1+i));copied.forEach(p=>output.addPage(p));
-     f=new File([await output.save()],item.document_name||item.sourceFile.name.replace(/\\.pdf$/i,"")+" - pages "+start+"-"+end+".pdf",{type:"application/pdf"});
-     documentName=item.document_name||f.name;
+     const base=item.sourceFile.name.replace(/\\.pdf$/i,"");
+     const typeLabel=requirements.find(r=>r.code===documentType)?.label||documentType;
+     documentName=base+" - "+typeLabel+" - pages "+start+"-"+end+".pdf";
+     f=new File([await output.save()],documentName,{type:"application/pdf"});
     }
     const safe=f.name.replace(/[^a-zA-Z0-9._-]/g,"_");
     const path="listings/"+listing.id+"/"+String(user.id)+"/"+Date.now()+"-"+count+"-"+safe;
