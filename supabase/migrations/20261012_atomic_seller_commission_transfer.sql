@@ -108,3 +108,32 @@ $$;
 
 comment on function public.dv_accounting_process_seller_commission_transfer(uuid,text,date)
 is 'Posts the debit and credit for a seller-side commission transfer atomically and releases the settlement to Commission Payroll.';
+
+
+create or replace function public.dv_accounting_prevent_seller_settlement_reversal()
+returns trigger language plpgsql as $$
+begin
+  if old.status in ('READY_FOR_COMMISSION_PAYROLL','COMMISSION_PAYROLL_PROCESSED','PAYMENTS_COMPLETED') then
+    if new.status not in ('READY_FOR_COMMISSION_PAYROLL','COMMISSION_PAYROLL_PROCESSED','PAYMENTS_COMPLETED') then
+      raise exception 'A posted seller commission transfer cannot be reverted to an earlier settlement stage.';
+    end if;
+    if new.company_id is distinct from old.company_id or new.transaction_id is distinct from old.transaction_id
+       or new.seller_client_name is distinct from old.seller_client_name or new.matter is distinct from old.matter
+       or new.listing_commission_amount is distinct from old.listing_commission_amount
+       or new.cooperating_commission_amount is distinct from old.cooperating_commission_amount
+       or new.commission_hst_amount is distinct from old.commission_hst_amount
+       or new.real_estate_trust_account_id is distinct from old.real_estate_trust_account_id
+       or new.commission_trust_account_id is distinct from old.commission_trust_account_id
+       or new.commission_transfer_amount is distinct from old.commission_transfer_amount
+       or new.commission_transfer_reference is distinct from old.commission_transfer_reference
+       or new.commission_transfer_date is distinct from old.commission_transfer_date then
+      raise exception 'Financial fields are locked after the commission trust transfer is posted.';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists dv_accounting_seller_settlement_no_reversal on public.dv_accounting_seller_settlements;
+create trigger dv_accounting_seller_settlement_no_reversal before update on public.dv_accounting_seller_settlements
+for each row execute function public.dv_accounting_prevent_seller_settlement_reversal();
