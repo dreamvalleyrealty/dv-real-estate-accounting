@@ -61,9 +61,9 @@ export default function Listings({user,agentId,adminMode=false}){
   if(status==="PUBLISHED"&&!String(mlsNumber||"").trim()){setError("Enter the MLS number after the listing has been entered into REALM MLS.");return}
   if(status==="PUBLISHED"&&!selected?.status?.match(/APPROVED|PUBLISHED/)){setError("Approve the paperwork before marking the listing published.");return}
   setBusy(true);setError("");setMessage("");
-  const {data,error:e}=await supabase.from("dv_accounting_listing_submissions").update({status,mls_number:mlsNumber.trim()||null,admin_notes:adminNotes,reviewed_by:user?.id||null,reviewed_at:new Date().toISOString(),published_at:status==="PUBLISHED"?new Date().toISOString():selected.published_at||null,updated_at:new Date().toISOString()}).eq("id",selected.id).select().single();
+  const {data,error:e}=await supabase.from("dv_accounting_listing_submissions").update({status,mls_number:status==="PUBLISHED"?mlsNumber.trim():(selected.mls_number||null),admin_notes:adminNotes,reviewed_by:user?.id||null,reviewed_at:new Date().toISOString(),published_at:status==="PUBLISHED"?new Date().toISOString():selected.published_at||null,updated_at:new Date().toISOString()}).eq("id",selected.id).select().single();
   if(e){setError("Could not update listing: "+e.message);setBusy(false);return}
-  setSelected(data);setForm({...blank,...data});setMessage(status==="NEEDS_CHANGES"?"Changes requested.":status==="APPROVED"?"Paperwork approved. Enter the listing in REALM MLS, then record its MLS number and mark it published.":"Listing marked as published with MLS number "+data.mls_number+".");
+  setSelected(data);setForm({...blank,...data});setMlsNumber(data.mls_number||"");setMessage(status==="NEEDS_CHANGES"?"Changes requested.":status==="APPROVED"?"Paperwork approved. Enter the listing in REALM MLS, then record its MLS number and mark it published.":"Listing marked as published with MLS number "+data.mls_number+".");
   await load();setBusy(false);
  }
  async function openDocument(d){const {data,error:e}=await supabase.storage.from("dv-trade-documents").createSignedUrl(d.storage_path,3600);if(e){setError(e.message);return}window.open(data.signedUrl,"_blank","noopener,noreferrer")}
