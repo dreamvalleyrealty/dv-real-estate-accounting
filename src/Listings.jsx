@@ -8,16 +8,26 @@ const fieldStyle={width:"100%",boxSizing:"border-box",minHeight:36,padding:"7px 
 const labelStyle={display:"grid",gap:4,fontSize:12,fontWeight:600};
 const statusLabel=s=>({DRAFT:"Draft",SUBMITTED:"Awaiting review",NEEDS_CHANGES:"Changes requested",APPROVED:"Approved — awaiting MLS",PUBLISHED:"Published to MLS"}[s]||s||"—");
 export default function Listings({user,agentId,adminMode=false}){
- const [rows,setRows]=useState([]),[docs,setDocs]=useState([]),[requirements,setRequirements]=useState(defaults),[companyId,setCompanyId]=useState(""),[selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[newListing,setNewListing]=useState(false),[uploadType,setUploadType]=useState(defaults[0].code),[fileBatch,setFileBatch]=useState([]),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[message,setMessage]=useState(""),[mlsNumber,setMlsNumber]=useState(""),[adminNotes,setAdminNotes]=useState("");
+ const [rows,setRows]=useState([]),[docs,setDocs]=useState([]),[requirements,setRequirements]=useState(defaults),[companyId,setCompanyId]=useState(""),[agents,setAgents]=useState([]),[assignedAgentId,setAssignedAgentId]=useState(""),[selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[newListing,setNewListing]=useState(false),[uploadType,setUploadType]=useState(defaults[0].code),[fileBatch,setFileBatch]=useState([]),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[message,setMessage]=useState(""),[mlsNumber,setMlsNumber]=useState(""),[adminNotes,setAdminNotes]=useState("");
  const isAdmin=adminMode;
  const load=useCallback(async()=>{
   if(!supabase){setLoading(false);return}
   setLoading(true);setError("");
   const {data:company}=await supabase.from("dv_accounting_companies").select("id").limit(1).maybeSingle();
   if(company?.id)setCompanyId(company.id);
-  const {data:req}=company?.id?await supabase.from("dv_accounting_settings").select("value").eq("company_id",company.id).eq("key","LISTING_DOCUMENT_REQUIREMENTS").maybeSingle():{data:null};
-  const saved=req?.value;
-  if(Array.isArray(saved)&&saved.length)setRequirements(saved.filter(x=>x&&x.code&&x.label).map(x=>({code:String(x.code),label:String(x.label),required:x.required!==false})));
+  if(isAdmin){const {data:agentRows,error:agentError}=await supabase.from("dv_accounting_agents").select("*");if(agentError)setError("Could not load agents: "+agentError.message);else setAgents((agentRows||[]).filter(a=>a.active!==false).sort((a,b)=>String(a.last_name||"").localeCompare(String(b.last_name||""))));}
+  if(company?.id){
+   const {data:settings}=await supabase.from("dv_accounting_settings").select("key,value").eq("company_id",company.id).in("key",["TRADE_DOCUMENT_TYPES","TRADE_DOCUMENT_REQUIREMENTS_BY_SIDE","LISTING_DOCUMENT_REQUIREMENTS"]);
+   const map=Object.fromEntries((settings||[]).map(x=>[x.key,x.value]));
+   const master=Array.isArray(map.TRADE_DOCUMENT_TYPES)?map.TRADE_DOCUMENT_TYPES.filter(x=>Array.isArray(x)&&x.length>=2).map(([code,label])=>({code:String(code),label:String(label)})):[];
+   const listingRules=map.TRADE_DOCUMENT_REQUIREMENTS_BY_SIDE?.LISTING;
+   const legacy=Array.isArray(map.LISTING_DOCUMENT_REQUIREMENTS)?map.LISTING_DOCUMENT_REQUIREMENTS:[];
+   const types=Array.isArray(listingRules?.types)?listingRules.types:[];
+   const required=Array.isArray(listingRules?.required)?listingRules.required:types;
+   const configured=types.map(code=>master.find(x=>x.code===String(code))||legacy.find(x=>String(x.code)===String(code))||{code:String(code),label:String(code)}).filter(x=>x.code);
+   if(configured.length)setRequirements(configured.map(x=>({...x,required:required.includes(x.code)})));
+   else if(legacy.length)setRequirements(legacy.filter(x=>x&&x.code&&x.label).map(x=>({code:String(x.code),label:String(x.label),required:x.required!==false})));
+  }
   let q=supabase.from("dv_accounting_listing_submissions").select("*").order("created_at",{ascending:false});
   if(!isAdmin)q=q.eq("agent_id",agentId);
   const {data,error:e}=await q;
@@ -26,20 +36,20 @@ export default function Listings({user,agentId,adminMode=false}){
  },[isAdmin,agentId]);
  useEffect(()=>{load()},[load]);
  const loadDocs=useCallback(async(id)=>{if(!id){setDocs([]);return}const {data,error:e}=await supabase.from("dv_accounting_listing_documents").select("*").eq("listing_id",id).order("created_at");if(e)setError(e.message);else setDocs(data||[])},[]);
- function startNew(){setSelected(null);setForm({...blank});setDocs([]);setNewListing(true);setFileBatch([]);setMessage("");setError("");setMlsNumber("");setAdminNotes("")}
- async function openListing(row){setSelected(row);setForm({...blank,...row});setNewListing(false);setMlsNumber(row.mls_number||"");setAdminNotes(row.admin_notes||"");setMessage("");setError("");await loadDocs(row.id)}
+ function startNew(){setSelected(null);setForm({...blank});setDocs([]);setNewListing(true);setFileBatch([]);setAssignedAgentId("");setMessage("");setError("");setMlsNumber("");setAdminNotes("")}
+ async function openListing(row){setSelected(row);setForm({...blank,...row});setAssignedAgentId(row.agent_id||"");setNewListing(false);setMlsNumber(row.mls_number||"");setAdminNotes(row.admin_notes||"");setMessage("");setError("");await loadDocs(row.id)}
  async function saveDraft(submit=false){
-  if(!agentId&&!isAdmin){setError("Your login is not linked to an active agent profile.");return}
+  const targetAgentId=isAdmin?(assignedAgentId||selected?.agent_id):agentId;if(!targetAgentId){setError(isAdmin?"Select the agent this listing belongs to.":"Your login is not linked to an active agent profile.");return}
   if(!String(form.property_address||"").trim()||!String(form.city||"").trim()){setError("Property address and city are required.");return}
   if(submit&&!selected?.id){setError("Save the listing draft first, upload the paperwork, then submit it for review.");return}
   if(submit){const missing=requirements.filter(r=>r.required&&!docs.some(d=>d.document_type===r.code));if(missing.length){setError("Upload required listing documents before submitting: "+missing.map(x=>x.label).join(", "));return}}
   setBusy(true);setError("");setMessage("");
   const payload={property_address:String(form.property_address).trim(),unit_number:form.unit_number||"",city:String(form.city).trim(),province:form.province||"ON",postal_code:form.postal_code||"",property_type:form.property_type||"RESIDENTIAL",listing_type:form.listing_type||"SALE",asking_price:form.asking_price?Number(form.asking_price):null,listing_start_date:form.listing_start_date||null,listing_expiry_date:form.listing_expiry_date||null,notes:form.notes||"",status:submit?"SUBMITTED":(selected?.status==="NEEDS_CHANGES"?"NEEDS_CHANGES":"DRAFT"),updated_at:new Date().toISOString()};
   let result;
-  if(selected?.id)result=await supabase.from("dv_accounting_listing_submissions").update(payload).eq("id",selected.id).select().single();
-  else result=await supabase.from("dv_accounting_listing_submissions").insert([{...payload,agent_id:agentId,company_id:companyId,created_by:user?.id||null}]).select().single();
+  if(selected?.id)result=await supabase.from("dv_accounting_listing_submissions").update({...payload,...(isAdmin?{agent_id:targetAgentId}:{})}).eq("id",selected.id).select().single();
+  else result=await supabase.from("dv_accounting_listing_submissions").insert([{...payload,agent_id:targetAgentId,company_id:companyId,created_by:user?.id||null}]).select().single();
   if(result.error){setError("Could not save listing: "+result.error.message);setBusy(false);return}
-  setSelected(result.data);setForm({...blank,...result.data});setNewListing(false);setMessage(submit?"Listing paperwork submitted for admin review.":"Listing draft saved. Upload the paperwork before submitting.");await load();await loadDocs(result.data.id);setBusy(false);
+  setSelected(result.data);setAssignedAgentId(result.data.agent_id||targetAgentId);setForm({...blank,...result.data});setNewListing(false);setMessage(submit?"Listing paperwork submitted for admin review.":"Listing draft saved. Upload the paperwork before submitting.");await load();await loadDocs(result.data.id);setBusy(false);
  }
  async function uploadFiles(){
   if(!selected?.id||!fileBatch.length){setError("Save the listing draft and select one or more files first.");return}
@@ -67,11 +77,11 @@ export default function Listings({user,agentId,adminMode=false}){
   await load();setBusy(false);
  }
  async function openDocument(d){const {data,error:e}=await supabase.storage.from("dv-trade-documents").createSignedUrl(d.storage_path,3600);if(e){setError(e.message);return}window.open(data.signedUrl,"_blank","noopener,noreferrer")}
- const canEdit=!isAdmin&&(!selected||["DRAFT","NEEDS_CHANGES"].includes(selected.status));
+ const canEdit=isAdmin||(!selected||["DRAFT","NEEDS_CHANGES"].includes(selected.status));
  const visibleRequirements=useMemo(()=>requirements,[requirements]);
  const inp=(key,caption,type="text",opts=null)=><label style={labelStyle}>{caption}{opts?<select disabled={!canEdit} style={fieldStyle} value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}>{opts.map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}</select>:<input disabled={!canEdit} style={fieldStyle} type={type} value={form[key]??""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))} />}</label>;
  return <div style={{display:"grid",gap:14}}>
-  <div className="pagehead"><div><h1>Listings</h1><p>Listing paperwork submission, compliance review, and REALM MLS tracking.</p></div>{!isAdmin&&<button className="primary" type="button" onClick={startNew}>+ New Listing</button>}</div>
+  <div className="pagehead"><div><h1>Listings</h1><p>Listing paperwork submission, compliance review, and REALM MLS tracking.</p></div><button className="primary" type="button" onClick={startNew}>{isAdmin?"+ Add Listing for Agent":"+ New Listing"}</button></div>
   {error&&<div className="notice" role="alert"><AlertCircle size={16}/> {error}</div>}{message&&<div className="notice" role="status"><CheckCircle2 size={16}/> {message}</div>}
   <div style={{display:"grid",gridTemplateColumns:isAdmin?"minmax(260px,0.8fr) minmax(0,1.6fr)":"1fr",gap:12,alignItems:"start"}}>
    <section className="panel" style={{padding:12}}><div className="paneltitle"><h2 style={{fontSize:16,margin:0}}>{isAdmin?"Listing Review Queue":"My Listings"}</h2><button className="secondary" type="button" onClick={load}><RefreshCw size={14}/></button></div>
@@ -80,6 +90,7 @@ export default function Listings({user,agentId,adminMode=false}){
    <section className="panel" style={{padding:12}}>
     {!selected&&!newListing?<div className="muted">{isAdmin?"Select a listing from the queue to review.":"Create a listing submission to begin."}</div>:<>
      <div className="paneltitle"><h2 style={{fontSize:16,margin:0}}>{selected?form.property_address||"Listing details":"New Listing Submission"}</h2>{selected&&<span className="pill">{statusLabel(selected.status)}</span>}</div>
+     {isAdmin&&<label style={{...labelStyle,marginBottom:9}}>Assigned Agent *<select style={fieldStyle} value={assignedAgentId} onChange={e=>setAssignedAgentId(e.target.value)}><option value="">Select agent</option>{agents.map(a=><option key={a.id} value={a.id}>{[a.first_name,a.last_name].filter(Boolean).join(" ")||a.full_name||a.email||a.id}{a.agent_number?" · "+a.agent_number:""}</option>)}</select></label>}
      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:9}}>
       {inp("property_address","Property address *")}{inp("unit_number","Unit #")}{inp("city","City *")}{inp("province","Province", "text", [["ON","Ontario"],["AB","Alberta"],["BC","British Columbia"],["QC","Quebec"],["Other","Other"]])}{inp("postal_code","Postal code")}{inp("property_type","Property type","text",[["RESIDENTIAL","Residential"],["CONDO","Condo"],["COMMERCIAL","Commercial"],["LAND","Land"],["OTHER","Other"]])}{inp("listing_type","Listing type","text",[["SALE","For Sale"],["LEASE","For Lease"]])}{inp("asking_price","Asking price","number")}{inp("listing_start_date","Listing start date","date")}{inp("listing_expiry_date","Listing expiry date","date")}
      </div>
