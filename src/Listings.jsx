@@ -44,17 +44,29 @@ export default function Listings({user,agentId,adminMode=false}){
  function startNew(){setSelected(null);setForm({...blank});setDocs([]);setNewListing(true);setFileBatch([]);setAssignedAgentId("");setAdditionalAgentIds([]);setAdditionalAgentSearch("");setMessage("");setError("");setMlsNumber("");setAdminNotes("")}
  async function openListing(row){setSelected(row);setForm({...blank,...row});setAssignedAgentId(row.agent_id||"");setAdditionalAgentIds(Array.isArray(row.additional_agent_ids)?row.additional_agent_ids.filter(id=>id!==row.agent_id):[]);setNewListing(false);setMlsNumber(row.mls_number||"");setAdminNotes(row.admin_notes||"");setMessage("");setError("");await loadDocs(row.id)}
  async function saveDraft(submit=false){
-  const targetAgentId=isAdmin?(assignedAgentId||selected?.agent_id):agentId;if(!targetAgentId){setError(isAdmin?"Select the agent this listing belongs to.":"Your login is not linked to an active agent profile.");return}
-  if(!String(form.property_address||"").trim()||!String(form.city||"").trim()){setError("Property address and city are required.");return}
-  if(submit&&!selected?.id){setError("Save the listing draft first, upload the paperwork, then submit it for review.");return}
-  if(submit){const missing=requirements.filter(r=>r.required&&!docs.some(d=>d.document_type===r.code));if(missing.length){setError("Upload required listing documents before submitting: "+missing.map(x=>x.label).join(", "));return}}
+  const targetAgentId=isAdmin?(assignedAgentId||selected?.agent_id):agentId;
+  if(!targetAgentId){setError(isAdmin?"Select the agent this listing belongs to.":"Your login is not linked to an active agent profile.");return null}
+  if(!String(form.property_address||"").trim()||!String(form.city||"").trim()){setError("Property address and city are required.");return null}
+  if(submit&&!selected?.id){setError("Save the listing draft first, upload the paperwork, then submit it for review.");return null}
+  if(submit){const missing=requirements.filter(r=>r.required&&!docs.some(d=>d.document_type===r.code));if(missing.length){setError("Upload required listing documents before submitting: "+missing.map(x=>x.label).join(", "));return null}}
   setBusy(true);setError("");setMessage("");
-  const payload={property_address:String(form.property_address).trim(),additional_agent_ids:isAdmin?[...new Set([targetAgentId,...additionalAgentIds].filter(Boolean))]:[...new Set([agentId,...additionalAgentIds].filter(Boolean))],unit_number:form.unit_number||"",city:String(form.city).trim(),province:form.province||"ON",postal_code:form.postal_code||"",property_type:form.property_type||"RESIDENTIAL",listing_type:form.listing_type||"SALE",asking_price:form.asking_price?Number(form.asking_price):null,listing_start_date:form.listing_start_date||null,listing_expiry_date:form.listing_expiry_date||null,notes:form.notes||"",status:submit?"SUBMITTED":(selected?.status==="NEEDS_CHANGES"?"NEEDS_CHANGES":"DRAFT"),updated_at:new Date().toISOString()};
-  let result;
-  if(selected?.id)result=await supabase.from("dv_accounting_listing_submissions").update({...payload,...(isAdmin?{agent_id:targetAgentId}:{})}).eq("id",selected.id).select().single();
-  else result=await supabase.from("dv_accounting_listing_submissions").insert([{...payload,agent_id:targetAgentId,company_id:companyId,created_by:user?.id||null}]).select().single();
-  if(result.error){setError("Could not save listing: "+result.error.message);setBusy(false);return}
-  setSelected(result.data);setAssignedAgentId(result.data.agent_id||targetAgentId);setAdditionalAgentIds(Array.isArray(result.data.additional_agent_ids)?result.data.additional_agent_ids.filter(id=>id!==result.data.agent_id):[]);setForm({...blank,...result.data});setNewListing(false);setMessage(submit?"Listing paperwork submitted for admin review.":"Listing draft saved. Upload the paperwork before submitting.");await load();await loadDocs(result.data.id);setBusy(false);return result.data;
+  try{
+   if(!supabase)throw new Error("Database connection is unavailable. Refresh the page and sign in again.");
+   const payload={property_address:String(form.property_address).trim(),additional_agent_ids:isAdmin?[...new Set([targetAgentId,...additionalAgentIds].filter(Boolean))]:[...new Set([agentId,...additionalAgentIds].filter(Boolean))],unit_number:form.unit_number||"",city:String(form.city).trim(),province:form.province||"ON",postal_code:form.postal_code||"",property_type:form.property_type||"RESIDENTIAL",listing_type:form.listing_type||"SALE",asking_price:form.asking_price?Number(form.asking_price):null,listing_start_date:form.listing_start_date||null,listing_expiry_date:form.listing_expiry_date||null,notes:form.notes||"",status:submit?"SUBMITTED":(selected?.status==="NEEDS_CHANGES"?"NEEDS_CHANGES":"DRAFT"),updated_at:new Date().toISOString()};
+   let result;
+   if(selected?.id)result=await supabase.from("dv_accounting_listing_submissions").update({...payload,...(isAdmin?{agent_id:targetAgentId}:{})}).eq("id",selected.id).select().single();
+   else result=await supabase.from("dv_accounting_listing_submissions").insert([{...payload,agent_id:targetAgentId,company_id:companyId||null,created_by:user?.id||null}]).select().single();
+   if(result.error)throw new Error("Could not save listing: "+result.error.message);
+   const saved=result.data;
+   setSelected(saved);setAssignedAgentId(saved.agent_id||targetAgentId);setAdditionalAgentIds(Array.isArray(saved.additional_agent_ids)?saved.additional_agent_ids.filter(id=>id!==saved.agent_id):[]);setForm({...blank,...saved});setNewListing(false);
+   setMessage(submit?"Listing paperwork submitted for admin review.":"Listing draft saved.");
+   await load();
+   await loadDocs(saved.id);
+   return saved;
+  }catch(e){
+   setError(e?.message||"Could not save the listing. Please try again.");
+   return null;
+  }finally{setBusy(false)}
  }
  async function prepareSplitPreview(){
   if(!fileBatch.length){setError("Choose one or more files first.");return}
