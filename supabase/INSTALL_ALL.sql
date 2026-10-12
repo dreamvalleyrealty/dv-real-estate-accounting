@@ -5082,7 +5082,13 @@ select company_id,account_code,account_name,account_type,
        sum(case when account_type in ('LIABILITY','EQUITY') then credit-debit else debit-credit end) as balance
 from public.dv_accounting_v_general_ledger
 where account_type in ('ASSET','LIABILITY','EQUITY')
-group by company_id,account_code,account_name,account_type;
+group by company_id,account_code,account_name,account_type
+union all
+select company_id,'3900'::text,'Current Year Earnings'::text,'EQUITY'::text,
+       sum(case when account_type='REVENUE' then credit-debit else debit-credit end) as balance
+from public.dv_accounting_v_general_ledger
+where account_type in ('REVENUE','EXPENSE')
+group by company_id;
 
 -- Journal integrity check. The application should post a complete entry in one transaction.
 create or replace function public.dv_accounting_check_journal_entry(p_entry_id uuid)
