@@ -381,3 +381,35 @@ body, #root, .app { font-size: 15px; }
 .listing-document-preview-other a{color:#0f2141;font-weight:600}
 @keyframes listingTabFade{from{opacity:.65;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:760px){.listing-detail-tabs button{flex:1;padding:8px 9px;font-size:12px}.listing-document-preview-frame{height:62vh;min-height:320px}.listing-document-preview-image{height:58vh;min-height:240px}.listing-document-preview{padding:7px}}
+
+
+/* Listing document workspace v0.6.188: clickable file navigation with an in-window, auto-fitting preview. */
+.listing-files-workspace{display:grid;grid-template-columns:minmax(220px,.72fr) minmax(0,1.8fr);gap:12px;align-items:stretch;margin-top:14px;min-width:0}
+.listing-files-sidebar,.listing-files-preview-pane{min-width:0;border:1px solid #e1e6ee;border-radius:10px;background:#fff;overflow:hidden}
+.listing-files-sidebar{display:flex;flex-direction:column;max-height:calc(100vh - 320px);min-height:360px}
+.listing-files-sidebar-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px;background:#f7f8fa;border-bottom:1px solid #e8ebf0}
+.listing-files-sidebar-head strong{font-size:12px;color:#172b4d}
+.listing-files-sidebar-head span{font-size:11px;color:#667085;white-space:nowrap}
+.listing-clickable-file-list{overflow:auto;min-height:0}
+.listing-clickable-file{display:flex;align-items:center;gap:9px;width:100%;min-height:58px;padding:10px;text-align:left;border:0;border-bottom:1px solid #edf0f4;border-radius:0;background:#fff;color:#344054;cursor:pointer}
+.listing-clickable-file:hover{background:#f8fafc}
+.listing-clickable-file.active{background:#f4f0e7;box-shadow:inset 3px 0 #9e8556}
+.listing-clickable-file-icon{display:grid;place-items:center;flex:0 0 32px;width:32px;height:36px;border-radius:7px;background:#edf1f7;color:#0f2141}
+.listing-clickable-file.active .listing-clickable-file-icon{background:#e5dcc9}
+.listing-clickable-file-text{display:grid;gap:4px;flex:1;min-width:0}
+.listing-clickable-file-text strong{font-size:11px;line-height:1.35;font-weight:650;overflow-wrap:anywhere;color:#25324a}
+.listing-clickable-file-text small{font-size:10px;color:#7b8596;overflow-wrap:anywhere}
+.listing-clickable-file-arrow{font-size:20px;color:#98a2b3}
+.listing-files-empty{display:grid;place-items:center;text-align:center;gap:7px;min-height:220px;padding:20px;color:#8a94a3}
+.listing-files-empty span{font-size:12px;color:#475467}
+.listing-files-empty small{font-size:11px}
+.listing-files-preview-pane{display:flex;flex-direction:column;padding:10px;background:#f8fafc;min-height:440px}
+.listing-files-preview-pane .listing-document-preview-head{flex:0 0 auto;margin-bottom:9px;padding:2px 2px 9px;border-bottom:1px solid #e1e6ee}
+.listing-files-preview-pane .listing-document-preview-frame{width:100%;height:calc(100vh - 410px);min-height:420px;max-height:900px;flex:1 1 auto}
+.listing-files-preview-pane .listing-document-preview-image{width:100%;height:calc(100vh - 410px);min-height:300px;max-height:900px;object-fit:contain;background:#fff}
+.listing-files-preview-empty{display:flex;flex:1;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:28px;color:#98a2b3}
+.listing-files-preview-empty strong{font-size:14px;color:#344054}
+.listing-files-preview-empty span{max-width:340px;font-size:12px;line-height:1.55;color:#7b8596}
+.listing-preview-open-link{display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap;padding:6px 9px;min-height:32px}
+@media(max-width:900px){.listing-files-workspace{grid-template-columns:minmax(180px,.75fr) minmax(0,1.5fr);gap:8px}.listing-files-sidebar{max-height:calc(100vh - 280px)}.listing-files-preview-pane .listing-document-preview-frame{height:calc(100vh - 360px);min-height:350px}.listing-files-preview-pane .listing-document-preview-image{height:calc(100vh - 360px);min-height:260px}}
+@media(max-width:640px){.listing-files-workspace{grid-template-columns:minmax(0,1fr)}.listing-files-sidebar{max-height:260px;min-height:140px}.listing-files-preview-pane{min-height:360px}.listing-files-preview-pane .listing-document-preview-frame{height:58vh;min-height:300px}.listing-files-preview-pane .listing-document-preview-image{height:52vh;min-height:240px}.listing-files-preview-empty{min-height:260px}}
