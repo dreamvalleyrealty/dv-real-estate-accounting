@@ -313,3 +313,97 @@ begin
     and ch.charge_type='DESK_FEE'
     and ch.status='OPEN';
 end $$;
+
+
+-- Enforce double-entry balance at transaction commit for every new or changed journal entry.
+create or replace function public.dv_accounting_enforce_balanced_journal()
+returns trigger language plpgsql set search_path=public as $$
+declare entry_id uuid; d numeric(14,2); c numeric(14,2); n integer;
+begin
+  entry_id:=case when tg_op='DELETE' then old.journal_entry_id else new.journal_entry_id end;
+  if not exists(select 1 from public.dv_accounting_journal_entries where id=entry_id) then
+    return null;
+  end if;
+  select coalesce(sum(debit),0),coalesce(sum(credit),0),count(*)
+    into d,c,n from public.dv_accounting_journal_lines where journal_entry_id=entry_id;
+  if n<2 or abs(round(d-c,2))>0.01 then
+    raise exception 'Journal entry % is unbalanced: debits %, credits %, lines %',entry_id,d,c,n;
+  end if;
+  return null;
+end $$;
+
+drop trigger if exists dv_accounting_journal_balance_check on public.dv_accounting_journal_lines;
+create constraint trigger dv_accounting_journal_balance_check
+after insert or update or delete on public.dv_accounting_journal_lines
+deferrable initially deferred
+for each row execute function public.dv_accounting_enforce_balanced_journal();
+
+-- Closing a month locks new journal entries into that month. Reopen by authorized
+-- administrative correction of closed_at only after documenting the reason.
+create or replace function public.dv_accounting_prevent_posting_to_closed_month()
+returns trigger language plpgsql set search_path=public as $$
+begin
+  if exists (
+    select 1 from public.dv_accounting_month_end me
+    where me.company_id=new.company_id
+      and me.closed_at is not null
+      and date_trunc('month',me.period_end)=date_trunc('month',new.entry_date)
+  ) then
+    raise exception 'Accounting period for % is closed. Reopen it through an authorized correction process before posting.',new.entry_date;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists dv_accounting_journal_period_lock on public.dv_accounting_journal_entries;
+create trigger dv_accounting_journal_period_lock
+before insert or update of entry_date,company_id on public.dv_accounting_journal_entries
+for each row execute function public.dv_accounting_prevent_posting_to_closed_month();
+
+-- Registers for assets, prepaid expenses and accruals. These records support schedules;
+-- journal entries remain the source of truth for financial statements.
+create table if not exists public.dv_accounting_fixed_assets(
+ id uuid primary key default gen_random_uuid(),
+ company_id uuid not null references public.dv_accounting_companies(id) on delete cascade,
+ asset_name text not null,
+ asset_category text not null,
+ acquisition_date date not null,
+ in_service_date date not null,
+ cost numeric(14,2) not null check(cost>=0),
+ residual_value numeric(14,2) not null default 0 check(residual_value>=0),
+ useful_life_months integer not null check(useful_life_months>0),
+ depreciation_method text not null default 'STRAIGHT_LINE' check(depreciation_method in('STRAIGHT_LINE')),
+ accumulated_depreciation numeric(14,2) not null default 0,
+ disposal_date date,
+ disposal_proceeds numeric(14,2),
+ notes text,
+ created_at timestamptz not null default now(),
+ check(residual_value<=cost)
+);
+
+create table if not exists public.dv_accounting_amortization_schedules(
+ id uuid primary key default gen_random_uuid(),
+ company_id uuid not null references public.dv_accounting_companies(id) on delete cascade,
+ schedule_type text not null check(schedule_type in('PREPAID','ACCRUAL')),
+ description text not null,
+ vendor text,
+ start_date date not null,
+ end_date date not null,
+ total_amount numeric(14,2) not null check(total_amount>=0),
+ recognized_to_date numeric(14,2) not null default 0,
+ frequency text not null default 'MONTHLY' check(frequency in('MONTHLY','QUARTERLY')),
+ asset_account_code text,
+ expense_account_code text,
+ liability_account_code text,
+ active boolean not null default true,
+ notes text,
+ created_at timestamptz not null default now(),
+ check(end_date>=start_date),
+ check(recognized_to_date>=0 and recognized_to_date<=total_amount)
+);
+
+alter table public.dv_accounting_fixed_assets enable row level security;
+alter table public.dv_accounting_amortization_schedules enable row level security;
+drop policy if exists "authenticated access" on public.dv_accounting_fixed_assets;
+create policy "authenticated access" on public.dv_accounting_fixed_assets for all to authenticated using(true) with check(true);
+drop policy if exists "authenticated access" on public.dv_accounting_amortization_schedules;
+create policy "authenticated access" on public.dv_accounting_amortization_schedules for all to authenticated using(true) with check(true);
