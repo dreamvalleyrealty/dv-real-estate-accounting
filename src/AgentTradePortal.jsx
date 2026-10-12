@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { PDFDocument } from "pdf-lib";
 import { AlertCircle, CheckCircle2, Clock3, FileText, Plus, RefreshCw, Send, Upload, XCircle, ExternalLink, X } from "lucide-react";
 import { supabase } from "./lib/supabase";
+import AgentSearchSelect from "./AgentSearchSelect";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
-const AGENT_PORTAL_VERSION = "0.6.128";
+const AGENT_PORTAL_VERSION = "0.6.129";
 
 const blank = {
   transaction_number:"", transaction_type:"BUY_SELL", side:"SELLER", dvr_lead:false, property_address:"",
@@ -479,7 +480,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      <section className="panel" style={adminCreating?{gridColumn:"1 / -1"}:undefined}>
        <div className="paneltitle"><div><h2>{adminMode?(selected?"Review Trade":"Select a submission"):(selected?"Trade Details":"Create a Trade")}</h2><p className="agent-trade-muted">{selected?"Last updated "+displayDate(selected.updated_at?.slice(0,10)||selected.created_at?.slice(0,10)):"Save a draft before uploading documents."}</p></div>{selected&&statusPill(selected.status)}</div>
        {!selected&&adminMode&&!adminCreating?<div className="empty"><ClipboardPlaceholder/><h3>Select a trade</h3><p>Choose a submission from the queue or create a trade for an agent.</p></div>:(!adminMode&&(!selected||["DRAFT","NEEDS_CHANGES"].includes(selected.status))||adminMode&&adminCreating)?<form onSubmit={e=>{e.preventDefault();saveDraft()}}>
-          {adminMode&&adminCreating&&<div style={{marginBottom:14}}><Field label="Create this trade for agent" ><select required value={selectedAgentId} onChange={e=>{setSelectedAgentId(e.target.value);const person=agents.find(a=>a.id===e.target.value);setRepresentingAgent(person||null);setForm(v=>applyRepresentingDefaults({...v},person||null));}}><option value="">Select an agent…</option>{agents.map(a=><option key={a.id} value={a.id}>{[a.agent_number,[a.first_name,a.last_name].filter(Boolean).join(" "),a.email].filter(Boolean).join(" · ")}</option>)}</select></Field><p className="agent-trade-muted">The trade will be assigned to this agent, while the audit log records the admin who created and changed it.</p></div>}
+          {adminMode&&adminCreating&&<div style={{marginBottom:14}}><Field label="Create this trade for agent" ><AgentSearchSelect agents={agents} value={selectedAgentId} onChange={id=>{setSelectedAgentId(id);const person=agents.find(a=>a.id===id);setRepresentingAgent(person||null);setForm(v=>applyRepresentingDefaults({...v},person||null));}} placeholder="Search agent name..."/></Field><p className="agent-trade-muted">The trade will be assigned to this agent, while the audit log records the admin who created and changed it.</p></div>}
          <div className="agent-trade-workspace">
            <section className="agent-trade-upload-panel"><h3 style={{marginTop:0}}>1. Upload documents</h3><p className="agent-trade-muted">Upload the APS first. Text will be extracted where available and suggested values will appear in the form on the right.</p>
              <Field label="Document type"><select value={docType} onChange={e=>setDocType(e.target.value)}>{docTypes.filter(([type])=>(requirementsBySide?.[form.side]?.types||requiredTypes).includes(type)).map(([type,label])=><option key={type} value={type}>{label}</option>)}</select></Field>
