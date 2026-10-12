@@ -230,3 +230,19 @@ pre{max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
  .panel{padding:9px}
  .modalactions{grid-template-columns:minmax(0,1fr)}
 }
+
+
+/* Compact transaction list: keep each trade readable without oversized row gaps. */
+.transaction-list-panel{padding:8px!important}
+.transaction-list-table{font-size:11px;line-height:1.2;min-width:1050px}
+.transaction-list-table th{padding:7px 8px!important;white-space:nowrap}
+.transaction-list-table td{padding:6px 8px!important;vertical-align:middle}
+.transaction-list-table tbody tr{height:auto}
+.transaction-list-table td .textbutton{padding:2px 0;line-height:1.2}
+.transaction-list-table td select{padding:4px 6px;font-size:11px;min-height:28px}
+.transaction-row-actions{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-width:140px;max-width:340px}
+.transaction-row-actions>div{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-width:0}
+.transaction-row-actions .transaction-actions-label{display:none}
+.transaction-row-actions button{font-size:10px!important;line-height:1.15;padding:3px 5px!important;white-space:nowrap}
+.transaction-row-actions button.primary{min-height:0}
+@media(max-width:900px){.transaction-list-panel{padding:6px!important}.transaction-list-table th,.transaction-list-table td{padding:6px!important}.transaction-row-actions{max-width:280px}}
