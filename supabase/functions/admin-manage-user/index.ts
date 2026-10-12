@@ -46,11 +46,10 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
     let agent: { id: string; email: string | null; first_name: string; last_name: string; user_id?: string | null } | null = null;
     if (agentId) {
-      const { data, error } = await admin.from("dv_accounting_agents").select("id,email,first_name,last_name,user_id").eq("id", agentId).maybeSingle();
+      const { data, error } = await admin.from("dv_accounting_agents").select("id,email,first_name,last_name").eq("id", agentId).maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("The selected agent record could not be found.");
       if (String(data.email || "").trim().toLowerCase() !== email) throw new Error("The login email must match the selected agent's email address.");
-      if (data.user_id) throw new Error("This agent is already linked to a login account.");
       agent = data;
     }
 
@@ -74,13 +73,6 @@ Deno.serve(async (req) => {
     });
     if (profileError) throw profileError;
 
-    if (agent) {
-      const { error: linkError } = await admin.from("dv_accounting_agents").update({ user_id: createdUserId }).eq("id", agent.id).is("user_id", null);
-      if (linkError) throw linkError;
-      const { data: linked } = await admin.from("dv_accounting_agents").select("id").eq("id", agent.id).eq("user_id", createdUserId).maybeSingle();
-      if (!linked) throw new Error("The login was created but the agent link could not be verified. Please contact the Super Admin.");
-    }
-
     return new Response(JSON.stringify({ ok: true, user_id: createdUserId, email, role, must_change_password: true }), {
       status: 200, headers: { ...cors, "Content-Type": "application/json" },
     });
@@ -91,7 +83,6 @@ Deno.serve(async (req) => {
       if (supabaseUrl && serviceKey) {
         const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
         await admin.from("dv_accounting_user_profiles").delete().eq("user_id", createdUserId);
-        await admin.from("dv_accounting_agents").update({ user_id: null }).eq("user_id", createdUserId);
         await admin.auth.admin.deleteUser(createdUserId);
       }
     }
