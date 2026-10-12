@@ -38,7 +38,7 @@ begin
     select * into plan from public.dv_accounting_fee_plans where id=fs.fee_plan_id;
   end if;
 
-  fee:=greatest(0,coalesce(fs.desk_fee_override,plan.desk_fee,0));
+  fee:=case when plan.id is not null and coalesce(plan.desk_fee,0)<=0 then 0 else greatest(0,coalesce(fs.desk_fee_override,plan.desk_fee,0)) end;
   freq:=coalesce(fs.desk_fee_frequency,plan.desk_fee_frequency,'MONTHLY');
 
   select * into sub
@@ -102,7 +102,7 @@ begin
       else
         plan:=null;
       end if;
-      amount_due:=greatest(0,coalesce(fs.desk_fee_override,plan.desk_fee,0));
+      amount_due:=case when plan.id is not null and coalesce(plan.desk_fee,0)<=0 then 0 else greatest(0,coalesce(fs.desk_fee_override,plan.desk_fee,0)) end;
       if amount_due<=0 then
         update public.dv_accounting_agent_service_subscriptions
            set active=false,end_date=coalesce(end_date,p_run_date-1)
