@@ -22,7 +22,8 @@ export default function SellerSettlements(){
  }
  useEffect(()=>{load()},[]);
  function isEligibleTrade(tx){return !!tx&&tx.status==="CLOSED"&&tx.is_own_listing===true&&String(tx.side||"").toUpperCase()==="SELLER"}
- function hasSellerBalance(row){return Number(row?.seller_proceeds_amount||0)-Number(row?.seller_paid_amount||0)>0.009}\n const eligibleTrades=trades.filter(tx=>isEligibleTrade(tx)&&(!rows.some(row=>row.transaction_id===tx.id)||rows.some(row=>row.transaction_id===tx.id&&hasSellerBalance(row))));
+ function hasSellerBalance(row){return Number(row?.seller_proceeds_amount||0)-Number(row?.seller_paid_amount||0)>0.009}
+ const eligibleTrades=trades.filter(tx=>isEligibleTrade(tx)&&(!rows.some(row=>row.transaction_id===tx.id)||rows.some(row=>row.transaction_id===tx.id&&hasSellerBalance(row))));
  const visibleSettlements=rows.filter(row=>isEligibleTrade(trades.find(tx=>tx.id===row.transaction_id))&&hasSellerBalance(row));
  function chooseTrade(id){const tx=trades.find(x=>x.id===id);setForm(f=>({...f,transaction_id:id,company_id:tx?.company_id||f.company_id,matter:tx?.transaction_number||f.matter}))}
  function editRow(row){if(["READY_FOR_COMMISSION_PAYROLL","COMMISSION_PAYROLL_PROCESSED","PAYMENTS_COMPLETED"].includes(row.status)){return alert("This settlement has already posted its trust transfer. Its financial fields are locked to prevent duplicate transfers.");}setEditing(row.id);setForm({...emptyForm(),...row,seller_proceeds_amount:String(row.seller_proceeds_amount??""),seller_paid_amount:String(row.seller_paid_amount??""),listing_commission_amount:String(row.listing_commission_amount??""),cooperating_commission_amount:String(row.cooperating_commission_amount??""),commission_hst_amount:String(row.commission_hst_amount??""),commission_transfer_date:row.commission_transfer_date||today(),seller_payment_date:row.seller_payment_date||today()})}
