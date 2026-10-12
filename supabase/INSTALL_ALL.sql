@@ -4063,7 +4063,7 @@ NOTIFY pgrst, 'reload schema';
 
 
 -- ============================================================
--- 202610120001_accounting_controls_and_reporting.sql
+-- 20261012z_accounting_controls_and_reporting.sql
 -- ============================================================
 
 -- 2026-10-12: accounting controls, GL reporting views, and recurring-fee safeguards
@@ -4300,7 +4300,7 @@ cross join (values
 on conflict(company_id,code) do nothing;
 
 -- Read-only financial report views based exclusively on posted journal lines.
-create or replace view public.dv_accounting_v_general_ledger as
+create or replace view public.dv_accounting_v_general_ledger with (security_invoker=true) as
 select je.company_id,je.id as journal_entry_id,je.entry_date,je.source_type,je.source_id,je.memo,
        ga.id as gl_account_id,ga.code as account_code,ga.name as account_name,ga.account_type,
        jl.id as journal_line_id,jl.debit,jl.credit,(jl.debit-jl.credit) as net_amount
@@ -4308,7 +4308,7 @@ from public.dv_accounting_journal_entries je
 join public.dv_accounting_journal_lines jl on jl.journal_entry_id=je.id
 join public.dv_accounting_gl_accounts ga on ga.id=jl.gl_account_id;
 
-create or replace view public.dv_accounting_v_trial_balance as
+create or replace view public.dv_accounting_v_trial_balance with (security_invoker=true) as
 select company_id,gl_account_id,account_code,account_name,account_type,
        sum(debit) as total_debits,sum(credit) as total_credits,
        sum(debit-credit) as debit_balance_signed,
@@ -4317,14 +4317,14 @@ select company_id,gl_account_id,account_code,account_name,account_type,
 from public.dv_accounting_v_general_ledger
 group by company_id,gl_account_id,account_code,account_name,account_type;
 
-create or replace view public.dv_accounting_v_profit_loss as
+create or replace view public.dv_accounting_v_profit_loss with (security_invoker=true) as
 select company_id,account_code,account_name,account_type,
        sum(case when account_type='REVENUE' then credit-debit else debit-credit end) as amount
 from public.dv_accounting_v_general_ledger
 where account_type in ('REVENUE','EXPENSE')
 group by company_id,account_code,account_name,account_type;
 
-create or replace view public.dv_accounting_v_balance_sheet as
+create or replace view public.dv_accounting_v_balance_sheet with (security_invoker=true) as
 select company_id,account_code,account_name,account_type,
        sum(case when account_type in ('LIABILITY','EQUITY') then credit-debit else debit-credit end) as balance
 from public.dv_accounting_v_general_ledger
