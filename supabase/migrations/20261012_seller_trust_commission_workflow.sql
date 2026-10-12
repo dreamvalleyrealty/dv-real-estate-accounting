@@ -109,22 +109,32 @@ for each row execute function public.dv_accounting_validate_seller_settlement();
 
 alter table public.dv_accounting_seller_settlements enable row level security;
 
--- Access follows the app's existing authenticated-user model. Role/tenant restrictions
--- should be tightened to match the project's established company-scope policies.
+-- Restrict the initial rollout to brokerage administrators. Broader company-scoped
+-- accountant access should be added after the project's membership schema is verified.
 drop policy if exists "Authenticated users can read seller settlements"
   on public.dv_accounting_seller_settlements;
-create policy "Authenticated users can read seller settlements"
+drop policy if exists "Seller settlement administrators can read"
+  on public.dv_accounting_seller_settlements;
+create policy "Seller settlement administrators can read"
   on public.dv_accounting_seller_settlements
-  for select to authenticated using (true);
+  for select to authenticated
+  using (upper(coalesce(auth.jwt()->'app_metadata'->>'role', auth.jwt()->'user_metadata'->>'role', '')) in ('SUPERADMIN','ADMIN'));
 
 drop policy if exists "Authenticated users can insert seller settlements"
   on public.dv_accounting_seller_settlements;
-create policy "Authenticated users can insert seller settlements"
+drop policy if exists "Seller settlement administrators can insert"
+  on public.dv_accounting_seller_settlements;
+create policy "Seller settlement administrators can insert"
   on public.dv_accounting_seller_settlements
-  for insert to authenticated with check (true);
+  for insert to authenticated
+  with check (upper(coalesce(auth.jwt()->'app_metadata'->>'role', auth.jwt()->'user_metadata'->>'role', '')) in ('SUPERADMIN','ADMIN'));
 
 drop policy if exists "Authenticated users can update seller settlements"
   on public.dv_accounting_seller_settlements;
-create policy "Authenticated users can update seller settlements"
+drop policy if exists "Seller settlement administrators can update"
+  on public.dv_accounting_seller_settlements;
+create policy "Seller settlement administrators can update"
   on public.dv_accounting_seller_settlements
-  for update to authenticated using (true) with check (true);
+  for update to authenticated
+  using (upper(coalesce(auth.jwt()->'app_metadata'->>'role', auth.jwt()->'user_metadata'->>'role', '')) in ('SUPERADMIN','ADMIN'))
+  with check (upper(coalesce(auth.jwt()->'app_metadata'->>'role', auth.jwt()->'user_metadata'->>'role', '')) in ('SUPERADMIN','ADMIN'));
