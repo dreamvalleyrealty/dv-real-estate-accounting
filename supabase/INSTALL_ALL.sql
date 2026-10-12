@@ -4062,6 +4062,758 @@ ALTER TABLE public.dv_accounting_transaction_agent_info ALTER COLUMN created_at 
 NOTIFY pgrst, 'reload schema';
 
 
+
+-- ============================================================
+-- 202610110001_agent_sin_number.sql
+-- ============================================================
+
+-- Add Social Insurance Number to agent profiles.
+-- SIN is sensitive personal information: ensure access to dv_accounting_agents
+-- is limited by your Supabase RLS policies to authorized brokerage personnel.
+ALTER TABLE public.dv_accounting_agents
+  ADD COLUMN IF NOT EXISTS sin_number text;
+
+
+
+-- ============================================================
+-- 202610110002_personnel_document_expiry_date.sql
+-- ============================================================
+
+alter table public.dv_accounting_personnel_documents
+  add column if not exists expiry_date date;
+
+comment on column public.dv_accounting_personnel_documents.expiry_date is
+  'Expiry date for personnel documents such as government ID, RECO licence copies, and independent contractor agreements.';
+
+
+
+-- ============================================================
+-- 20261012_agent_charge_history_payments.sql
+-- ============================================================
+
+-- 0025: agent recurring charge history and payment registration
+CREATE TABLE IF NOT EXISTS public.dv_accounting_agent_charge_payments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid NOT NULL REFERENCES public.dv_accounting_companies(id) ON DELETE CASCADE,
+  agent_id uuid NOT NULL REFERENCES public.dv_accounting_agents(id) ON DELETE RESTRICT,
+  charge_id uuid NOT NULL REFERENCES public.dv_accounting_commission_charges(id) ON DELETE RESTRICT,
+  payment_date date NOT NULL DEFAULT current_date,
+  amount numeric(14,2) NOT NULL CHECK (amount > 0),
+  method text NOT NULL DEFAULT 'EFT',
+  reference text,
+  notes text,
+  recorded_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_dv_agent_charge_payments_agent_date
+  ON public.dv_accounting_agent_charge_payments(agent_id, payment_date DESC);
+CREATE INDEX IF NOT EXISTS idx_dv_agent_charge_payments_charge
+  ON public.dv_accounting_agent_charge_payments(charge_id);
+
+-- Extend the existing charge status values to support direct payments and partial payments.
+DO $$
+DECLARE c record;
+BEGIN
+  FOR c IN
+    SELECT conname
+    FROM pg_constraint
+    WHERE conrelid = 'public.dv_accounting_commission_charges'::regclass
+      AND contype = 'c'
+      AND pg_get_constraintdef(oid) ILIKE '%status%'
+  LOOP
+    EXECUTE format('ALTER TABLE public.dv_accounting_commission_charges DROP CONSTRAINT %I', c.conname);
+  END LOOP;
+END $$;
+
+ALTER TABLE public.dv_accounting_commission_charges
+  ADD CONSTRAINT dv_accounting_commission_charges_status_check
+  CHECK (status IN ('OPEN','PARTIAL','PAID','APPLIED','VOID'));
+
+CREATE OR REPLACE FUNCTION public.dv_accounting_register_agent_charge_payment(
+  p_charge_id uuid,
+  p_payment_date date,
+  p_amount numeric,
+  p_method text DEFAULT 'EFT',
+  p_reference text DEFAULT NULL,
+  p_notes text DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  ch public.dv_accounting_commission_charges%ROWTYPE;
+  ag public.dv_accounting_agents%ROWTYPE;
+  already_paid numeric(14,2);
+  outstanding numeric(14,2);
+  payment_id uuid;
+  next_status text;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Sign in before registering an agent payment.';
+  END IF;
+  IF p_amount IS NULL OR p_amount <= 0 THEN
+    RAISE EXCEPTION 'Payment amount must be greater than zero.';
+  END IF;
+  IF p_payment_date IS NULL THEN
+    RAISE EXCEPTION 'Payment date is required.';
+  END IF;
+
+  SELECT * INTO ch
+  FROM public.dv_accounting_commission_charges
+  WHERE id = p_charge_id
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Agent charge not found.'; END IF;
+  IF ch.status IN ('APPLIED','VOID','PAID') THEN
+    RAISE EXCEPTION 'This charge is already applied to commission, voided, or paid.';
+  END IF;
+
+  SELECT * INTO ag FROM public.dv_accounting_agents WHERE id = ch.agent_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Agent not found for this charge.'; END IF;
+
+  SELECT coalesce(sum(amount),0) INTO already_paid
+  FROM public.dv_accounting_agent_charge_payments
+  WHERE charge_id = ch.id;
+
+  outstanding := round(coalesce(ch.amount,0) - already_paid, 2);
+  IF p_amount > outstanding + 0.005 THEN
+    RAISE EXCEPTION 'Payment exceeds the outstanding charge balance of %.', outstanding;
+  END IF;
+
+  INSERT INTO public.dv_accounting_agent_charge_payments(
+    company_id, agent_id, charge_id, payment_date, amount, method, reference, notes, recorded_by
+  ) VALUES (
+    ag.company_id, ag.id, ch.id, p_payment_date, round(p_amount,2),
+    coalesce(nullif(trim(p_method),''),'EFT'), nullif(trim(p_reference),''), nullif(trim(p_notes),''), auth.uid()
+  ) RETURNING id INTO payment_id;
+
+  SELECT coalesce(sum(amount),0) INTO already_paid
+  FROM public.dv_accounting_agent_charge_payments
+  WHERE charge_id = ch.id;
+
+  next_status := CASE WHEN already_paid + 0.005 >= ch.amount THEN 'PAID' ELSE 'PARTIAL' END;
+  UPDATE public.dv_accounting_commission_charges SET status = next_status WHERE id = ch.id;
+
+  RETURN jsonb_build_object(
+    'payment_id', payment_id,
+    'charge_id', ch.id,
+    'paid_amount', already_paid,
+    'outstanding_amount', greatest(0, round(ch.amount - already_paid, 2)),
+    'status', next_status
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.dv_accounting_register_agent_charge_payment(uuid,date,numeric,text,text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.dv_accounting_register_agent_charge_payment(uuid,date,numeric,text,text,text) TO authenticated;
+
+
+
+-- ============================================================
+-- 20261012_atomic_seller_commission_transfer.sql
+-- ============================================================
+
+-- Atomic posting for seller-side commission transfers.
+-- The seller's payment is recorded as a lawyer-paid checkpoint; the brokerage's
+-- trust ledger records only the inter-account commission transfer here.
+alter table public.dv_accounting_seller_settlements
+  add column if not exists seller_client_name text,
+  add column if not exists matter text;
+
+create or replace function public.dv_accounting_process_seller_commission_transfer(
+  p_settlement_id uuid,
+  p_transfer_reference text,
+  p_transfer_date date
+)
+returns public.dv_accounting_seller_settlements
+language plpgsql
+set search_path = public
+as $$
+declare
+  v public.dv_accounting_seller_settlements%rowtype;
+  v_total numeric(14,2);
+  v_available numeric(14,2);
+begin
+  select * into v
+  from public.dv_accounting_seller_settlements
+  where id = p_settlement_id
+  for update;
+
+  if not found then
+    raise exception 'Seller settlement was not found.';
+  end if;
+
+  if v.status <> 'SELLER_PAID' then
+    raise exception 'Record and save full seller payment before transferring commission.';
+  end if;
+
+  if coalesce(v.seller_paid_amount, 0) < coalesce(v.seller_proceeds_amount, 0)
+     or coalesce(nullif(trim(v.seller_payment_reference), ''), '') = ''
+     or v.seller_payment_date is null then
+    raise exception 'Seller payment must be fully recorded with reference and date.';
+  end if;
+
+  if v.real_estate_trust_account_id is null
+     or v.commission_trust_account_id is null
+     or v.real_estate_trust_account_id = v.commission_trust_account_id then
+    raise exception 'Select two different trust accounts.';
+  end if;
+
+  if coalesce(nullif(trim(v.seller_client_name), ''), '') = ''
+     or coalesce(nullif(trim(v.matter), ''), '') = '' then
+    raise exception 'Seller/client name and trade number are required for the trust ledger.';
+  end if;
+
+  v_total := round(
+    coalesce(v.listing_commission_amount, 0)
+    + coalesce(v.cooperating_commission_amount, 0)
+    + coalesce(v.commission_hst_amount, 0), 2
+  );
+
+  if v_total <= 0 then
+    raise exception 'Commission transfer must be greater than zero.';
+  end if;
+
+  if coalesce(nullif(trim(p_transfer_reference), ''), '') = '' or p_transfer_date is null then
+    raise exception 'Transfer reference and date are required.';
+  end if;
+
+  if not exists (
+    select 1 from public.dv_accounting_bank_accounts
+    where id = v.real_estate_trust_account_id and company_id = v.company_id and account_type = 'REAL_ESTATE_TRUST'
+  ) then
+    raise exception 'The selected Real Estate Trust account does not belong to this company.';
+  end if;
+  if not exists (
+    select 1 from public.dv_accounting_bank_accounts
+    where id = v.commission_trust_account_id and company_id = v.company_id and account_type = 'COMMISSION_TRUST'
+  ) then
+    raise exception 'The selected Commission Trust account does not belong to this company.';
+  end if;
+  select coalesce(ba.opening_balance, 0) + coalesce(sum(bt.amount), 0) into v_available
+  from public.dv_accounting_bank_accounts ba
+  left join public.dv_accounting_bank_transactions bt on bt.bank_account_id = ba.id
+  where ba.id = v.real_estate_trust_account_id and ba.company_id = v.company_id
+  group by ba.id, ba.opening_balance;
+  if not found or coalesce(v_available, 0) + 0.005 < v_total then
+    raise exception 'Insufficient available Real Estate Trust bank balance for the commission transfer.';
+  end if;
+
+  -- Both ledger posts occur in this database transaction. If either post fails,
+  -- PostgreSQL rolls back both, preventing one-sided trust transfers.
+  perform public.dv_accounting_post_trust_transaction(
+    p_company_id => v.company_id,
+    p_bank_account_id => v.real_estate_trust_account_id,
+    p_transaction_id => v.transaction_id,
+    p_ledger_date => p_transfer_date,
+    p_trust_account_type => 'REAL_ESTATE_TRUST',
+    p_direction => 'DISBURSEMENT',
+    p_client_name => v.seller_client_name,
+    p_matter => v.matter,
+    p_description => 'Commission transfer to Commission Trust - ' || v.matter,
+    p_amount => v_total,
+    p_reference => trim(p_transfer_reference) || '-OUT'
+  );
+
+  perform public.dv_accounting_post_trust_transaction(
+    p_company_id => v.company_id,
+    p_bank_account_id => v.commission_trust_account_id,
+    p_transaction_id => v.transaction_id,
+    p_ledger_date => p_transfer_date,
+    p_trust_account_type => 'COMMISSION_TRUST',
+    p_direction => 'DEPOSIT',
+    p_client_name => v.seller_client_name,
+    p_matter => v.matter,
+    p_description => 'Commission transfer received from Real Estate Trust - ' || v.matter,
+    p_amount => v_total,
+    p_reference => trim(p_transfer_reference) || '-IN'
+  );
+
+  update public.dv_accounting_seller_settlements
+  set status = 'READY_FOR_COMMISSION_PAYROLL',
+      commission_transfer_amount = v_total,
+      commission_transfer_reference = trim(p_transfer_reference),
+      commission_transfer_date = p_transfer_date,
+      updated_at = now(),
+      updated_by = auth.uid()
+  where id = p_settlement_id
+  returning * into v;
+
+  return v;
+end;
+$$;
+
+comment on function public.dv_accounting_process_seller_commission_transfer(uuid,text,date)
+is 'Posts the debit and credit for a seller-side commission transfer atomically and releases the settlement to Commission Payroll.';
+
+
+create or replace function public.dv_accounting_prevent_seller_settlement_reversal()
+returns trigger language plpgsql as $$
+begin
+  if old.status in ('READY_FOR_COMMISSION_PAYROLL','COMMISSION_PAYROLL_PROCESSED','PAYMENTS_COMPLETED') then
+    if new.status not in ('READY_FOR_COMMISSION_PAYROLL','COMMISSION_PAYROLL_PROCESSED','PAYMENTS_COMPLETED') then
+      raise exception 'A posted seller commission transfer cannot be reverted to an earlier settlement stage.';
+    end if;
+    if new.company_id is distinct from old.company_id or new.transaction_id is distinct from old.transaction_id
+       or new.seller_client_name is distinct from old.seller_client_name or new.matter is distinct from old.matter
+       or new.listing_commission_amount is distinct from old.listing_commission_amount
+       or new.cooperating_commission_amount is distinct from old.cooperating_commission_amount
+       or new.commission_hst_amount is distinct from old.commission_hst_amount
+       or new.real_estate_trust_account_id is distinct from old.real_estate_trust_account_id
+       or new.commission_trust_account_id is distinct from old.commission_trust_account_id
+       or new.commission_transfer_amount is distinct from old.commission_transfer_amount
+       or new.commission_transfer_reference is distinct from old.commission_transfer_reference
+       or new.commission_transfer_date is distinct from old.commission_transfer_date then
+      raise exception 'Financial fields are locked after the commission trust transfer is posted.';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists dv_accounting_seller_settlement_no_reversal on public.dv_accounting_seller_settlements;
+create trigger dv_accounting_seller_settlement_no_reversal before update on public.dv_accounting_seller_settlements
+for each row execute function public.dv_accounting_prevent_seller_settlement_reversal();
+
+
+
+-- ============================================================
+-- 20261012_optional_hst_on_agent_charges.sql
+-- ============================================================
+
+-- 0026: optional HST on recurring rules and agent service charges
+ALTER TABLE public.dv_accounting_recurring_fee_rules
+  ADD COLUMN IF NOT EXISTS hst_applicable boolean NOT NULL DEFAULT false;
+ALTER TABLE public.dv_accounting_agent_service_subscriptions
+  ADD COLUMN IF NOT EXISTS hst_applicable boolean NOT NULL DEFAULT false;
+ALTER TABLE public.dv_accounting_commission_charges
+  ADD COLUMN IF NOT EXISTS hst_applicable boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS base_amount numeric(14,2),
+  ADD COLUMN IF NOT EXISTS hst_amount numeric(14,2) NOT NULL DEFAULT 0;
+
+CREATE OR REPLACE FUNCTION public.dv_accounting_apply_charge_hst()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  v_base numeric(14,2);
+  v_hst_enabled boolean := coalesce(NEW.hst_applicable,false);
+  v_hst numeric(14,2) := 0;
+  v_rule public.dv_accounting_recurring_fee_rules%ROWTYPE;
+  v_service public.dv_accounting_agent_service_subscriptions%ROWTYPE;
+BEGIN
+  -- Older billing RPCs do not pass the HST flag, so resolve it from the
+  -- originating recurring rule or service subscription where possible.
+  IF NEW.charge_type = 'RECURRING_FEE' AND NEW.agent_id IS NOT NULL THEN
+    SELECT * INTO v_rule
+    FROM public.dv_accounting_recurring_fee_rules r
+    WHERE r.agent_id = NEW.agent_id
+      AND coalesce(r.description,r.name) = NEW.description
+    ORDER BY r.created_at DESC
+    LIMIT 1;
+    IF FOUND THEN
+      v_hst_enabled := coalesce(v_rule.hst_applicable,false);
+    END IF;
+  ELSIF NEW.charge_type IN ('DESK_FEE','ADD_ON_SERVICE') AND NEW.agent_id IS NOT NULL THEN
+    SELECT * INTO v_service
+    FROM public.dv_accounting_agent_service_subscriptions s
+    WHERE s.agent_id = NEW.agent_id AND s.name = NEW.description
+    ORDER BY s.created_at DESC
+    LIMIT 1;
+    IF FOUND THEN
+      v_hst_enabled := coalesce(v_service.hst_applicable,false);
+    END IF;
+  END IF;
+
+  -- Do not reapply HST if a charge already has a stored base amount.
+  IF NEW.base_amount IS NULL THEN
+    v_base := round(coalesce(NEW.amount,0),2);
+    v_hst := CASE WHEN v_hst_enabled THEN round(v_base * 0.13,2) ELSE 0 END;
+    NEW.base_amount := v_base;
+    NEW.hst_applicable := v_hst_enabled;
+    NEW.hst_amount := v_hst;
+    NEW.amount := v_base + v_hst;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_dv_accounting_apply_charge_hst
+  ON public.dv_accounting_commission_charges;
+CREATE TRIGGER trg_dv_accounting_apply_charge_hst
+BEFORE INSERT ON public.dv_accounting_commission_charges
+FOR EACH ROW EXECUTE FUNCTION public.dv_accounting_apply_charge_hst();
+
+-- Existing charges are left unchanged; no retroactive HST is added.
+
+
+
+-- ============================================================
+-- 20261012_seller_payment_trust_disbursement.sql
+-- ============================================================
+
+-- Post an issued seller cheque/EFT to Real Estate Trust and reduce the matching trust liability.
+-- Idempotent: retrying the same saved settlement will not post a second disbursement.
+CREATE OR REPLACE FUNCTION public.dv_accounting_post_seller_settlement_payment(
+  p_settlement_id uuid
+)
+RETURNS public.dv_accounting_seller_settlements
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v public.dv_accounting_seller_settlements%ROWTYPE;
+  v_trust_client_name text;
+  v_existing_count integer;
+BEGIN
+  SELECT *
+    INTO v
+  FROM public.dv_accounting_seller_settlements
+  WHERE id = p_settlement_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Seller settlement was not found.';
+  END IF;
+
+  IF coalesce(v.seller_paid_amount, 0) < coalesce(v.seller_proceeds_amount, 0)
+     OR coalesce(v.seller_proceeds_amount, 0) <= 0 THEN
+    RAISE EXCEPTION 'Save the full seller payment amount before posting the trust disbursement.';
+  END IF;
+
+  IF coalesce(nullif(trim(v.seller_payment_reference), ''), '') = ''
+     OR v.seller_payment_date IS NULL THEN
+    RAISE EXCEPTION 'Seller cheque/EFT reference and payment date are required.';
+  END IF;
+
+  IF v.real_estate_trust_account_id IS NULL THEN
+    RAISE EXCEPTION 'Select a Real Estate Trust account before posting the seller payment.';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.dv_accounting_bank_accounts ba
+    WHERE ba.id = v.real_estate_trust_account_id
+      AND ba.company_id = v.company_id
+      AND upper(replace(replace(coalesce(ba.account_type, ''), '_', ''), ' ', '')) = 'REALESTATETRUST'
+  ) THEN
+    RAISE EXCEPTION 'The selected account is not a Real Estate Trust account for this company.';
+  END IF;
+
+  -- Use the client identity on the original deposit liability, not the cheque payee.
+  SELECT l.client_name
+    INTO v_trust_client_name
+  FROM public.dv_accounting_trust_liabilities l
+  WHERE l.company_id = v.company_id
+    AND l.trust_account_type = 'REAL_ESTATE_TRUST'
+    AND l.matter = v.matter
+    AND l.direction = 'RECEIVABLE'
+    AND l.amount > 0
+  ORDER BY l.created_at
+  LIMIT 1;
+
+  IF coalesce(nullif(trim(v_trust_client_name), ''), '') = '' THEN
+    RAISE EXCEPTION 'Cannot identify the original trust deposit client for trade %.', v.matter;
+  END IF;
+
+  -- A matching posted payment makes this function safe to retry after a network timeout.
+  SELECT count(*)
+    INTO v_existing_count
+  FROM public.dv_accounting_trust_transactions tt
+  WHERE tt.bank_account_id = v.real_estate_trust_account_id
+    AND tt.transaction_id = v.transaction_id
+    AND tt.trust_account_type = 'REAL_ESTATE_TRUST'
+    AND tt.direction = 'DISBURSEMENT'
+    AND tt.matter = v.matter
+    AND tt.reference = v.seller_payment_reference
+    AND tt.amount = v.seller_proceeds_amount
+    AND upper(coalesce(tt.status, '')) = 'POSTED';
+
+  IF v_existing_count = 0 THEN
+    PERFORM public.dv_accounting_post_trust_transaction(
+      v.company_id,
+      v.real_estate_trust_account_id,
+      v.transaction_id,
+      v.seller_payment_date,
+      'REAL_ESTATE_TRUST',
+      'DISBURSEMENT',
+      v_trust_client_name,
+      v.matter,
+      'Seller cheque/EFT payment to ' || v.seller_client_name || ' - ' || v.matter,
+      v.seller_proceeds_amount,
+      v.seller_payment_reference
+    );
+  END IF;
+
+  SELECT *
+    INTO v
+  FROM public.dv_accounting_seller_settlements
+  WHERE id = p_settlement_id;
+
+  RETURN v;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.dv_accounting_post_seller_settlement_payment(uuid) TO authenticated;
+
+
+
+-- ============================================================
+-- 20261012_seller_trust_commission_workflow.sql
+-- ============================================================
+
+-- Seller-side trust settlement workflow for DV Real Estate Accounting.
+-- This migration records the required settlement checkpoints. Bank transactions must still
+-- be posted by the application using the existing bank-transaction workflow.
+
+create table if not exists public.dv_accounting_seller_settlements (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null,
+  transaction_id uuid not null,
+  status text not null default 'DEPOSIT_HELD'
+    check (status in (
+      'DEPOSIT_HELD',
+      'SELLER_PROCEEDS_CALCULATED',
+      'SELLER_PAID',
+      'COMMISSION_TRANSFERRED',
+      'READY_FOR_COMMISSION_PAYROLL',
+      'COMMISSION_PAYROLL_PROCESSED',
+      'PAYMENTS_COMPLETED'
+    )),
+  deposit_held_amount numeric(14,2) not null default 0 check (deposit_held_amount >= 0),
+  seller_proceeds_amount numeric(14,2) not null default 0 check (seller_proceeds_amount >= 0),
+  listing_commission_amount numeric(14,2) not null default 0 check (listing_commission_amount >= 0),
+  cooperating_commission_amount numeric(14,2) not null default 0 check (cooperating_commission_amount >= 0),
+  commission_hst_amount numeric(14,2) not null default 0 check (commission_hst_amount >= 0),
+  seller_paid_amount numeric(14,2) not null default 0 check (seller_paid_amount >= 0),
+  seller_payment_reference text,
+  seller_payment_date date,
+  real_estate_trust_account_id uuid,
+  commission_trust_account_id uuid,
+  commission_transfer_amount numeric(14,2) not null default 0 check (commission_transfer_amount >= 0),
+  commission_transfer_reference text,
+  commission_transfer_date date,
+  commission_payroll_id uuid,
+  listing_agent_paid_amount numeric(14,2) not null default 0 check (listing_agent_paid_amount >= 0),
+  cooperating_brokerage_paid_amount numeric(14,2) not null default 0 check (cooperating_brokerage_paid_amount >= 0),
+  payments_completed_at timestamptz,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_by uuid,
+  updated_by uuid,
+  unique (company_id, transaction_id)
+);
+
+create index if not exists dv_accounting_seller_settlements_status_idx
+  on public.dv_accounting_seller_settlements (company_id, status);
+
+create or replace function public.dv_accounting_validate_seller_settlement()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_commission_total numeric(14,2);
+begin
+  new.updated_at := now();
+  v_commission_total := round(
+    coalesce(new.listing_commission_amount, 0)
+    + coalesce(new.cooperating_commission_amount, 0)
+    + coalesce(new.commission_hst_amount, 0), 2
+  );
+
+  if new.status in ('SELLER_PAID','COMMISSION_TRANSFERRED','READY_FOR_COMMISSION_PAYROLL',
+                    'COMMISSION_PAYROLL_PROCESSED','PAYMENTS_COMPLETED') then
+    if new.seller_paid_amount < new.seller_proceeds_amount then
+      raise exception 'Seller must be paid in full before this settlement can advance.';
+    end if;
+    if coalesce(nullif(trim(new.seller_payment_reference), ''), '') = ''
+       or new.seller_payment_date is null then
+      raise exception 'Record the seller payment reference and date before advancing.';
+    end if;
+  end if;
+
+  if new.status in ('COMMISSION_TRANSFERRED','READY_FOR_COMMISSION_PAYROLL',
+                    'COMMISSION_PAYROLL_PROCESSED','PAYMENTS_COMPLETED') then
+    if new.commission_transfer_amount <> v_commission_total then
+      raise exception 'Commission trust transfer must equal listing commission plus cooperating commission plus HST.';
+    end if;
+    if coalesce(nullif(trim(new.commission_transfer_reference), ''), '') = ''
+       or new.commission_transfer_date is null then
+      raise exception 'Record the commission trust transfer reference and date before advancing.';
+    end if;
+    if new.real_estate_trust_account_id is null
+       or new.commission_trust_account_id is null
+       or new.real_estate_trust_account_id = new.commission_trust_account_id then
+      raise exception 'Select two different trust accounts for the commission transfer.';
+    end if;
+  end if;
+
+  if new.status in ('READY_FOR_COMMISSION_PAYROLL','COMMISSION_PAYROLL_PROCESSED','PAYMENTS_COMPLETED')
+     and new.seller_paid_amount < new.seller_proceeds_amount then
+    raise exception 'Commission Payroll is blocked until the seller is fully paid.';
+  end if;
+
+  if new.status = 'PAYMENTS_COMPLETED' then
+    if new.listing_agent_paid_amount + new.cooperating_brokerage_paid_amount > new.commission_transfer_amount then
+      raise exception 'Recorded commission payments cannot exceed the transferred commission funds.';
+    end if;
+    new.payments_completed_at := coalesce(new.payments_completed_at, now());
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists dv_accounting_seller_settlement_validate
+  on public.dv_accounting_seller_settlements;
+create trigger dv_accounting_seller_settlement_validate
+before insert or update on public.dv_accounting_seller_settlements
+for each row execute function public.dv_accounting_validate_seller_settlement();
+
+alter table public.dv_accounting_seller_settlements enable row level security;
+
+-- Restrict the initial rollout to brokerage administrators. Broader company-scoped
+-- accountant access should be added after the project's membership schema is verified.
+drop policy if exists "Authenticated users can read seller settlements"
+  on public.dv_accounting_seller_settlements;
+drop policy if exists "Seller settlement administrators can read"
+  on public.dv_accounting_seller_settlements;
+create policy "Seller settlement administrators can read"
+  on public.dv_accounting_seller_settlements
+  for select to authenticated
+  using (upper(coalesce(auth.jwt()->'app_metadata'->>'role', auth.jwt()->'user_metadata'->>'role', '')) in ('SUPERADMIN','ADMIN'));
+
+drop policy if exists "Authenticated users can insert seller settlements"
+  on public.dv_accounting_seller_settlements;
+drop policy if exists "Seller settlement administrators can insert"
+  on public.dv_accounting_seller_settlements;
+create policy "Seller settlement administrators can insert"
+  on public.dv_accounting_seller_settlements
+  for insert to authenticated
+  with check (upper(coalesce(auth.jwt()->'app_metadata'->>'role', auth.jwt()->'user_metadata'->>'role', '')) in ('SUPERADMIN','ADMIN'));
+
+drop policy if exists "Authenticated users can update seller settlements"
+  on public.dv_accounting_seller_settlements;
+drop policy if exists "Seller settlement administrators can update"
+  on public.dv_accounting_seller_settlements;
+create policy "Seller settlement administrators can update"
+  on public.dv_accounting_seller_settlements
+  for update to authenticated
+  using (upper(coalesce(auth.jwt()->'app_metadata'->>'role', auth.jwt()->'user_metadata'->>'role', '')) in ('SUPERADMIN','ADMIN'))
+  with check (upper(coalesce(auth.jwt()->'app_metadata'->>'role', auth.jwt()->'user_metadata'->>'role', '')) in ('SUPERADMIN','ADMIN'));
+
+
+
+-- ============================================================
+-- 20261012_superadmin_delete_trust_transaction.sql
+-- ============================================================
+
+-- Super Admin-only deletion for posted trust banking activity.
+-- Refuses deletion if the corresponding bank entry is missing, ambiguous, or reconciled.
+CREATE OR REPLACE FUNCTION public.dv_accounting_delete_trust_transaction(p_trust_transaction_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tt public.dv_accounting_trust_transactions%ROWTYPE;
+  v_bank_id uuid;
+  v_bank_count integer;
+  v_role text;
+BEGIN
+  v_role := upper(regexp_replace(coalesce(
+    auth.jwt() -> 'app_metadata' ->> 'role',
+    auth.jwt() -> 'app_metadata' ->> 'user_role',
+    auth.jwt() -> 'user_metadata' ->> 'role',
+    auth.jwt() -> 'user_metadata' ->> 'user_role',
+    ''
+  ), '[^A-Za-z]', '', 'g'));
+
+  IF v_role NOT IN ('SUPERADMIN', 'SUPERADMINISTRATOR') THEN
+    BEGIN
+      SELECT upper(regexp_replace(coalesce(role, ''), '[^A-Za-z]', '', 'g'))
+        INTO v_role
+      FROM public.dv_accounting_user_profiles
+      WHERE user_id = auth.uid()
+      LIMIT 1;
+    EXCEPTION WHEN undefined_table OR undefined_column THEN
+      v_role := '';
+    END;
+  END IF;
+
+  IF coalesce(v_role, '') NOT IN ('SUPERADMIN', 'SUPERADMINISTRATOR') THEN
+    RAISE EXCEPTION 'Only a Super Admin can delete banking transactions.';
+  END IF;
+
+  SELECT * INTO v_tt
+  FROM public.dv_accounting_trust_transactions
+  WHERE id = p_trust_transaction_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Trust transaction was not found.';
+  END IF;
+
+  IF upper(coalesce(v_tt.status, '')) <> 'POSTED' THEN
+    RAISE EXCEPTION 'Only posted trust transactions can be deleted through this workflow.';
+  END IF;
+
+  SELECT count(*) INTO v_bank_count
+  FROM public.dv_accounting_bank_transactions bt
+  WHERE bt.bank_account_id = v_tt.bank_account_id
+    AND bt.transaction_date = v_tt.ledger_date
+    AND abs(coalesce(bt.amount, 0)) = abs(coalesce(v_tt.amount, 0))
+    AND coalesce(bt.description, '') = coalesce(v_tt.description, '')
+    AND coalesce(bt.reference, '') = coalesce(v_tt.reference, '');
+
+  IF v_bank_count <> 1 THEN
+    RAISE EXCEPTION 'Could not identify exactly one matching bank entry. No records were deleted.';
+  END IF;
+
+  SELECT bt.id INTO v_bank_id
+  FROM public.dv_accounting_bank_transactions bt
+  WHERE bt.bank_account_id = v_tt.bank_account_id
+    AND bt.transaction_date = v_tt.ledger_date
+    AND abs(coalesce(bt.amount, 0)) = abs(coalesce(v_tt.amount, 0))
+    AND coalesce(bt.description, '') = coalesce(v_tt.description, '')
+    AND coalesce(bt.reference, '') = coalesce(v_tt.reference, '')
+  LIMIT 1;
+
+  IF EXISTS (SELECT 1 FROM public.dv_accounting_bank_transactions
+             WHERE id = v_bank_id AND coalesce(reconciled, false) = true) THEN
+    RAISE EXCEPTION 'This banking transaction has been reconciled and cannot be deleted. Correct it through an approved accounting adjustment.';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.dv_accounting_reconciliations rec
+    WHERE rec.bank_account_id = v_tt.bank_account_id
+      AND rec.period_end >= v_tt.ledger_date
+      AND upper(coalesce(rec.status, '')) = 'RECONCILED'
+  ) THEN
+    RAISE EXCEPTION 'A completed reconciliation covers this transaction date. Reopen/correct the reconciliation before deleting this entry.';
+  END IF;
+
+  DELETE FROM public.dv_accounting_trust_liabilities
+  WHERE trust_transaction_id = v_tt.id;
+
+  DELETE FROM public.dv_accounting_bank_transactions
+  WHERE id = v_bank_id;
+
+  DELETE FROM public.dv_accounting_trust_transactions
+  WHERE id = v_tt.id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.dv_accounting_delete_trust_transaction(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.dv_accounting_delete_trust_transaction(uuid) TO authenticated;
+
+
+
 -- ============================================================
 -- 20261012z_accounting_controls_and_reporting.sql
 -- ============================================================
