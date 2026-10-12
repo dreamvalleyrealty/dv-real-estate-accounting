@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useState} from "react";
-import {AlertCircle,CheckCircle2,RefreshCw,Save,ArrowLeftRight,ShieldCheck} from "lucide-react";
+import {AlertCircle,CheckCircle2,RefreshCw,Save,ArrowLeftRight,ShieldCheck,Printer} from "lucide-react";
 import {supabase} from "./lib/supabase";
 
 const today=()=>new Date().toISOString().slice(0,10);
