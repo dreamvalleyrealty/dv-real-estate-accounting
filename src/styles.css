@@ -439,3 +439,26 @@ body, #root, .app { font-size: 15px; }
 .listing-requirement-preview-pane .listing-document-preview-other{flex:1;display:grid;place-content:center;justify-items:center;gap:10px;padding:20px;text-align:center}
 @media(max-width:850px){.listing-requirement-preview-workspace{grid-template-columns:1fr}.listing-requirement-list{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}.listing-requirement-preview-pane{min-height:360px}}
 @media(max-width:520px){.listing-requirement-list{grid-template-columns:1fr}.listing-requirement-preview-pane{min-height:300px}.listing-requirement-preview-pane .listing-document-preview-frame,.listing-requirement-preview-pane .listing-document-preview-image{min-height:260px}}
+
+
+/* Listing list and detail are separate full-page workspaces v0.6.190. */
+.listing-page-workspace{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start;min-width:0}
+.listing-page-workspace>.panel{width:100%;min-width:0;box-sizing:border-box}
+.listing-page-list .listing-list-panel{max-width:none}
+.listing-list-panel .paneltitle{margin-bottom:12px}
+.listing-list-panel .paneltitle button{white-space:nowrap}
+.listing-list-panel button[ type="button" ]{transition:border-color .12s ease,background .12s ease}
+.listing-detail-panel{min-height:calc(100vh - 190px);overflow:visible}
+.listing-detail-panel .listing-detail-tabs{position:sticky;top:0;z-index:4;background:#fff;padding-top:8px}
+.listing-detail-panel .listing-documents-tab{min-width:0}
+.listing-detail-panel .listing-requirement-preview-workspace{grid-template-columns:minmax(250px,.62fr) minmax(0,2fr);gap:14px}
+.listing-detail-panel .listing-requirement-preview-pane{min-height:calc(100vh - 360px)}
+.listing-detail-panel .listing-requirement-preview-pane .listing-document-preview-frame{height:calc(100vh - 430px);min-height:520px;max-height:none}
+.listing-detail-panel .listing-requirement-preview-pane .listing-document-preview-image{height:calc(100vh - 430px);min-height:420px;max-height:none}
+@media(max-width:850px){
+ .listing-detail-panel{min-height:0}
+ .listing-detail-panel .listing-requirement-preview-workspace{grid-template-columns:1fr}
+ .listing-detail-panel .listing-requirement-preview-pane{min-height:360px}
+ .listing-detail-panel .listing-requirement-preview-pane .listing-document-preview-frame{height:65vh;min-height:340px}
+ .listing-detail-panel .listing-requirement-preview-pane .listing-document-preview-image{height:60vh;min-height:280px}
+}
