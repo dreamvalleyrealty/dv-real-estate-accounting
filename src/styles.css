@@ -361,3 +361,23 @@ body, #root, .app { font-size: 15px; }
   .transaction-list-table th { font-size: 11px !important; }
   .transaction-list-table td { font-size: 12px !important; }
 }
+
+
+/* Listing workspace redesign v0.6.186: compact tabs and in-panel document preview. */
+.listing-detail-tabs{display:flex;gap:6px;align-items:center;border-bottom:1px solid #e5e7eb;margin:10px 0 14px;padding:0 0 8px;overflow-x:auto}
+.listing-detail-tabs button{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;border:1px solid transparent;background:transparent;color:#566176;border-radius:8px;padding:9px 12px;min-height:40px;font-weight:600}
+.listing-detail-tabs button.active{background:#f4f0e7;border-color:#d8c9a7;color:#0f2141;box-shadow:inset 0 -2px 0 #9e8556}
+.listing-tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:21px;height:21px;padding:0 5px;border-radius:999px;background:#e9edf3;color:#344054;font-size:11px}
+.listing-property-tab,.listing-documents-tab,.listing-property-tab-secondary{min-width:0;animation:listingTabFade .14s ease-out}
+.listing-document-preview{margin-top:14px;padding:10px;border:1px solid #dce2eb;border-radius:10px;background:#f8fafc;display:grid;gap:10px;min-width:0}
+.listing-document-preview-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.listing-document-preview-head>div{display:grid;gap:3px;min-width:0;overflow-wrap:anywhere}
+.listing-document-preview-head strong{font-size:13px;color:#172b4d}
+.listing-document-preview-head span{font-size:11px;color:#667085}
+.listing-document-preview-frame{display:block;width:100%;height:min(66vh,760px);min-height:420px;border:1px solid #d0d5dd;border-radius:8px;background:#fff}
+.listing-document-preview-image{display:block;width:100%;height:min(66vh,760px);min-height:300px;object-fit:contain;border:1px solid #d0d5dd;border-radius:8px;background:#fff}
+.listing-document-preview-other{min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#667085;text-align:center}
+.listing-document-preview-other p{margin:0}
+.listing-document-preview-other a{color:#0f2141;font-weight:600}
+@keyframes listingTabFade{from{opacity:.65;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:760px){.listing-detail-tabs button{flex:1;padding:8px 9px;font-size:12px}.listing-document-preview-frame{height:62vh;min-height:320px}.listing-document-preview-image{height:58vh;min-height:240px}.listing-document-preview{padding:7px}}
