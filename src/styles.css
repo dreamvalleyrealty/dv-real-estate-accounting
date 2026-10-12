@@ -308,3 +308,56 @@ pre{max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
   .content table:not(.transaction-list-table) th,
   .content table:not(.transaction-list-table) td { padding: 5px 6px !important; }
 }
+
+
+/* App-wide typography readability pass v0.6.184.
+   Increase text sizes consistently, including compact lists and transaction tables. */
+html { font-size: 16px; }
+body, #root, .app { font-size: 15px; }
+.content { font-size: 14px; }
+.content p, .content li, .content label, .content .muted,
+.content .sub, .content .hint, .content small { font-size: 13px; }
+.content h1 { font-size: 25px; }
+.content h2 { font-size: 19px; }
+.content h3 { font-size: 16px; }
+.content h4 { font-size: 15px; }
+.content button, .content .primary, .content .secondary,
+.content .textbutton, .content input, .content select, .content textarea {
+  font-size: 13px;
+}
+.content input, .content select, .content textarea { line-height: 1.35; }
+.content table:not(.transaction-list-table) { font-size: 13px !important; line-height: 1.3 !important; }
+.content table:not(.transaction-list-table) th { font-size: 12px !important; line-height: 1.25 !important; }
+.content table:not(.transaction-list-table) td { font-size: 13px !important; line-height: 1.3 !important; }
+.content table:not(.transaction-list-table) td button,
+.content table:not(.transaction-list-table) td .primary,
+.content table:not(.transaction-list-table) td .secondary,
+.content table:not(.transaction-list-table) td .textbutton { font-size: 12px !important; }
+.content table:not(.transaction-list-table) td input,
+.content table:not(.transaction-list-table) td select { font-size: 12px !important; }
+.content .agent-table { font-size: 13px !important; }
+.content .agent-table th { font-size: 12px !important; }
+.content .agent-table td { font-size: 13px !important; }
+.content .agent-toolbar input,
+.content .agent-toolbar select,
+.content .agent-toolbar button { font-size: 13px !important; }
+
+/* Bring the previously ultra-compact transaction list back to readable sizes. */
+.transaction-list-table { font-size: 12px !important; line-height: 1.25 !important; }
+.transaction-list-table th { font-size: 11px !important; line-height: 1.2 !important; }
+.transaction-list-table td { font-size: 12px !important; line-height: 1.25 !important; }
+.transaction-list-table td .textbutton { font-size: 12px !important; }
+.transaction-list-table td select { font-size: 12px !important; }
+.transaction-row-actions button { font-size: 11px !important; line-height: 1.2 !important; }
+.transaction-list-table .status { font-size: 11px !important; }
+
+@media (max-width: 760px) {
+  .content { font-size: 14px; }
+  .content p, .content li, .content label, .content .muted,
+  .content .sub, .content .hint, .content small { font-size: 13px; }
+  .content h1 { font-size: 23px; }
+  .content table:not(.transaction-list-table) th { font-size: 11px !important; }
+  .content table:not(.transaction-list-table) td { font-size: 12px !important; }
+  .transaction-list-table th { font-size: 11px !important; }
+  .transaction-list-table td { font-size: 12px !important; }
+}
