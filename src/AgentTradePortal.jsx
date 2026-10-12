@@ -4,7 +4,7 @@ import { AlertCircle, CheckCircle2, Clock3, FileText, Plus, RefreshCw, Send, Upl
 import { supabase } from "./lib/supabase";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
-const AGENT_PORTAL_VERSION = "0.6.127";
+const AGENT_PORTAL_VERSION = "0.6.128";
 
 const blank = {
   transaction_number:"", transaction_type:"BUY_SELL", side:"SELLER", dvr_lead:false, property_address:"",
@@ -417,11 +417,11 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
        if(upError)throw new Error("Upload failed for "+task.name+": "+upError.message);
        uploadedPaths.push(path);
        const {data,error:e}=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:task.type,document_name:task.name,storage_path:path,mime_type:"application/pdf",file_size:task.blob.size,uploaded_by:user.id}]).select().single();
-       if(e)throw new Error("Could not register "+task.name+": "+e.message);
+       if(e){await supabase.storage.from("dv-trade-documents").remove([path]);uploadedPaths.pop();throw new Error("Could not register "+task.name+": "+e.message)}
        setDocs(old=>[...old,data]);uploaded++;
      }
      setBulkFile(null);setBulkGroups([]);setMessage("Saved "+sorted.length+" split document(s)"+(bulkOriginal?" and retained the original PDF":"")+".");if(draft.id)await loadDocs(draft.id);
-   }catch(e){if(uploadedPaths.length)await supabase.storage.from("dv-trade-documents").remove(uploadedPaths);setError("Split upload did not complete: "+(e?.message||String(e))+". Please check the trade documents before retrying.");}
+   }catch(e){setError("Split upload did not complete: "+(e?.message||String(e))+". Any files already registered remain attached; check the trade documents before retrying.");}
    finally{setBulkBusy(false)}
  }
  async function openDoc(doc){
@@ -495,7 +495,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
               {bulkGroups.length>0&&<div style={{marginTop:10}}>
                <p className="agent-trade-muted">Review the detected sections. Page ranges must not overlap. Unrecognized pages are marked for review.</p>
                <div style={{display:"grid",gap:7}}>{bulkGroups.map(g=><div key={g.id} style={{border:"1px solid #e4e7ec",borderRadius:7,padding:8,display:"grid",gridTemplateColumns:"minmax(140px,1fr) 62px 62px",gap:7,alignItems:"end"}}>
-                <Field label={"Document "+g.id}><select value={g.type} onChange={e=>updateBulkGroup(g.id,{type:e.target.value})}>{docTypes.map(([type,label])=><option key={type} value={type}>{label}</option>)}<option value="OTHER">Other / Review</option></select></Field>
+                <Field label={"Document "+g.id}><select value={g.type} onChange={e=>updateBulkGroup(g.id,{type:e.target.value})}>{docTypes.map(([type,label])=><option key={type} value={type}>{label}</option>)}{!docTypes.some(([type])=>type==="OTHER")&&<option value="OTHER">Other / Review</option>}</select></Field>
                 <Field label="From page"><input type="number" min="1" value={g.start} onChange={e=>updateBulkGroup(g.id,{start:e.target.value})}/></Field>
                 <Field label="To page"><input type="number" min="1" value={g.end} onChange={e=>updateBulkGroup(g.id,{end:e.target.value})}/></Field>
                 <small className="agent-trade-muted" style={{gridColumn:"1 / -1"}}>{g.confidence==="Likely"?"Title/form number detected":g.confidence==="Inherited"?"Assumed continuation of previous form":"Please verify classification"} · {g.end-g.start+1} page(s)</small>
