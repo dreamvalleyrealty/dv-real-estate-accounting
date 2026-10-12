@@ -2,7 +2,7 @@ import {useMemo,useState} from "react";
 
 export default function AgentSearchSelect({agents=[],value="",onChange,placeholder="Search agent name...",style={},disabled=false,excludeIds=[]}) {
  const [query,setQuery]=useState("");
- const options=useMemo(()=>agents.filter(a=>!excludeIds.includes(a.id)).map(a=>({id:String(a.id),label:[a.first_name,a.last_name].filter(Boolean).join(" ")||a.full_name||a.email||a.id,number:a.agent_number||"",email:a.email||""})),[agents,excludeIds]);
+ const options=useMemo(()=>agents.filter(a=>!excludeIds.includes(a.id)).map(a=>({id:String(a.id),label:[a.first_name,a.last_name].filter(Boolean).join(" ")||a.full_name||a.name||a.agent_name||a.email||a.id,number:a.agent_number||"",email:a.email||""})),[agents,excludeIds]);
  const selected=options.find(a=>a.id===String(value));
  const filtered=options.filter(a=>(a.label+" "+a.number+" "+a.email).toLowerCase().includes(query.toLowerCase()));
  const field={width:"100%",boxSizing:"border-box",minHeight:36,padding:"7px 9px",border:"1px solid #d0d5dd",borderRadius:6,...style};
