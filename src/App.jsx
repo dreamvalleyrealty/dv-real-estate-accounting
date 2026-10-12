@@ -9,7 +9,7 @@ import SellerSettlements from "./SellerSettlements";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
-const APP_VERSION = "0.6.145";
+const APP_VERSION = "0.6.146";
 const nav=[["Dashboard",LayoutDashboard,"dashboard.view"],["Transactions",ArrowLeftRight,"transactions.view"],["Trade Submissions",ClipboardCheck,"transactions.edit"],["Contacts",Users,"contacts.view"],["Banking & Reconciliation",Landmark,"banking.view"],["Seller Settlements",ReceiptText,"settings.view"],["Expenses & A/P",ReceiptText,"expenses.view"],["Agents",Users,"agents.view"],["Agent Rankings",BarChart3,"agents.view"],["Agent Fees & Plans",ReceiptText,"fees.view"],["Commission Payroll",ReceiptText,"commission.view"],["Staff Payroll",Clock3,"staff.view"],["HST / Tax",Percent,"tax.view"],["Reports",BarChart3,"reports.view"],["Compliance & Month End",ClipboardCheck,"compliance.view"],["Recent Audit Log",ShieldCheck,"settings.view"],["Settings",Settings,"settings.view"]];
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(n||0));
 const today=()=>new Date().toISOString().slice(0,10);
@@ -215,7 +215,7 @@ function Banking(){
  const brokerageForTrade=id=>outsideBrokers.rows.find(x=>x.transaction_id===id);
  const selectedBrokerage=brokerageForTrade(payOther.transaction_id);
  const brokerPayeeName=b=>String(b?.brokerage_name||b?.company_name||"").trim();
- const brokerageCommissionForTrade=(tradeId,broker)=>{if(!broker?.id)return[];return transactionCommissions.rows.filter(c=>c.transaction_id===tradeId&&c.settlement_direction==="PAYABLE"&&c.brokerage_id===broker.id)};
+ const brokerageCommissionForTrade=(tradeId,broker)=>{const brokerageId=broker?.brokerage_id;if(!brokerageId)return[];return transactionCommissions.rows.filter(c=>c.transaction_id===tradeId&&c.settlement_direction==="PAYABLE"&&String(c.brokerage_id||"")===String(brokerageId))};
  const trustClientForTrade=tradeId=>{const trade=trades.rows.find(x=>x.id===tradeId);if(!trade)return"";const candidates=tt.rows.filter(x=>x.transaction_id===tradeId&&x.trust_account_type==="COMMISSION_TRUST"&&String(x.matter||"").trim()===String(trade.transaction_number||"").trim());const balances=new Map();for(const x of candidates){const name=String(x.client_name||"").trim();if(!name)continue;balances.set(name,(balances.get(name)||0)+(x.direction==="DEPOSIT"?1:-1)*Number(x.amount||0))}const outstanding=[...balances.entries()].filter(([,v])=>v>0.005);return outstanding.length===1?outstanding[0][0]:""};
  const brokeragePaymentAmount=(tradeId,broker)=>Math.round(brokerageCommissionForTrade(tradeId,broker).reduce((sum,c)=>{const base=Number(c.amount||0);const hst=c.hst_amount==null?base*Number(c.hst_rate||0)/100:Number(c.hst_amount);return sum+base+hst},0)*100)/100;
  const selectedBrokerageAmount=brokeragePaymentAmount(payOther.transaction_id,selectedBrokerage);
