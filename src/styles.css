@@ -262,3 +262,49 @@ pre{max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 .transaction-row-actions .transaction-actions-label{display:none!important}
 .transaction-list-table .status{font-size:9px;padding:2px 4px}
 @media(max-width:900px){.transaction-list-panel{padding:3px!important}.transaction-list-table th,.transaction-list-table td{padding:4px!important}.transaction-row-actions{max-width:250px}}
+
+
+/* App-wide compact list density v0.6.183 — agents, contacts, fees/plans, and other data lists.
+   Forms and transaction-specific ultra-compact overrides remain separately scoped. */
+.content table:not(.transaction-list-table) {
+  font-size: 11px;
+  line-height: 1.2;
+}
+.content table:not(.transaction-list-table) th {
+  padding: 6px 8px !important;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.content table:not(.transaction-list-table) td {
+  padding: 5px 8px !important;
+  line-height: 1.2;
+  vertical-align: middle;
+}
+.content table:not(.transaction-list-table) tbody tr { height: auto; }
+.content table:not(.transaction-list-table) td button,
+.content table:not(.transaction-list-table) td .primary,
+.content table:not(.transaction-list-table) td .secondary,
+.content table:not(.transaction-list-table) td .textbutton {
+  font-size: 10px;
+  line-height: 1.15;
+  padding: 3px 6px;
+  min-height: 0;
+}
+.content table:not(.transaction-list-table) td input,
+.content table:not(.transaction-list-table) td select {
+  font-size: 11px;
+  padding: 4px 6px;
+  min-height: 26px;
+}
+.content .agent-table th { padding: 6px 8px !important; }
+.content .agent-table td { padding: 4px 8px !important; }
+.content .agent-table tbody tr { height: 32px !important; }
+.content .agent-toolbar { gap: 6px; margin-bottom: 8px; }
+.content .agent-toolbar .toolbar { gap: 6px; }
+.content .agent-toolbar input,
+.content .agent-toolbar select { padding: 6px 8px; }
+.content .panel:has(> .agent-toolbar) { padding: 10px; }
+@media (max-width: 760px) {
+  .content table:not(.transaction-list-table) th,
+  .content table:not(.transaction-list-table) td { padding: 5px 6px !important; }
+}
