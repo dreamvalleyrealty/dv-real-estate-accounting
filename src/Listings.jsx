@@ -2,6 +2,10 @@ import {useCallback,useEffect,useMemo,useState} from "react";
 import {supabase} from "./lib/supabase";
 import AgentSearchSelect from "./AgentSearchSelect";
 import {Upload,RefreshCw,CheckCircle2,AlertCircle,FileText,Send,Save} from "lucide-react";
+import { PDFDocument } from "pdf-lib";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 const blank={property_address:"",unit_number:"",city:"",province:"ON",postal_code:"",property_type:"RESIDENTIAL",listing_type:"SALE",asking_price:"",listing_start_date:"",listing_expiry_date:"",notes:""};
 const defaults=[{code:"LISTING_AGREEMENT",label:"Listing Agreement",required:true},{code:"MLS_DATA",label:"MLS Data / Listing Information",required:true},{code:"PROPERTY_DETAILS",label:"Property Details / Feature Sheet",required:true},{code:"SELLER_DIRECTION",label:"Seller Direction / Authorization",required:true},{code:"ID_FINTRAC",label:"Identification / FINTRAC",required:true},{code:"OTHER",label:"Other Supporting Documents",required:false}];
@@ -9,7 +13,7 @@ const fieldStyle={width:"100%",boxSizing:"border-box",minHeight:36,padding:"7px 
 const labelStyle={display:"grid",gap:4,fontSize:12,fontWeight:600};
 const statusLabel=s=>({DRAFT:"Draft",SUBMITTED:"Awaiting review",NEEDS_CHANGES:"Changes requested",APPROVED:"Approved — awaiting MLS",PUBLISHED:"Published to MLS"}[s]||s||"—");
 export default function Listings({user,agentId,adminMode=false}){
- const [rows,setRows]=useState([]),[docs,setDocs]=useState([]),[requirements,setRequirements]=useState(defaults),[companyId,setCompanyId]=useState(""),[agents,setAgents]=useState([]),[assignedAgentId,setAssignedAgentId]=useState(""),[additionalAgentIds,setAdditionalAgentIds]=useState([]),[additionalAgentSearch,setAdditionalAgentSearch]=useState(""),[selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[newListing,setNewListing]=useState(false),[uploadType,setUploadType]=useState(defaults[0].code),[fileBatch,setFileBatch]=useState([]),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[message,setMessage]=useState(""),[mlsNumber,setMlsNumber]=useState(""),[adminNotes,setAdminNotes]=useState("");
+ const [rows,setRows]=useState([]),[docs,setDocs]=useState([]),[requirements,setRequirements]=useState(defaults),[companyId,setCompanyId]=useState(""),[agents,setAgents]=useState([]),[assignedAgentId,setAssignedAgentId]=useState(""),[additionalAgentIds,setAdditionalAgentIds]=useState([]),[additionalAgentSearch,setAdditionalAgentSearch]=useState(""),[selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[newListing,setNewListing]=useState(false),[uploadType,setUploadType]=useState(defaults[0].code),[fileBatch,setFileBatch]=useState([]),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[message,setMessage]=useState(""),[mlsNumber,setMlsNumber]=useState(""),[adminNotes,setAdminNotes]=useState(""),[autoSplit,setAutoSplit]=useState(false),[splitPreview,setSplitPreview]=useState(null),[splitting,setSplitting]=useState(false);
  const isAdmin=adminMode;
  const load=useCallback(async()=>{
   if(!supabase){setLoading(false);return}
@@ -52,18 +56,71 @@ export default function Listings({user,agentId,adminMode=false}){
   if(result.error){setError("Could not save listing: "+result.error.message);setBusy(false);return}
   setSelected(result.data);setAssignedAgentId(result.data.agent_id||targetAgentId);setAdditionalAgentIds(Array.isArray(result.data.additional_agent_ids)?result.data.additional_agent_ids.filter(id=>id!==result.data.agent_id):[]);setForm({...blank,...result.data});setNewListing(false);setMessage(submit?"Listing paperwork submitted for admin review.":"Listing draft saved. Upload the paperwork before submitting.");await load();await loadDocs(result.data.id);setBusy(false);
  }
+ async function prepareSplitPreview(){
+  if(!fileBatch.length){setError("Choose one or more files first.");return}
+  const pdfs=fileBatch.filter(f=>f.type==="application/pdf"||/\.pdf$/i.test(f.name));
+  if(!pdfs.length){setError("Auto-splitting works with PDF files. Turn it off to upload other file types normally.");return}
+  setSplitting(true);setError("");setSplitPreview(null);
+  try{
+   const prepared=[];
+   for(const file of fileBatch){
+    if(!(file.type==="application/pdf"||/\.pdf$/i.test(file.name))){prepared.push({file,document_type:uploadType,document_name:file.name,pages:"Original file",needsReview:false});continue}
+    const bytes=await file.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:bytes.slice(0)}).promise;
+    const pageTypes=[];
+    for(let pageNo=1;pageNo<=pdf.numPages;pageNo++){
+     const page=await pdf.getPage(pageNo);const content=await page.getTextContent();
+     const text=content.items.map(item=>item.str||"").join(" ").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+     let best={code:uploadType,score:0};
+     for(const req of requirements){
+      const label=String(req.label||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+      const code=String(req.code||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+      let score=0;
+      if(label&&text.includes(label))score+=10;
+      if(code&&text.includes(code))score+=8;
+      const tokens=[...new Set((label+" "+code).split(/\s+/).filter(w=>w.length>3&&!["document","listing","other","supporting","information"].includes(w)))];
+      for(const token of tokens)if(text.includes(token))score+=1;
+      if(score>best.score)best={code:req.code,score};
+     }
+     pageTypes.push({pageNo,code:best.code,score:best.score});
+    }
+    const groups=[];
+    for(const item of pageTypes){
+     const last=groups[groups.length-1];
+     if(last&&last.code===item.code){last.pages.push(item.pageNo);last.lowConfidence=last.lowConfidence||item.score<2}
+     else groups.push({code:item.code,pages:[item.pageNo],lowConfidence:item.score<2});
+    }
+    for(let i=0;i<groups.length;i++){
+     const group=groups[i];const output=await PDFDocument.create();const loaded=await PDFDocument.load(bytes);
+     const copied=await output.copyPages(loaded,group.pages.map(p=>p-1));copied.forEach(p=>output.addPage(p));
+     const blob=new Blob([await output.save()],{type:"application/pdf"});
+     const base=file.name.replace(/\.pdf$/i,"");
+     const label=requirements.find(r=>r.code===group.code)?.label||group.code;
+     prepared.push({file:new File([blob],base+" - "+label+" - pages "+group.pages.join(",")+".pdf",{type:"application/pdf"}),document_type:group.code,document_name:base+" - "+label+".pdf",pages:group.pages.join(", "),needsReview:group.lowConfidence});
+    }
+   }
+   setSplitPreview(prepared);
+   setMessage("Review the split PDF files and document types before uploading. Pages with uncertain classifications are flagged for review.");
+  }catch(e){setError("Could not split this PDF: "+(e?.message||String(e)));}
+  finally{setSplitting(false)}
+ }
  async function uploadFiles(){
-  if(!selected?.id||!fileBatch.length){setError("Save the listing draft and select one or more files first.");return}if(!user?.id){setError("Your login session is missing. Sign in again before uploading files.");return}
+  if(!selected?.id||(!fileBatch.length&&!splitPreview?.length)){setError("Save the listing draft and select one or more files first.");return}if(!user?.id){setError("Your login session is missing. Sign in again before uploading files.");return}
+  if(autoSplit&&!splitPreview&&fileBatch.some(f=>f.type==="application/pdf"||/\.pdf$/i.test(f.name))){await prepareSplitPreview();return}
   setBusy(true);setError("");let count=0;
-  for(const f of fileBatch){
+  const uploadQueue=splitPreview||fileBatch.map(file=>({file,document_type:uploadType,document_name:file.name}));
+  for(const item of uploadQueue){
+   const f=item.file;
+   const documentType=item.document_type||uploadType;
+   const documentName=item.document_name||f.name;
    const safe=f.name.replace(/[^a-zA-Z0-9._-]/g,"_"),path="listings/"+selected.id+"/"+String(user.id)+"/"+Date.now()+"-"+count+"-"+safe;
    const {error:upError}=await supabase.storage.from("dv-trade-documents").upload(path,f,{upsert:false,contentType:f.type||"application/octet-stream"});
    if(upError){setError("Upload failed for "+f.name+": "+upError.message);break}
-   const {data,error:e}=await supabase.from("dv_accounting_listing_documents").insert([{listing_id:selected.id,document_type:uploadType,document_name:f.name,storage_path:path,mime_type:f.type||null,file_size:f.size,uploaded_by:user.id}]).select().single();
+   const {data,error:e}=await supabase.from("dv_accounting_listing_documents").insert([{listing_id:selected.id,document_type:documentType,document_name:documentName,storage_path:path,mime_type:f.type||null,file_size:f.size,uploaded_by:user.id}]).select().single();
    if(e){await supabase.storage.from("dv-trade-documents").remove([path]);setError("Could not register "+f.name+": "+e.message);break}
    count++;setDocs(old=>[...old,data]);
   }
-  if(count===fileBatch.length){setFileBatch([]);setMessage(count+" listing document(s) uploaded.")}
+  if(count===uploadQueue.length){setFileBatch([]);setSplitPreview(null);setMessage(count+" listing document(s) uploaded.")}
   setBusy(false);await loadDocs(selected.id);
  }
  async function adminUpdate(status){
@@ -97,8 +154,9 @@ export default function Listings({user,agentId,adminMode=false}){
      </div>
      <label style={{...labelStyle,marginTop:9}}>Notes / special instructions<textarea disabled={!canEdit} rows={3} style={fieldStyle} value={form.notes||""} onChange={e=>setForm(v=>({...v,notes:e.target.value}))}/></label>
      {canEdit&&<div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:10}}><button className="secondary" type="button" disabled={busy} onClick={()=>saveDraft(false)}><Save size={14}/> Save Draft</button>{selected&&<button className="primary" type="button" disabled={busy} onClick={()=>saveDraft(true)}><Send size={14}/> Submit for Review</button>}</div>}
-     {(selected||newListing)&&<div style={{marginTop:12,borderTop:"1px solid #eaecf0",paddingTop:10}}><h3 style={{fontSize:14,margin:"0 0 8px"}}>Listing Paperwork & Document Requirements</h3><p className="muted" style={{fontSize:11,margin:"0 0 8px"}}>{selected?"Upload each document against the configured Listing requirements below.":"Save the listing draft first to enable uploads. Your configured Listing requirements are shown now."}</p><div style={{display:"grid",gap:5}}>{visibleRequirements.map(r=>{const found=docs.filter(d=>d.document_type===r.code);return <div key={r.code} style={{display:"flex",gap:8,alignItems:"center",fontSize:12,padding:"5px 0",borderBottom:"1px solid #f2f4f7"}}><FileText size={14}/><span style={{flex:1}}>{r.label}{r.required?" *":""}</span><span className="muted">{found.length?"✓ "+found.length+" file(s)":"Not uploaded"}</span></div>})}</div>
-      {canEdit&&<div style={{display:"grid",gridTemplateColumns:"minmax(150px,1fr) minmax(160px,1.4fr) auto",gap:7,alignItems:"end",marginTop:9}}><label style={labelStyle}>Document type<select style={fieldStyle} value={uploadType} onChange={e=>setUploadType(e.target.value)}>{requirements.map(r=><option key={r.code} value={r.code}>{r.label}</option>)}</select></label><label style={labelStyle}>Choose file(s)<input style={fieldStyle} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx" disabled={!selected} onChange={e=>setFileBatch(Array.from(e.target.files||[]))}/></label><button className="secondary" type="button" disabled={busy||!selected||!fileBatch.length||!requirements.length} onClick={uploadFiles}><Upload size={14}/> Upload</button></div>}
+     {(selected||newListing)&&<div style={{marginTop:12,borderTop:"1px solid #eaecf0",paddingTop:10}}><h3 style={{fontSize:14,margin:"0 0 8px"}}>Listing Paperwork & Document Requirements</h3><label style={{display:"flex",alignItems:"center",gap:7,fontSize:12,margin:"0 0 8px",fontWeight:600}}><input type="checkbox" checked={autoSplit} onChange={e=>{setAutoSplit(e.target.checked);setSplitPreview(null);}}/> Auto-split combined PDF files and detect document types</label><p className="muted" style={{fontSize:11,margin:"0 0 8px"}}>{selected?"Upload each document against the configured Listing requirements below.":"Save the listing draft first to enable uploads. Your configured Listing requirements are shown now."}</p><div style={{display:"grid",gap:5}}>{visibleRequirements.map(r=>{const found=docs.filter(d=>d.document_type===r.code);return <div key={r.code} style={{display:"flex",gap:8,alignItems:"center",fontSize:12,padding:"5px 0",borderBottom:"1px solid #f2f4f7"}}><FileText size={14}/><span style={{flex:1}}>{r.label}{r.required?" *":""}</span><span className="muted">{found.length?"✓ "+found.length+" file(s)":"Not uploaded"}</span></div>})}</div>
+      {canEdit&&<div style={{display:"grid",gridTemplateColumns:"minmax(150px,1fr) minmax(160px,1.4fr) auto",gap:7,alignItems:"end",marginTop:9}}><label style={labelStyle}>Document type<select style={fieldStyle} value={uploadType} onChange={e=>setUploadType(e.target.value)}>{requirements.map(r=><option key={r.code} value={r.code}>{r.label}</option>)}</select></label><label style={labelStyle}>Choose file(s)<input style={fieldStyle} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx" disabled={!selected} onChange={e=>{setFileBatch(Array.from(e.target.files||[]));setSplitPreview(null);setMessage("");}}/></label><button className="secondary" type="button" disabled={busy||splitting||!selected||!fileBatch.length||!requirements.length} onClick={uploadFiles}><Upload size={14}/>{splitting?"Splitting…":autoSplit?"Prepare / Split":"Upload"}</button></div>}
+      {splitPreview&&<div style={{marginTop:10,padding:10,border:"1px solid #d0d5dd",borderRadius:7,display:"grid",gap:8}}><div><b style={{fontSize:13}}>Review split documents ({splitPreview.length})</b><p className="muted" style={{fontSize:11,margin:"3px 0 0"}}>Confirm each document type before uploading. Low-confidence matches need manual review.</p></div>{splitPreview.map((item,i)=><div key={i} style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(150px,1fr) auto",gap:7,alignItems:"center"}}><span style={{fontSize:11,overflowWrap:"anywhere"}}>{item.document_name}<small className="muted" style={{display:"block"}}>Page(s): {item.pages}{item.needsReview?" · Review classification":""}</small></span><select style={fieldStyle} value={item.document_type} onChange={e=>setSplitPreview(old=>old.map((x,j)=>j===i?{...x,document_type:e.target.value,needsReview:false}:x))}>{requirements.map(r=><option key={r.code} value={r.code}>{r.label}</option>)}</select><button type="button" className="textbutton" onClick={()=>setSplitPreview(old=>old.filter((_,j)=>j!==i))}>Remove</button></div>)}<div style={{display:"flex",gap:7,flexWrap:"wrap"}}><button type="button" className="primary" disabled={busy||!splitPreview.length} onClick={uploadFiles}><Upload size={14}/> Upload reviewed documents</button><button type="button" className="secondary" onClick={()=>setSplitPreview(null)}>Cancel review</button></div></div>}
       {!requirements.length&&<p className="muted" style={{fontSize:12}}>No Listing-side document types are configured. Open Settings → Trade & Listing Documents Requirements → Listing and enable the document types.</p>}{docs.map(d=><div key={d.id} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 0",fontSize:12}}><FileText size={14}/><span style={{flex:1}}>{d.document_name}<small className="muted" style={{display:"block"}}>{requirements.find(r=>r.code===d.document_type)?.label||d.document_type}</small></span><button type="button" className="textbutton" onClick={()=>openDocument(d)}>View</button></div>)}
      </div>}
      {isAdmin&&selected&&<div style={{marginTop:14,paddingTop:12,borderTop:"1px solid #eaecf0"}}><h3 style={{fontSize:14,margin:"0 0 8px"}}>Admin Review & MLS Publication</h3><label style={labelStyle}>Review notes<textarea rows={2} style={fieldStyle} value={adminNotes} onChange={e=>setAdminNotes(e.target.value)}/></label><label style={{...labelStyle,marginTop:8}}>MLS number (enter after uploading to REALM MLS)<input style={fieldStyle} value={mlsNumber} onChange={e=>setMlsNumber(e.target.value)} placeholder="Enter assigned MLS number"/></label><div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:10}}><button className="secondary" type="button" disabled={busy} onClick={()=>adminUpdate("NEEDS_CHANGES")}>Request Changes</button><button className="primary" type="button" disabled={busy||selected.status==="PUBLISHED"} onClick={()=>adminUpdate("APPROVED")}><CheckCircle2 size={14}/> Approve Paperwork</button><button className="primary" type="button" disabled={busy||!mlsNumber.trim()||!["APPROVED","PUBLISHED"].includes(selected.status)} onClick={()=>adminUpdate("PUBLISHED")}>Mark Published</button></div><p className="muted" style={{fontSize:11}}>Approval does not publish to REALM automatically. Enter the listing in REALM MLS first, then record the MLS number and mark Published.</p></div>}
