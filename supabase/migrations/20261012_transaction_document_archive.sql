@@ -59,3 +59,11 @@ for delete to authenticated using (
 
 comment on table public.dv_accounting_transaction_documents is
   'Long-term evidence file register for real-estate transaction management and audit retrieval. Transaction deletion is restricted while files exist.';
+
+-- Backfill documents already attached to approved submissions into the transaction archive index.
+insert into public.dv_accounting_transaction_documents
+  (transaction_id, document_type, document_name, storage_path, mime_type, file_size, uploaded_by, created_at)
+select d.transaction_id, d.document_type, d.document_name, d.storage_path, d.mime_type, d.file_size, d.uploaded_by, d.created_at
+from public.dv_accounting_agent_trade_documents d
+where d.transaction_id is not null
+on conflict (storage_path) do nothing;
