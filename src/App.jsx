@@ -9,7 +9,7 @@ import SellerSettlements from "./SellerSettlements";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
-const APP_VERSION = "0.6.141";
+const APP_VERSION = "0.6.142";
 const nav=[["Dashboard",LayoutDashboard,"dashboard.view"],["Transactions",ArrowLeftRight,"transactions.view"],["Trade Submissions",ClipboardCheck,"transactions.edit"],["Contacts",Users,"contacts.view"],["Banking & Reconciliation",Landmark,"banking.view"],["Seller Settlements",ReceiptText,"settings.view"],["Expenses & A/P",ReceiptText,"expenses.view"],["Agents",Users,"agents.view"],["Agent Rankings",BarChart3,"agents.view"],["Agent Fees & Plans",ReceiptText,"fees.view"],["Commission Payroll",ReceiptText,"commission.view"],["Staff Payroll",Clock3,"staff.view"],["HST / Tax",Percent,"tax.view"],["Reports",BarChart3,"reports.view"],["Compliance & Month End",ClipboardCheck,"compliance.view"],["Recent Audit Log",ShieldCheck,"settings.view"],["Settings",Settings,"settings.view"]];
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(n||0));
 const today=()=>new Date().toISOString().slice(0,10);
@@ -207,7 +207,13 @@ function Banking(){
  const[show,setShow]=useState(false),[recShow,setRecShow]=useState(false),[payOtherShow,setPayOtherShow]=useState(false);
  const[form,setForm]=useState({bank_account_id:"",transaction_id:"",ledger_date:today(),direction:"DEPOSIT",client_name:"",matter:"",description:"",amount:"",reference:""});
  const[rec,setRec]=useState({bank_account_id:"",period_end:today(),statement_balance:""});
- const[payOther,setPayOther]=useState({bank_account_id:"",transaction_id:"",ledger_date:today(),client_name:"",matter:"",payee_name:"",description:"Payment to cooperating brokerage",amount:"",reference:""});\n const outsideBrokers=useRows("dv_accounting_transaction_outside_brokers");\n const sellerSettlements=useRows("dv_accounting_seller_settlements");\n const readyBrokerageTrades=trades.rows.filter(tr=>sellerSettlements.rows.some(ss=>ss.transaction_id===tr.id&&ss.status==="READY_FOR_COMMISSION_PAYROLL")&&!tt.rows.some(x=>x.transaction_id===tr.id&&x.trust_account_type==="COMMISSION_TRUST"&&x.direction==="DISBURSEMENT"&&String(x.description||"").toLowerCase().includes("other brokerage payment")));\n const brokerageForTrade=id=>outsideBrokers.rows.find(x=>x.transaction_id===id);\n const selectedBrokerage=brokerageForTrade(payOther.transaction_id);\n const brokerPayeeName=b=>String(b?.brokerage_name||b?.company_name||"").trim();
+ const[payOther,setPayOther]=useState({bank_account_id:"",transaction_id:"",ledger_date:today(),client_name:"",matter:"",payee_name:"",description:"Payment to cooperating brokerage",amount:"",reference:""});
+ const outsideBrokers=useRows("dv_accounting_transaction_outside_brokers");
+ const sellerSettlements=useRows("dv_accounting_seller_settlements");
+ const readyBrokerageTrades=trades.rows.filter(tr=>sellerSettlements.rows.some(ss=>ss.transaction_id===tr.id&&ss.status==="READY_FOR_COMMISSION_PAYROLL")&&!tt.rows.some(x=>x.transaction_id===tr.id&&x.trust_account_type==="COMMISSION_TRUST"&&x.direction==="DISBURSEMENT"&&String(x.description||"").toLowerCase().includes("other brokerage payment")));
+ const brokerageForTrade=id=>outsideBrokers.rows.find(x=>x.transaction_id===id);
+ const selectedBrokerage=brokerageForTrade(payOther.transaction_id);
+ const brokerPayeeName=b=>String(b?.brokerage_name||b?.company_name||"").trim();
  const trustAccounts=a.rows.filter(x=>x.account_type==="REAL_ESTATE_TRUST"||x.account_type==="COMMISSION_TRUST");
  const balance=id=>Number(a.rows.find(x=>x.id===id)?.opening_balance||0)+t.rows.filter(x=>x.bank_account_id===id).reduce((s,x)=>s+Number(x.amount||0),0);
  const liability=(type,client,matter)=>tl.rows.filter(x=>x.trust_account_type===type&&(!client||x.client_name===client)&&(!matter||x.matter===matter)).reduce((s,x)=>s+(x.direction==="RECEIVABLE"?1:-1)*Number(x.amount||0),0);
