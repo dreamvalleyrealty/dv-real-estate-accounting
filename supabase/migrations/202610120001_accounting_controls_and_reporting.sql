@@ -287,3 +287,29 @@ begin
     perform public.dv_accounting_sync_agent_desk_fee_subscription(a.id,current_date);
   end loop;
 end $$;
+
+
+-- Remove erroneous unpaid desk-fee charges for agents assigned to plans that explicitly have no desk fee.
+-- Paid/applied charges are intentionally preserved for auditability.
+do $$
+begin
+  delete from public.dv_accounting_agent_charge_payments p
+  using public.dv_accounting_commission_charges ch,
+        public.dv_accounting_agent_fee_settings fs,
+        public.dv_accounting_fee_plans fp
+  where p.charge_id=ch.id
+    and ch.agent_id=fs.agent_id
+    and fs.fee_plan_id=fp.id
+    and coalesce(fp.desk_fee,0)<=0
+    and ch.charge_type='DESK_FEE'
+    and ch.status='OPEN';
+
+  delete from public.dv_accounting_commission_charges ch
+  using public.dv_accounting_agent_fee_settings fs,
+        public.dv_accounting_fee_plans fp
+  where ch.agent_id=fs.agent_id
+    and fs.fee_plan_id=fp.id
+    and coalesce(fp.desk_fee,0)<=0
+    and ch.charge_type='DESK_FEE'
+    and ch.status='OPEN';
+end $$;
