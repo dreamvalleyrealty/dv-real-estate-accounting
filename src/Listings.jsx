@@ -60,70 +60,84 @@ export default function Listings({user,agentId,adminMode=false}){
   if(!fileBatch.length){setError("Choose one or more files first.");return}
   const pdfs=fileBatch.filter(f=>f.type==="application/pdf"||/\.pdf$/i.test(f.name));
   if(!pdfs.length){setError("Auto-splitting works with PDF files. Turn it off to upload other file types normally.");return}
-  setSplitting(true);setError("");setSplitPreview(null);
+  setSplitting(true);setError("");setMessage("");setSplitPreview(null);
   try{
    const prepared=[];
    for(const file of fileBatch){
     if(!(file.type==="application/pdf"||/\.pdf$/i.test(file.name))){prepared.push({file,document_type:uploadType,document_name:file.name,pages:"Original file",needsReview:false});continue}
     const bytes=await file.arrayBuffer();
-    const pdf=await pdfjsLib.getDocument({data:bytes.slice(0)}).promise;
-    const pageTypes=[];
-    for(let pageNo=1;pageNo<=pdf.numPages;pageNo++){
-     const page=await pdf.getPage(pageNo);const content=await page.getTextContent();
-     const text=content.items.map(item=>item.str||"").join(" ").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
-     let best={code:uploadType,score:0};
-     for(const req of requirements){
-      const label=String(req.label||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
-      const code=String(req.code||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
-      let score=0;
-      if(label&&text.includes(label))score+=10;
-      if(code&&text.includes(code))score+=8;
-      const tokens=[...new Set((label+" "+code).split(/\s+/).filter(w=>w.length>3&&!["document","listing","other","supporting","information"].includes(w)))];
-      for(const token of tokens)if(text.includes(token))score+=1;
-      if(score>best.score)best={code:req.code,score};
+    const loaded=await PDFDocument.load(bytes);
+    let pageTypes=[];
+    try{
+     const pdf=await pdfjsLib.getDocument({data:bytes.slice(0)}).promise;
+     for(let pageNo=1;pageNo<=pdf.numPages;pageNo++){
+      const page=await pdf.getPage(pageNo);const content=await page.getTextContent();
+      const text=content.items.map(item=>item.str||"").join(" ").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+      let best={code:uploadType,score:0};
+      for(const req of requirements){
+       const label=String(req.label||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+       const code=String(req.code||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+       let score=0;
+       if(label&&text.includes(label))score+=10;
+       if(code&&text.includes(code))score+=8;
+       const tokens=[...new Set((label+" "+code).split(/\s+/).filter(w=>w.length>3&&!["document","listing","other","supporting","information"].includes(w)))];
+       for(const token of tokens)if(text.includes(token))score+=1;
+       if(score>best.score)best={code:req.code,score};
+      }
+      pageTypes.push({pageNo,code:best.code,score:best.score});
      }
-     pageTypes.push({pageNo,code:best.code,score:best.score});
+    }catch(readError){
+     // Scanned/image-only PDFs may not have extractable text or the PDF.js worker may be unavailable.
+     // Still split the PDF into individual pages so the user can assign each page manually.
+     pageTypes=Array.from({length:loaded.getPageCount()},(_,i)=>({pageNo:i+1,code:uploadType,score:0,forceSeparate:true}));
     }
     const groups=[];
     for(const item of pageTypes){
      const last=groups[groups.length-1];
-     if(last&&last.code===item.code){last.pages.push(item.pageNo);last.lowConfidence=last.lowConfidence||item.score<2}
-     else groups.push({code:item.code,pages:[item.pageNo],lowConfidence:item.score<2});
+     if(last&&last.code===item.code&&!item.forceSeparate&&!last.forceSeparate){last.pages.push(item.pageNo);last.lowConfidence=last.lowConfidence||item.score<2}
+     else groups.push({code:item.code,pages:[item.pageNo],lowConfidence:item.score<2,forceSeparate:!!item.forceSeparate});
     }
-    for(let i=0;i<groups.length;i++){
-     const group=groups[i];const output=await PDFDocument.create();const loaded=await PDFDocument.load(bytes);
+    const base=file.name.replace(/\.pdf$/i,"");
+    for(const group of groups){
+     const output=await PDFDocument.create();
      const copied=await output.copyPages(loaded,group.pages.map(p=>p-1));copied.forEach(p=>output.addPage(p));
      const blob=new Blob([await output.save()],{type:"application/pdf"});
-     const base=file.name.replace(/\.pdf$/i,"");
      const label=requirements.find(r=>r.code===group.code)?.label||group.code;
-     prepared.push({file:new File([blob],base+" - "+label+" - pages "+group.pages.join(",")+".pdf",{type:"application/pdf"}),document_type:group.code,document_name:base+" - "+label+".pdf",pages:group.pages.join(", "),needsReview:group.lowConfidence});
+     prepared.push({file:new File([blob],base+" - "+label+" - pages "+group.pages.join(",")+".pdf",{type:"application/pdf"}),document_type:group.code,document_name:base+" - "+label+" - pages "+group.pages.join(",")+".pdf",pages:group.pages.join(", "),needsReview:group.lowConfidence});
     }
    }
+   if(!prepared.length)throw new Error("No documents were produced from the selected files.");
    setSplitPreview(prepared);
-   setMessage("Review the split PDF files and document types before uploading. Pages with uncertain classifications are flagged for review.");
+   setMessage("Split preview ready. Review document types, then click Upload reviewed documents. Scanned pages are separated individually for manual classification.");
   }catch(e){setError("Could not split this PDF: "+(e?.message||String(e)));}
   finally{setSplitting(false)}
  }
  async function uploadFiles(){
-  if((!selected?.id&&!newListing)||(!fileBatch.length&&!splitPreview?.length)){setError("Select one or more files first.");return}if(!user?.id){setError("Your login session is missing. Sign in again before uploading files.");return}
+  if((!selected?.id&&!newListing)||(!fileBatch.length&&!splitPreview?.length)){setError("Select one or more files first.");return}
+  if(!user?.id){setError("Your login session is missing. Sign in again before uploading files.");return}
   let listing=selected;
   if(!listing?.id){listing=await saveDraft(false);if(!listing?.id)return}
   if(autoSplit&&!splitPreview&&fileBatch.some(f=>f.type==="application/pdf"||/\.pdf$/i.test(f.name))){await prepareSplitPreview();return}
-  setBusy(true);setError("");let count=0;
-  const uploadQueue=splitPreview||fileBatch.map(file=>({file,document_type:uploadType,document_name:file.name}));
-  for(const item of uploadQueue){
-   const f=item.file;
-   const documentType=item.document_type||uploadType;
-   const documentName=item.document_name||f.name;
-   const safe=f.name.replace(/[^a-zA-Z0-9._-]/g,"_"),path="listings/"+listing.id+"/+String(user.id)+"/"+Date.now()+"-"+count+"-"+safe;
-   const {error:upError}=await supabase.storage.from("dv-trade-documents").upload(path,f,{upsert:false,contentType:f.type||"application/octet-stream"});
-   if(upError){setError("Upload failed for "+f.name+": "+upError.message);break}
-   const {data,error:e}=await supabase.from("dv_accounting_listing_documents").insert([{listing_id:listing.id,document_type:documentType,document_name:documentName,storage_path:path,mime_type:f.type||null,file_size:f.size,uploaded_by:user.id}]).select().single();
-   if(e){await supabase.storage.from("dv-trade-documents").remove([path]);setError("Could not register "+f.name+": "+e.message);break}
-   count++;setDocs(old=>[...old,data]);
-  }
-  if(count===uploadQueue.length){setFileBatch([]);setSplitPreview(null);setMessage(count+" listing document(s) uploaded.")}
-  setBusy(false);await loadDocs(listing.id);
+  setBusy(true);setError("");setMessage("");
+  const uploadQueue=splitPreview?.length?splitPreview:fileBatch.map(file=>({file,document_type:uploadType,document_name:file.name}));
+  let count=0;
+  try{
+   if(!supabase)throw new Error("The database connection is unavailable. Please refresh and sign in again.");
+   for(const item of uploadQueue){
+    const f=item.file;
+    const documentType=item.document_type||uploadType;
+    const documentName=item.document_name||f.name;
+    const safe=f.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+    const path="listings/"+listing.id+"/"+String(user.id)+"/"+Date.now()+"-"+count+"-"+safe;
+    const {error:upError}=await supabase.storage.from("dv-trade-documents").upload(path,f,{upsert:false,contentType:f.type||"application/octet-stream"});
+    if(upError)throw new Error("Storage upload failed for "+f.name+": "+upError.message);
+    const {data,error:e}=await supabase.from("dv_accounting_listing_documents").insert([{listing_id:listing.id,document_type:documentType,document_name:documentName,storage_path:path,mime_type:f.type||null,file_size:f.size,uploaded_by:user.id}]).select().single();
+    if(e){await supabase.storage.from("dv-trade-documents").remove([path]);throw new Error("File uploaded but could not register "+f.name+": "+e.message);}
+    count++;setDocs(old=>[...old,data]);
+   }
+   setFileBatch([]);setSplitPreview(null);setMessage(count+" listing document(s) uploaded successfully.");
+  }catch(e){setError(e?.message||"Upload failed. Please try again.");}
+  finally{setBusy(false);await loadDocs(listing.id);}
  }
  async function adminUpdate(status){
   if(!selected?.id)return;
