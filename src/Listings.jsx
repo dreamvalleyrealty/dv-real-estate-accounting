@@ -13,12 +13,10 @@ export default function Listings({user,agentId,adminMode=false}){
  const load=useCallback(async()=>{
   if(!supabase){setLoading(false);return}
   setLoading(true);setError("");
-  const [company,req]=await Promise.all([
-   supabase.from("dv_accounting_companies").select("id").limit(1).maybeSingle(),
-   supabase.from("dv_accounting_settings").select("value").eq("key","LISTING_DOCUMENT_REQUIREMENTS").maybeSingle()
-  ]);
-  if(company.data?.id)setCompanyId(company.data.id);
-  const saved=req.data?.value;
+  const {data:company}=await supabase.from("dv_accounting_companies").select("id").limit(1).maybeSingle();
+  if(company?.id)setCompanyId(company.id);
+  const {data:req}=company?.id?await supabase.from("dv_accounting_settings").select("value").eq("company_id",company.id).eq("key","LISTING_DOCUMENT_REQUIREMENTS").maybeSingle():{data:null};
+  const saved=req?.value;
   if(Array.isArray(saved)&&saved.length)setRequirements(saved.filter(x=>x&&x.code&&x.label).map(x=>({code:String(x.code),label:String(x.label),required:x.required!==false})));
   let q=supabase.from("dv_accounting_listing_submissions").select("*").order("created_at",{ascending:false});
   if(!isAdmin)q=q.eq("agent_id",agentId);
@@ -59,10 +57,11 @@ export default function Listings({user,agentId,adminMode=false}){
  }
  async function adminUpdate(status){
   if(!selected?.id)return;
+  if(status==="APPROVED"){const missing=requirements.filter(r=>r.required&&!docs.some(d=>d.document_type===r.code));if(missing.length){setError("Cannot approve until required listing documents are uploaded: "+missing.map(x=>x.label).join(", "));return}}
   if(status==="PUBLISHED"&&!String(mlsNumber||"").trim()){setError("Enter the MLS number after the listing has been entered into REALM MLS.");return}
   if(status==="PUBLISHED"&&!selected?.status?.match(/APPROVED|PUBLISHED/)){setError("Approve the paperwork before marking the listing published.");return}
   setBusy(true);setError("");setMessage("");
-  const {data,error:e}=await supabase.from("dv_accounting_listing_submissions").update({status,mls_number:mlsNumber.trim()||null,admin_notes:adminNotes,reviewed_by:user?.id||null,reviewed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",selected.id).select().single();
+  const {data,error:e}=await supabase.from("dv_accounting_listing_submissions").update({status,mls_number:mlsNumber.trim()||null,admin_notes:adminNotes,reviewed_by:user?.id||null,reviewed_at:new Date().toISOString(),published_at:status==="PUBLISHED"?new Date().toISOString():selected.published_at||null,updated_at:new Date().toISOString()}).eq("id",selected.id).select().single();
   if(e){setError("Could not update listing: "+e.message);setBusy(false);return}
   setSelected(data);setForm({...blank,...data});setMessage(status==="NEEDS_CHANGES"?"Changes requested.":status==="APPROVED"?"Paperwork approved. Enter the listing in REALM MLS, then record its MLS number and mark it published.":"Listing marked as published with MLS number "+data.mls_number+".");
   await load();setBusy(false);
@@ -70,7 +69,7 @@ export default function Listings({user,agentId,adminMode=false}){
  async function openDocument(d){const {data,error:e}=await supabase.storage.from("dv-trade-documents").createSignedUrl(d.storage_path,3600);if(e){setError(e.message);return}window.open(data.signedUrl,"_blank","noopener,noreferrer")}
  const canEdit=!isAdmin&&(!selected||["DRAFT","NEEDS_CHANGES"].includes(selected.status));
  const visibleRequirements=useMemo(()=>requirements,[requirements]);
- const inp=(key,caption,type="text",opts=null)=><label style={labelStyle}>{caption}{opts?<select style={fieldStyle} value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}>{opts.map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}</select>:<input style={fieldStyle} type={type} value={form[key]??""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))} />}</label>;
+ const inp=(key,caption,type="text",opts=null)=><label style={labelStyle}>{caption}{opts?<select disabled={!canEdit} style={fieldStyle} value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}>{opts.map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}</select>:<input disabled={!canEdit} style={fieldStyle} type={type} value={form[key]??""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))} />}</label>;
  return <div style={{display:"grid",gap:14}}>
   <div className="pagehead"><div><h1>Listings</h1><p>Listing paperwork submission, compliance review, and REALM MLS tracking.</p></div>{!isAdmin&&<button className="primary" type="button" onClick={startNew}>+ New Listing</button>}</div>
   {error&&<div className="notice" role="alert"><AlertCircle size={16}/> {error}</div>}{message&&<div className="notice" role="status"><CheckCircle2 size={16}/> {message}</div>}
@@ -84,7 +83,7 @@ export default function Listings({user,agentId,adminMode=false}){
      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:9}}>
       {inp("property_address","Property address *")}{inp("unit_number","Unit #")}{inp("city","City *")}{inp("province","Province", "text", [["ON","Ontario"],["AB","Alberta"],["BC","British Columbia"],["QC","Quebec"],["Other","Other"]])}{inp("postal_code","Postal code")}{inp("property_type","Property type","text",[["RESIDENTIAL","Residential"],["CONDO","Condo"],["COMMERCIAL","Commercial"],["LAND","Land"],["OTHER","Other"]])}{inp("listing_type","Listing type","text",[["SALE","For Sale"],["LEASE","For Lease"]])}{inp("asking_price","Asking price","number")}{inp("listing_start_date","Listing start date","date")}{inp("listing_expiry_date","Listing expiry date","date")}
      </div>
-     <label style={{...labelStyle,marginTop:9}}>Notes / special instructions<textarea rows={3} style={fieldStyle} value={form.notes||""} onChange={e=>setForm(v=>({...v,notes:e.target.value}))}/></label>
+     <label style={{...labelStyle,marginTop:9}}>Notes / special instructions<textarea disabled={!canEdit} rows={3} style={fieldStyle} value={form.notes||""} onChange={e=>setForm(v=>({...v,notes:e.target.value}))}/></label>
      {canEdit&&<div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:10}}><button className="secondary" type="button" disabled={busy} onClick={()=>saveDraft(false)}><Save size={14}/> Save Draft</button>{selected&&<button className="primary" type="button" disabled={busy} onClick={()=>saveDraft(true)}><Send size={14}/> Submit for Review</button>}</div>}
      {selected&&<div style={{marginTop:12,borderTop:"1px solid #eaecf0",paddingTop:10}}><h3 style={{fontSize:14,margin:"0 0 8px"}}>Listing Paperwork</h3><div style={{display:"grid",gap:5}}>{visibleRequirements.map(r=>{const found=docs.filter(d=>d.document_type===r.code);return <div key={r.code} style={{display:"flex",gap:8,alignItems:"center",fontSize:12,padding:"5px 0",borderBottom:"1px solid #f2f4f7"}}><FileText size={14}/><span style={{flex:1}}>{r.label}{r.required?" *":""}</span><span className="muted">{found.length?"✓ "+found.length+" file(s)":"Not uploaded"}</span></div>})}</div>
       {canEdit&&<div style={{display:"grid",gridTemplateColumns:"minmax(150px,1fr) minmax(160px,1.4fr) auto",gap:7,alignItems:"end",marginTop:9}}><label style={labelStyle}>Document type<select style={fieldStyle} value={uploadType} onChange={e=>setUploadType(e.target.value)}>{requirements.map(r=><option key={r.code} value={r.code}>{r.label}</option>)}</select></label><label style={labelStyle}>Choose file(s)<input style={fieldStyle} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx" onChange={e=>setFileBatch(Array.from(e.target.files||[]))}/></label><button className="secondary" type="button" disabled={busy||!fileBatch.length} onClick={uploadFiles}><Upload size={14}/> Upload</button></div>}
