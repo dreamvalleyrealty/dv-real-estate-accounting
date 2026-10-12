@@ -181,6 +181,7 @@ function Reports(){
        agents=useRows("dv_accounting_agents"),commissions=useRows("dv_accounting_commissions"),
        listings=useRows("dv_accounting_listings"),trust=useRows("dv_accounting_trust_liabilities"),
        banks=useRows("dv_accounting_bank_accounts"),bankTx=useRows("dv_accounting_bank_transactions"),
+       reconciliations=useRows("dv_accounting_reconciliations"),hstPeriods=useRows("dv_accounting_hst_periods"),
        payroll=useRows("dv_accounting_payroll_runs");
  const gci=tx.rows.filter(x=>["FINALIZED","CLOSED","COMPLETED"].includes(String(x.status||"").toUpperCase())).reduce((s,x)=>s+Number(x.gross_commission||0),0),
        exp=ex.rows.reduce((s,x)=>s+Number(x.amount||0),0);
@@ -196,8 +197,8 @@ function Reports(){
   else if(name==="Revenue by Month"){headers=["Month","Posted Revenue"];const m=new Map();gl.rows.filter(x=>x.account_type==="REVENUE").forEach(x=>{const k=String(x.entry_date||"").slice(0,7);m.set(k,(m.get(k)||0)+Number(x.credit||0)-Number(x.debit||0))});lines=[...m].sort(([a],[b])=>a.localeCompare(b)).map(([month,amount])=>[month,amount])}
   else if(name==="Agent Ranking"){headers=["Agent","Completed Units","Sales Volume","Gross Commission"];lines=agents.rows.map(a=>{const ts=tx.rows.filter(t=>t.agent_id===a.id&&["FINALIZED","CLOSED","COMPLETED"].includes(String(t.status||"").toUpperCase()));return[[a.first_name,a.last_name].filter(Boolean).join(" ")||a.name||a.legal_name||a.id,ts.length,ts.reduce((n,t)=>n+Number(t.sale_price||0),0),ts.reduce((n,t)=>n+Number(t.gross_commission||0),0)]}).sort((a,b)=>b[2]-a[2])}
   else if(name==="Listings & Units"){headers=["Listing Number","Address","Agent","List Price","List Date","Status"];lines=listings.rows.map(x=>[x.listing_number,x.address,x.agent_name,x.list_price,x.list_date,x.status])}
-  else if(name==="Trust Reconciliation"){headers=["Bank Account","Account Type","Period End","Statement Balance","Book Balance","Difference","Status"];lines=banks.rows.filter(b=>String(b.account_type||"").includes("TRUST")).map(b=>{const rec=useRows;return[b.name,b.account_type,"","","","","Use Banking & Reconciliation for signed monthly statements"]})}
-  else if(name==="HST Working Paper"){headers=["Period Start","Period End","HST Collected","ITCs","Net HST","Status"];lines=[]}
+  else if(name==="Trust Reconciliation"){headers=["Bank Account","Account Type","Period End","Statement Balance","Book Balance","Difference","Status"];lines=reconciliations.rows.map(rec=>{const b=banks.rows.find(x=>x.id===rec.bank_account_id);return[b?.name||rec.bank_account_id,b?.account_type,rec.period_end,rec.statement_balance,rec.book_balance,Number(rec.statement_balance||0)-Number(rec.book_balance||0),rec.status]})}
+  else if(name==="HST Working Paper"){headers=["Period Start","Period End","Frequency","HST Collected","ITCs","Adjustments","Net HST","Status"];lines=hstPeriods.rows.map(x=>[x.period_start,x.period_end,x.frequency,x.hst_collected,x.itc_claimable,x.adjustments,x.net_hst,x.status])}
   else if(name==="Payroll Register"){headers=["Period Start","Period End","Pay Date","Gross Pay","CPP","CPP2","EI","Income Tax","Status"];lines=payroll.rows.map(x=>[x.period_start,x.period_end,x.pay_date,x.gross_pay,x.cpp,x.cpp2,x.ei,x.income_tax,x.status])}
   if(["Profit & Loss","Balance Sheet","Trial Balance","General Ledger"].includes(name)&&!gl.rows.length){alert("No posted journal entries are available. These financial reports cannot be treated as complete until transactions, expenses, payroll and bank activity are posted to the general ledger.");return}
   csvDownload(name,headers,lines)
