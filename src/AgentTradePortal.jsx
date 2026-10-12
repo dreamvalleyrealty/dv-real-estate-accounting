@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2, Clock3, FileText, Plus, RefreshCw, Send, Upl
 import { supabase } from "./lib/supabase";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
-const AGENT_PORTAL_VERSION = "0.6.124";
+const AGENT_PORTAL_VERSION = "0.6.125";
 
 const blank = {
   transaction_number:"", transaction_type:"BUY_SELL", side:"SELLER", dvr_lead:false, property_address:"",
