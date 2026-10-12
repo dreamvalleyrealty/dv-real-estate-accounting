@@ -3755,7 +3755,12 @@ grant execute on function public.dv_accounting_close_transaction(uuid) to authen
 ALTER TABLE public.dv_accounting_transactions ADD COLUMN IF NOT EXISTS mls_number text;
 CREATE INDEX IF NOT EXISTS idx_dv_accounting_transactions_mls_number ON public.dv_accounting_transactions(mls_number);
 NOTIFY pgrst, 'reload schema';
-\n\n-- ============================================================\n-- 0031_transaction_workflow_fields.sql\n-- ============================================================\n-- 0031_transaction_workflow_fields.sql
+
+
+-- ============================================================
+-- 0031_transaction_workflow_fields.sql
+-- ============================================================
+-- 0031_transaction_workflow_fields.sql
 -- Adds the transaction fields used by the six-tab transaction workflow.
 alter table public.dv_accounting_transactions
   add column if not exists listing_id uuid references public.dv_accounting_listings(id),
