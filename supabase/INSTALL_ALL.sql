@@ -4933,6 +4933,7 @@ begin
       update public.dv_accounting_agent_service_subscriptions
          set amount=amount_due,frequency=coalesce(fs.desk_fee_frequency,plan.desk_fee_frequency,s.frequency)
        where id=s.id;
+      s.frequency:=coalesce(fs.desk_fee_frequency,plan.desk_fee_frequency,s.frequency);
     end if;
 
     if amount_due<=0 then
