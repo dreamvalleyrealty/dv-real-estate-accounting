@@ -10,6 +10,19 @@ alter table public.dv_accounting_transactions
   add column if not exists commission_payroll_status text not null default 'NOT_READY',
   add column if not exists commission_id uuid references public.dv_accounting_commissions(id);
 
+-- Normalize legacy values (notably the older PENDING default) before enforcing the queue states.
+update public.dv_accounting_transactions
+set commission_payroll_status = case
+  when upper(trim(coalesce(commission_payroll_status,''))) = 'READY' then 'READY'
+  when upper(trim(coalesce(commission_payroll_status,''))) = 'PAID' then 'PAID'
+  else 'NOT_READY'
+end
+where commission_payroll_status is null
+   or upper(trim(commission_payroll_status)) not in ('NOT_READY','READY','PAID');
+
+alter table public.dv_accounting_transactions
+  alter column commission_payroll_status set default 'NOT_READY';
+
 alter table public.dv_accounting_transactions drop constraint if exists dv_accounting_transactions_commission_payroll_status_check;
 alter table public.dv_accounting_transactions add constraint dv_accounting_transactions_commission_payroll_status_check
   check (commission_payroll_status in ('NOT_READY','READY','PAID'));
