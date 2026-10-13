@@ -137,23 +137,23 @@ function Expenses({canApprove=false}){
    if(file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf")){
     const pdfjs=await import("pdfjs-dist/legacy/build/pdf.mjs");pdfjs.GlobalWorkerOptions.workerSrc=pdfWorkerUrl;
     const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
-    for(let pn=1;pn<=Math.min(pdf.numPages,3);pn++){const page=await pdf.getPage(pn),content=await page.getTextContent();text+=content.items.map(x=>x.str||"").join(" ")+"\\n"}
+    for(let pn=1;pn<=Math.min(pdf.numPages,3);pn++){const page=await pdf.getPage(pn),content=await page.getTextContent();text+=content.items.map(x=>x.str||"").join(" ")+"\n"}
     if(!text.trim()){const page=await pdf.getPage(1),viewport=page.getViewport({scale:2}),canvas=document.createElement("canvas");canvas.width=viewport.width;canvas.height=viewport.height;await page.render({canvasContext:canvas.getContext("2d"),viewport}).promise;const{createWorker}=await import("tesseract.js");const worker=await createWorker("eng");try{const result=await worker.recognize(canvas);text=result.data.text||""}finally{await worker.terminate()}}
    }else{const{createWorker}=await import("tesseract.js");const worker=await createWorker("eng");try{const result=await worker.recognize(file);text=result.data.text||""}finally{await worker.terminate()}}
    if(!text.trim())throw new Error("No readable text found. Try a clearer, well-lit photo or PDF.");
-   const clean=text.replace(/\\u00a0/g," ").replace(/[ \\t]+/g," ").replace(/\\r/g,"\\n");
-   const dateMatches=[...clean.matchAll(/\\b(\\d{4})[-/](\\d{1,2})[-/](\\d{1,2})\\b|\\b(\\d{1,2})[-/](\\d{1,2})[-/](\\d{2,4})\\b/g)];
+   const clean=text.replace(/\u00a0/g," ").replace(/[ \t]+/g," ").replace(/\r/g,"\n");
+   const dateMatches=[...clean.matchAll(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b|\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b/g)];
    let invoiceDate="";if(dateMatches.length){const m=dateMatches.find(z=>/invoice date|date issued|date:/i.test(clean.slice(Math.max(0,z.index-35),z.index)))||dateMatches[0];if(m[1])invoiceDate=m[1]+"-"+String(m[2]).padStart(2,"0")+"-"+String(m[3]).padStart(2,"0");else{let yr=Number(m[6]);if(yr<100)yr+=2000;const month=Number(m[5]),day=Number(m[4]);if(month>=1&&month<=12&&day>=1&&day<=31)invoiceDate=yr+"-"+String(month).padStart(2,"0")+"-"+String(day).padStart(2,"0")}}
-   const invoiceNo=clean.match(/(?:invoice|inv)\\s*(?:number|no\\.?|#|\\:)?\\s*([A-Z0-9][A-Z0-9-]{2,})/i);
-   const moneyValue=v=>Number(String(v||"").replace(/[$,\\s]/g,""));
-   const totalMatch=clean.match(/(?:total\\s*(?:due|payable|including tax|incl\\.?\\s*tax)?|amount\\s*due|balance\\s*due|grand\\s*total|invoice\\s*total)\\s*[:$ ]*([0-9,]+\\.\\d{2})/i);
-   const hstMatch=clean.match(/(?:HST|GST\\/HST|GST)\\s*(?:amount|tax)?\\s*[:$ ]*([0-9,]+\\.\\d{2})/i);
-   const rateMatch=clean.match(/(?:HST|GST\\/HST)\\s*(?:@|rate)?\\s*(5|12|13|14|15)\\s*%/i);
+   const invoiceNo=clean.match(/(?:invoice|inv)\s*(?:number|no\.?|#|\:)?\s*([A-Z0-9][A-Z0-9-]{2,})/i);
+   const moneyValue=v=>Number(String(v||"").replace(/[$,\s]/g,""));
+   const totalMatch=clean.match(/(?:total\s*(?:due|payable|including tax|incl\.?\s*tax)?|amount\s*due|balance\s*due|grand\s*total|invoice\s*total)\s*[:$ ]*([0-9,]+\.\d{2})/i);
+   const hstMatch=clean.match(/(?:HST|GST\/HST|GST)\s*(?:amount|tax)?\s*[:$ ]*([0-9,]+\.\d{2})/i);
+   const rateMatch=clean.match(/(?:HST|GST\/HST)\s*(?:@|rate)?\s*(5|12|13|14|15)\s*%/i);
    const foundTotal=totalMatch?moneyValue(totalMatch[1]):0,foundTax=hstMatch?moneyValue(hstMatch[1]):0;
    let rate=rateMatch?rateMatch[1]:"13";
    if(foundTotal>0&&foundTax>0&&foundTax<foundTotal){const computed=foundTax/(foundTotal-foundTax)*100;const rates=[0,5,12,13,14,15];rate=String(rates.reduce((best,r)=>Math.abs(r-computed)<Math.abs(best-computed)?r:best,13))}
-   const lines=clean.split("\\n").map(v=>v.trim()).filter(Boolean);
-   const vendorLine=lines.find(v=>v.length>2&&v.length<90&&!/invoice|bill to|ship to|date|phone|fax|www\\.|http|hst|gst|subtotal|total|amount due|tax|description|qty|quantity|price|terms|payment/i.test(v)&&!/^[0-9\\W]+$/.test(v));
+   const lines=clean.split("\n").map(v=>v.trim()).filter(Boolean);
+   const vendorLine=lines.find(v=>v.length>2&&v.length<90&&!/invoice|bill to|ship to|date|phone|fax|www\.|http|hst|gst|subtotal|total|amount due|tax|description|qty|quantity|price|terms|payment/i.test(v)&&!/^[0-9\W]+$/.test(v));
    const categoryText=(clean+" "+(vendorLine||"")).toLowerCase();
    const cat=cats.rows.filter(c=>c.active!==false&&c.category_type==="EXPENSE").find(c=>categoryText.includes(String(c.name||"").toLowerCase()));
    setForm(prev=>{let next={...prev};if(invoiceDate)next.expense_date=invoiceDate;if(invoiceNo)next.invoice_number=invoiceNo[1].replace(/[.,;:]$/,"");if(foundTotal>0){next.invoice_total=foundTotal.toFixed(2);next.hst_rate=rate;const net=Math.round((foundTotal/(1+Number(rate)/100)+Number.EPSILON)*100)/100;next.amount=net.toFixed(2);next.hst_amount=(Math.round((foundTotal-net+Number.EPSILON)*100)/100).toFixed(2)}if(cat)next.category=cat.name;if(vendorLine&&!prev.vendor){const matched=vendors.rows.find(v=>String(v.name||"").toLowerCase()===vendorLine.toLowerCase()||vendorLine.toLowerCase().includes(String(v.name||"").toLowerCase()));if(matched)next.vendor=matched.name;else next.description=next.description||vendorLine}return next});
