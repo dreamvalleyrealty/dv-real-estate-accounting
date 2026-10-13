@@ -5521,3 +5521,16 @@ drop policy if exists "transaction agents admin update" on public.dv_accounting_
 create policy "transaction agents admin update" on public.dv_accounting_transaction_agents for update to authenticated using (public.dv_accounting_is_trade_admin()) with check (public.dv_accounting_is_trade_admin());
 drop policy if exists "transaction agents admin delete" on public.dv_accounting_transaction_agents;
 create policy "transaction agents admin delete" on public.dv_accounting_transaction_agents for delete to authenticated using (public.dv_accounting_is_trade_admin());
+
+
+-- ============================================================
+-- 0031_staff_salary_visibility.sql
+-- ============================================================
+insert into public.dv_accounting_permission_catalog(code,module,label,description,sort_order)
+values ('staff.salary.view','Staff Payroll','View staff salary and hourly rates','View hourly rates and annual salaries in staff records.',207)
+on conflict(code) do update set module=excluded.module,label=excluded.label,description=excluded.description,sort_order=excluded.sort_order;
+
+insert into public.dv_accounting_role_permission_rules(role,permission_code,allowed,access_scope)
+select r.role,'staff.salary.view',r.role='SUPERADMIN','ALL'
+from (values ('SUPERADMIN'),('ADMIN'),('MANAGER'),('STAFF'),('ACCOUNTANT'),('VIEWER')) as r(role)
+on conflict(role,permission_code) do nothing;
