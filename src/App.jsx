@@ -13,7 +13,7 @@ import AccountingPeriods from "./AccountingPeriods";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
-const APP_VERSION = "0.6.221";
+const APP_VERSION = "0.6.222";
 const nav=[["Dashboard",LayoutDashboard,"dashboard.view"],["Transactions",ArrowLeftRight,"transactions.view"],["Trade Submissions",ClipboardCheck,"trade_submissions.view"],["Listings",FileText,"listings.view"],["Contacts",Users,"contacts.view"],["Banking & Reconciliation",Landmark,"banking.view"],["Expenses & A/P",ReceiptText,"expenses.view"],["Agents",Users,"agents.view"],["Agent Rankings",BarChart3,"agents.view"],["Agent Fees & Plans",ReceiptText,"fees.view"],["Commission Payroll",ReceiptText,"commission.view"],["Staff Payroll",Clock3,"staff.view"],["HST / Tax",Percent,"tax.view"],["Reports",BarChart3,"reports.view"],["Compliance & Month End",ClipboardCheck,"compliance.view"],["Recent Audit Log",ShieldCheck,"settings.view"],["Settings",Settings,"settings.view"]];
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
 const today=()=>new Date().toISOString().slice(0,10);
@@ -162,7 +162,8 @@ function Expenses({canApprove=false}){
  }
  const paidFor=row=>paymentRows.filter(p=>p.expense_id===row.id).reduce((sum,p)=>sum+Number(p.amount||0),0);
  const totalFor=row=>Number(row.amount||0)+Number(row.hst_amount||0);
- async function setApproval(row,status){if(!canApprove){alert("Only an authorized invoice approver can change approval status.");return}const{data:{user}}=await supabase.auth.getUser();const update={approval_status:status,approved_at:status==="APPROVED"?new Date().toISOString():null,approved_by:status==="APPROVED"?(user?.id||null):null};const{error}=await supabase.from("dv_accounting_expenses").update(update).eq("id",row.id);if(error)alert("Could not update invoice approval: "+error.message);else await load()}\n async function pay(row){
+ async function setApproval(row,status){if(!canApprove){alert("Only an authorized invoice approver can change approval status.");return}const{data:{user}}=await supabase.auth.getUser();const update={approval_status:status,approved_at:status==="APPROVED"?new Date().toISOString():null,approved_by:status==="APPROVED"?(user?.id||null):null};const{error}=await supabase.from("dv_accounting_expenses").update(update).eq("id",row.id);if(error)alert("Could not update invoice approval: "+error.message);else await load()}
+ async function pay(row){
   const remaining=Math.max(0,totalFor(row)-paidFor(row));
   const bankId=prompt("Enter the ID of the Operating bank account to pay from:");
   if(!bankId)return;
