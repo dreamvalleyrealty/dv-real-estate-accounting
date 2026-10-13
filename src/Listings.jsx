@@ -1,4 +1,4 @@
-import {useCallback,useEffect,useMemo,useState} from "react";
+import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {supabase} from "./lib/supabase";
 import AgentSearchSelect from "./AgentSearchSelect";
 import {Upload,RefreshCw,CheckCircle2,AlertCircle,FileText,Send,Save,Building2,Trash2} from "lucide-react";
@@ -11,13 +11,14 @@ const blank={property_address:"",unit_number:"",city:"",province:"ON",postal_cod
 const defaults=[{code:"LISTING_AGREEMENT",label:"Listing Agreement",required:true},{code:"MLS_DATA",label:"MLS Data / Listing Information",required:true},{code:"PROPERTY_DETAILS",label:"Property Details / Feature Sheet",required:true},{code:"SELLER_DIRECTION",label:"Seller Direction / Authorization",required:true},{code:"ID_FINTRAC",label:"Identification / FINTRAC",required:true},{code:"OTHER",label:"Other Supporting Documents",required:false}];
 const fieldStyle={width:"100%",boxSizing:"border-box",minHeight:36,padding:"7px 9px",border:"1px solid #d0d5dd",borderRadius:6};
 const labelStyle={display:"grid",gap:4,fontSize:12,fontWeight:600};
+function useAutoRefresh(load,enabled=true){const loadRef=useRef(load);const running=useRef(false);loadRef.current=load;useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>{if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;if(running.current)return;running.current=true;Promise.resolve().then(()=>loadRef.current()).catch(()=>{}).finally(()=>{running.current=false})},30000);return()=>clearInterval(timer)},[enabled])}
 const statusLabel=s=>({DRAFT:"Draft",SUBMITTED:"Awaiting review",NEEDS_CHANGES:"Changes requested",APPROVED:"Approved — awaiting MLS",APPROVED_WITH_CHANGES:"Approved with minor changes — awaiting MLS",PUBLISHED:"Published to MLS"}[s]||s||"—");
 export default function Listings({user,agentId,adminMode=false,canDeleteDocuments=false}){
  const [rows,setRows]=useState([]),[docs,setDocs]=useState([]),[activeTab,setActiveTab]=useState("PROPERTY"),[selectedRequirementCode,setSelectedRequirementCode]=useState("LISTING_AGREEMENT"),[previewDocument,setPreviewDocument]=useState(null),[previewUrl,setPreviewUrl]=useState(""),[requirements,setRequirements]=useState(defaults),[companyId,setCompanyId]=useState(""),[agents,setAgents]=useState([]),[assignedAgentId,setAssignedAgentId]=useState(""),[additionalAgentIds,setAdditionalAgentIds]=useState([]),[additionalAgentSearch,setAdditionalAgentSearch]=useState(""),[selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[newListing,setNewListing]=useState(false),[uploadType,setUploadType]=useState(defaults[0].code),[fileBatch,setFileBatch]=useState([]),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[message,setMessage]=useState(""),[mlsNumber,setMlsNumber]=useState(""),[adminNotes,setAdminNotes]=useState(""),[autoSplit,setAutoSplit]=useState(false),[splitPreview,setSplitPreview]=useState(null),[splitting,setSplitting]=useState(false),[changeRequests,setChangeRequests]=useState([]),[requestText,setRequestText]=useState(""),[renamingDocumentId,setRenamingDocumentId]=useState(null),[documentNameDraft,setDocumentNameDraft]=useState(""),[fileNameDrafts,setFileNameDrafts]=useState([]);
  const isAdmin=adminMode;
- const load=useCallback(async()=>{
+ const load=useCallback(async(background=false)=>{
   if(!supabase){setLoading(false);return}
-  setLoading(true);setError("");
+  if(!background){setLoading(true);setError("");}
   const {data:company}=await supabase.from("dv_accounting_companies").select("id").limit(1).maybeSingle();
   if(company?.id)setCompanyId(company.id);
   const {data:agentRows,error:agentError}=await supabase.from("dv_accounting_agents").select("*");if(agentError)setError("Could not load agents: "+agentError.message);else setAgents((agentRows||[]).filter(a=>a.active!==false).sort((a,b)=>String(a.last_name||"").localeCompare(String(b.last_name||""))));
@@ -39,7 +40,7 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
   if(e)setError("Could not load listing submissions: "+e.message);else setRows(data||[]);
   setLoading(false);
  },[isAdmin,agentId]);
- useEffect(()=>{load()},[load]);
+ useEffect(()=>{load()},[load]);useAutoRefresh(()=>load(true));
  const loadDocs=useCallback(async(id)=>{if(!id){setDocs([]);return []}const {data,error:e}=await supabase.from("dv_accounting_listing_documents").select("*").eq("listing_id",id).order("created_at");if(e){setError(e.message);return []}const loaded=data||[];setDocs(loaded);return loaded},[]);
  function startNew(){setActiveTab("PROPERTY");setSelectedRequirementCode(requirements[0]?.code||"LISTING_AGREEMENT");setPreviewDocument(null);setPreviewUrl("");setSelected(null);setForm({...blank});setDocs([]);setNewListing(true);setFileBatch([]);setAssignedAgentId("");setAdditionalAgentIds([]);setAdditionalAgentSearch("");setMessage("");setError("");setMlsNumber("");setAdminNotes("");setChangeRequests([]);setRequestText("")}
  async function openListing(row){setActiveTab("PROPERTY");setSelectedRequirementCode(requirements[0]?.code||"LISTING_AGREEMENT");setPreviewDocument(null);setPreviewUrl("");setSelected(row);setForm({...blank,...row});setAssignedAgentId(row.agent_id||"");setAdditionalAgentIds(Array.isArray(row.additional_agent_ids)?row.additional_agent_ids.filter(id=>id!==row.agent_id):[]);setNewListing(false);setMlsNumber(row.mls_number||"");setAdminNotes(row.admin_notes||"");setRequestText("");setMessage("");setError("");const loadedDocs=await loadDocs(row.id);const firstUploaded=loadedDocs.find(d=>requirements.some(r=>r.code===d.document_type));if(firstUploaded)await openDocument(loadedDocs.filter(d=>d.document_type===firstUploaded.document_type).slice(-1)[0]);const {data,error:e}=await supabase.from("dv_accounting_listing_change_requests").select("*").eq("listing_id",row.id).order("created_at",{ascending:false});if(e)setError("Could not load change requests: "+e.message);else setChangeRequests(data||[])}
