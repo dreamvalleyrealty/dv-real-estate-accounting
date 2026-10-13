@@ -470,3 +470,12 @@ body, #root, .app { font-size: 15px; }
 .content.trade-submissions-fullwidth .agent-trade-layout>section{width:100%;min-width:0;box-sizing:border-box}
 .content.trade-submissions-fullwidth .agent-trade-queue-list,.content.trade-submissions-fullwidth .agent-trade-queue-row{width:100%;min-width:0}
 @media(max-width:760px){.content.trade-submissions-fullwidth{padding-left:12px;padding-right:12px}}
+
+/* Full-width trade submissions queue in the primary app layout. */
+main:has(.content.trade-submissions-fullwidth){width:calc(100% - 276px);max-width:none;min-width:0}
+.content.trade-submissions-fullwidth{width:100%;max-width:none;box-sizing:border-box;margin:0;padding:24px 18px 40px}
+.content.trade-submissions-fullwidth>.agent-trade-portal{width:100%;max-width:none;min-width:0}
+.content.trade-submissions-fullwidth .agent-trade-layout{display:grid;width:100%;max-width:none;min-width:0;grid-template-columns:minmax(0,1fr);}
+.content.trade-submissions-fullwidth .agent-trade-layout>section{width:100%;max-width:none;min-width:0;box-sizing:border-box}
+.content.trade-submissions-fullwidth .agent-trade-queue-list,.content.trade-submissions-fullwidth .agent-trade-queue-row,.content.trade-submissions-fullwidth .agent-trade-queue-card{width:100%;max-width:none;min-width:0;box-sizing:border-box}
+@media(max-width:760px){main:has(.content.trade-submissions-fullwidth){width:100%}.content.trade-submissions-fullwidth{padding:18px 10px 30px}}
