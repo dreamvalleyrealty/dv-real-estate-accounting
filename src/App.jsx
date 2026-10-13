@@ -3,6 +3,7 @@ import{createPortal}from"react-dom";
 import{LayoutDashboard,ArrowLeftRight,Landmark,ReceiptText,Users,Clock3,Percent,BarChart3,ClipboardCheck,Settings,Menu,X,Plus,Search,RefreshCw,Save,LogOut,CheckCircle2,AlertCircle,FileText,Building2,Upload,ShieldCheck,FileSpreadsheet,Printer}from"lucide-react";
 import{supabase}from"./lib/supabase";
 import * as XLSX from "xlsx";
+import { jsPDF } from "jspdf";
 import TransactionWorkspace,{TransactionEditor} from "./Transactions";
 import AgentTradePortal from "./AgentTradePortal";
 import Listings,{AgentListingsWorkspace} from "./Listings";
@@ -11,7 +12,7 @@ import SellerSettlements from "./SellerSettlements";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
-const APP_VERSION = "0.6.195";
+const APP_VERSION = "0.6.196";
 const nav=[["Dashboard",LayoutDashboard,"dashboard.view"],["Transactions",ArrowLeftRight,"transactions.view"],["Trade Submissions",ClipboardCheck,"transactions.edit"],["Listings",FileText,"transactions.edit"],["Contacts",Users,"contacts.view"],["Banking & Reconciliation",Landmark,"banking.view"],["Expenses & A/P",ReceiptText,"expenses.view"],["Agents",Users,"agents.view"],["Agent Rankings",BarChart3,"agents.view"],["Agent Fees & Plans",ReceiptText,"fees.view"],["Commission Payroll",ReceiptText,"commission.view"],["Staff Payroll",Clock3,"staff.view"],["HST / Tax",Percent,"tax.view"],["Reports",BarChart3,"reports.view"],["Compliance & Month End",ClipboardCheck,"compliance.view"],["Recent Audit Log",ShieldCheck,"settings.view"],["Settings",Settings,"settings.view"]];
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(n||0));
 const today=()=>new Date().toISOString().slice(0,10);
@@ -242,7 +243,48 @@ function Reports(){
  const gci=tx.rows.filter(x=>["FINALIZED","CLOSED","COMPLETED"].includes(String(x.status||"").toUpperCase())).reduce((s,x)=>s+Number(x.gross_commission||0),0),
        exp=ex.rows.reduce((s,x)=>s+Number(x.amount||0),0);
  const csvDownload=(name,headers,lines)=>{const escape=v=>{const s=String(v??"");return /[",\n]/.test(s)?'"'+s.replaceAll('"','""')+'"':s};const csv=[headers,...lines].map(row=>row.map(escape).join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));a.download=name.toLowerCase().replaceAll(" ","-")+".csv";a.click();URL.revokeObjectURL(a.href)};
- const report=name=>{
+ const pdfDownload=async(name,headers,lines)=>{
+  const landscape=headers.length>6;
+  const doc=new jsPDF({orientation:landscape?"landscape":"portrait",unit:"mm",format:"a4"});
+  const pageWidth=doc.internal.pageSize.getWidth(),pageHeight=doc.internal.pageSize.getHeight(),margin=12;
+  const navy=[15,33,65],gold=[158,133,86],muted=[90,100,115];
+  try{
+   const logo=new Image();logo.src="/dv-logo.svg";
+   await new Promise(resolve=>{if(logo.complete)return resolve();logo.onload=resolve;logo.onerror=resolve});
+   if(logo.naturalWidth&&logo.naturalHeight){const canvas=document.createElement("canvas");canvas.width=logo.naturalWidth;canvas.height=logo.naturalHeight;const ctx=canvas.getContext("2d");if(ctx){ctx.drawImage(logo,0,0);doc.addImage(canvas.toDataURL("image/png"),"PNG",margin,8,24,Math.min(14,24*logo.naturalHeight/logo.naturalWidth));}}
+  }catch{}
+  doc.setTextColor(...navy);doc.setFont("helvetica","bold");doc.setFontSize(15);doc.text("DREAM VALLEY REALTY",margin+28,14);
+  doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(...muted);doc.text("ACCOUNTING & BACK OFFICE",margin+28,19);
+  doc.setFont("helvetica","bold");doc.setFontSize(13);doc.setTextColor(...navy);doc.text(name,pageWidth-margin,14,{align:"right"});
+  doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(...muted);doc.text("Generated "+new Date().toLocaleString("en-CA"),pageWidth-margin,19,{align:"right"});
+  doc.setDrawColor(...gold);doc.setLineWidth(.6);doc.line(margin,25,pageWidth-margin,25);
+  const tableTop=30,usableWidth=pageWidth-margin*2,colWidth=usableWidth/Math.max(headers.length,1),fontSize=headers.length>8?6.5:headers.length>5?7:8;
+  const cellPad=1.7,lineHeight=fontSize*.42+1.1;
+  let y=tableTop;
+  const drawHeader=()=>{
+   doc.setFillColor(...navy);doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(fontSize);
+   const wrapped=headers.map(h=>doc.splitTextToSize(String(h??""),Math.max(4,colWidth-cellPad*2)));
+   const rowHeight=Math.max(8,...wrapped.map(a=>a.length*lineHeight+cellPad*2));
+   doc.rect(margin,y,usableWidth,rowHeight,"F");
+   wrapped.forEach((parts,i)=>doc.text(parts,margin+i*colWidth+cellPad,y+cellPad+lineHeight*.75));
+   y+=rowHeight;doc.setFont("helvetica","normal");doc.setTextColor(35,40,48);return rowHeight;
+  };
+  drawHeader();
+  lines.forEach((line,index)=>{
+   const cells=line.map(value=>doc.splitTextToSize(String(value??"—"),Math.max(4,colWidth-cellPad*2)));
+   const rowHeight=Math.max(7,...cells.map(a=>a.length*lineHeight+cellPad*2));
+   if(y+rowHeight>pageHeight-15){doc.addPage();y=14;drawHeader();}
+   if(index%2===1){doc.setFillColor(245,247,250);doc.rect(margin,y,usableWidth,rowHeight,"F");}
+   doc.setDrawColor(220,224,230);doc.setLineWidth(.15);doc.line(margin,y+rowHeight,pageWidth-margin,y+rowHeight);
+   cells.forEach((parts,i)=>doc.text(parts,margin+i*colWidth+cellPad,y+cellPad+lineHeight*.75));
+   y+=rowHeight;
+  });
+  if(!lines.length){doc.setFontSize(9);doc.setTextColor(...muted);doc.text("No records found for this report.",margin,y+7);}
+  const pages=doc.getNumberOfPages();
+  for(let page=1;page<=pages;page++){doc.setPage(page);doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(...muted);doc.text("Dream Valley Realty · Confidential",margin,pageHeight-6);doc.text("Page "+page+" of "+pages,pageWidth-margin,pageHeight-6,{align:"right"});}
+  doc.save(name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+".pdf");
+ };
+ const report=(name,format="csv")=>{
   let headers=["Account Code","Account","Type","Debit","Credit","Balance"],lines=[];
   if(name==="General Ledger") lines=gl.rows.map(x=>[x.account_code,x.account_name,x.account_type,x.debit,x.credit,x.net_amount]);
   else if(name==="Trial Balance") lines=tb.rows.map(x=>[x.account_code,x.account_name,x.account_type,x.total_debits,x.total_credits,x.debit_balance||-Number(x.credit_balance||0)]);
@@ -259,10 +301,10 @@ function Reports(){
   else if(name==="T4 Payroll Working Paper"){headers=["Tax Year","Employee","Employment Income (Box 14 working total)","Income Tax (Box 22 working total)","CPP (Box 16 working total)","CPP2 (Box 16A working total)","EI (Box 18 working total)","Net Pay","Payroll Lines"];const m=new Map();payrollLines.rows.forEach(line=>{const run=payroll.rows.find(r=>r.id===line.payroll_run_id);if(!run||String(run.status||"").toUpperCase()==="VOID")return;const year=Number(String(run.pay_date||run.period_end||"").slice(0,4)||run.tax_year);const id=String(line.employee_id||"unknown")+"-"+year;const emp=employees.rows.find(e=>e.id===line.employee_id);const v=m.get(id)||{year,name:emp?.name||"Employee not linked",gross:0,tax:0,cpp:0,cpp2:0,ei:0,net:0,count:0};v.gross+=Number(line.gross_pay||0);v.tax+=Number(line.income_tax||0);v.cpp+=Number(line.cpp||0);v.cpp2+=Number(line.cpp2||0);v.ei+=Number(line.ei||0);v.net+=Number(line.net_pay||0);v.count++;m.set(id,v)});lines=[...m.values()].sort((a,b)=>a.year-b.year||a.name.localeCompare(b.name)).map(v=>[v.year,v.name,v.gross,v.tax,v.cpp,v.cpp2,v.ei,v.net,v.count])}
   else if(name==="T4A Commission Working Paper"){headers=["Tax Year","Agent","Gross Commissions Paid (review for Box 20)","Fees Deducted","Net Cheques","Issued Cheques"];const m=new Map();commissionCheques.rows.filter(ch=>String(ch.status||"").toUpperCase()==="ISSUED").forEach(ch=>{const year=Number(String(ch.cheque_date||"").slice(0,4));const id=String(ch.agent_id||"unknown")+"-"+year;const agent=agents.rows.find(a=>a.id===ch.agent_id);const v=m.get(id)||{year,name:[agent?.first_name,agent?.last_name].filter(Boolean).join(" ")||agent?.name||"Agent not linked",gross:0,fees:0,net:0,count:0};v.gross+=Number(ch.gross_commission||0);v.fees+=Number(ch.total_fees||0);v.net+=Number(ch.net_amount||0);v.count++;m.set(id,v)});lines=[...m.values()].sort((a,b)=>a.year-b.year||a.name.localeCompare(b.name)).map(v=>[v.year,v.name,v.gross,v.fees,v.net,v.count])}
   if(["Profit & Loss","Balance Sheet","Trial Balance","General Ledger"].includes(name)&&!gl.rows.length){alert("No posted journal entries are available. These financial reports cannot be treated as complete until transactions, expenses, payroll and bank activity are posted to the general ledger.");return}
-  csvDownload(name,headers,lines)
+  if(format==="pdf")pdfDownload(name,headers,lines);else csvDownload(name,headers,lines)
  };
  const postedLines=gl.rows.length,postedRevenue=pl.rows.filter(x=>x.account_type==="REVENUE").reduce((n,x)=>n+Number(x.amount||0),0),postedExpense=pl.rows.filter(x=>x.account_type==="EXPENSE").reduce((n,x)=>n+Number(x.amount||0),0);
- return <><div className="pagehead"><div><h1>Reports</h1><p>Financial statements use posted double-entry journal lines. T4/T4A exports are reconciliation working papers, not official CRA slips.</p></div></div>{!postedLines&&<div className="notice"><AlertCircle/> No general-ledger postings found. Do not rely on the Profit & Loss or Balance Sheet exports until source transactions and expenses have been posted to the ledger.</div>}<section className="reportgrid">{["Profit & Loss","Balance Sheet","Trial Balance","General Ledger","Revenue by Month","Expense Summary","Sales Volume","Agent Ranking","Listings & Units","Trust Reconciliation","HST Working Paper","Payroll Register","T4 Payroll Working Paper","T4A Commission Working Paper"].map(x=><button className="report" key={x} onClick={()=>report(x)}><FileText/><span>{x}</span><span className="textbutton">Export CSV</span></button>)}</section><section className="panel"><div className="paneltitle"><h2>Live summary</h2><span className="pill">{postedLines} posted journal lines</span></div><div className="grid4"><Card title="Posted Revenue" value={money(postedRevenue)} sub="From general ledger"/><Card title="Posted Expenses" value={money(postedExpense)} sub="From general ledger"/><Card title="Posted Net Income" value={money(postedRevenue-postedExpense)} sub="Before tax, ledger basis"/><Card title="Transactions" value={tx.rows.length} sub="All statuses"/></div></section></>
+ return <><div className="pagehead"><div><h1>Reports</h1><p>Financial statements use posted double-entry journal lines. T4/T4A exports are reconciliation working papers, not official CRA slips.</p></div></div>{!postedLines&&<div className="notice"><AlertCircle/> No general-ledger postings found. Do not rely on the Profit & Loss or Balance Sheet exports until source transactions and expenses have been posted to the ledger.</div>}<section className="reportgrid">{["Profit & Loss","Balance Sheet","Trial Balance","General Ledger","Revenue by Month","Expense Summary","Sales Volume","Agent Ranking","Listings & Units","Trust Reconciliation","HST Working Paper","Payroll Register","T4 Payroll Working Paper","T4A Commission Working Paper"].map(x=><div className="report" key={x}><FileText/><span>{x}</span><div className="actions" style={{marginTop:8,flexWrap:"wrap"}}><button type="button" className="secondary" onClick={()=>report(x,"csv")}>Export CSV</button><button type="button" className="primary" onClick={()=>report(x,"pdf")}>Export PDF</button></div></div>)}</section><section className="panel"><div className="paneltitle"><h2>Live summary</h2><span className="pill">{postedLines} posted journal lines</span></div><div className="grid4"><Card title="Posted Revenue" value={money(postedRevenue)} sub="From general ledger"/><Card title="Posted Expenses" value={money(postedExpense)} sub="From general ledger"/><Card title="Posted Net Income" value={money(postedRevenue-postedExpense)} sub="Before tax, ledger basis"/><Card title="Transactions" value={tx.rows.length} sub="All statuses"/></div></section></>
 }
 function Compliance(){
  const{rows,setRows}=useRows("dv_accounting_month_end"),companies=useRows("dv_accounting_companies"),
