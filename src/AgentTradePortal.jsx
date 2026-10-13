@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PDFDocument } from "pdf-lib";
-import { AlertCircle, CheckCircle2, Clock3, FileText, Plus, RefreshCw, Send, Upload, XCircle, ExternalLink, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock3, FileText, Plus, RefreshCw, Send, Upload, XCircle, ExternalLink, X, Trash2 } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import AgentSearchSelect from "./AgentSearchSelect";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
-const AGENT_PORTAL_VERSION = "0.6.205";
+const AGENT_PORTAL_VERSION = "0.6.206";
 
 const blank = {
   transaction_number:"", transaction_type:"BUY_SELL", side:"SELLER", dvr_lead:false, property_address:"",
@@ -33,7 +33,7 @@ const inputFields = [
 function Field({label,children,missing=false}) { return <label className={"agent-trade-field"+(missing?" missing":"")}><span>{label}{missing&&<em> Required — please complete</em>}</span>{children}</label> }
 function statusPill(status){return <span className="pill" style={{background:status==="APPROVED"?"#e8f7ee":status==="SUBMITTED"?"#fff3d9":status==="NEEDS_CHANGES"?"#fff0f0":"#edf1f7",color:status==="APPROVED"?"#167344":status==="SUBMITTED"?"#875600":status==="NEEDS_CHANGES"?"#b42318":"#344054"}}>{labelStatus(status)}</span>}
 
-export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAdmin=false}) {
+export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAdmin=false,canDeleteDocuments=false}) {
  const [submissions,setSubmissions]=useState([]),[docs,setDocs]=useState([]),[agents,setAgents]=useState([]);
  const [selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[file,setFile]=useState(null),[files,setFiles]=useState([]),[docType,setDocType]=useState("APS"),[extractBusy,setExtractBusy]=useState(false),[extractedPreview,setExtractedPreview]=useState(null);
  const [bulkFile,setBulkFile]=useState(null),[bulkGroups,setBulkGroups]=useState([]),[bulkBusy,setBulkBusy]=useState(false),[bulkOriginal,setBulkOriginal]=useState(true);
@@ -432,6 +432,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const {data,error:e}=await supabase.storage.from("dv-trade-documents").createSignedUrl(doc.storage_path,3600);
    if(e){setError(e.message);return}setPreviewDoc(doc);setPreviewUrl(data.signedUrl);
  }
+ async function deleteTradeDocument(doc){if(!canDeleteDocuments||!doc?.id||!supabase)return;if(!window.confirm("Permanently delete this trade-submission document? Confirm it is not required for a compliance or retention obligation."))return;setBusy(true);setError("");try{const{error:rowError}=await supabase.from("dv_accounting_agent_trade_documents").delete().eq("id",doc.id);if(rowError)throw new Error("Could not delete the document record: "+rowError.message);const{error:storageError}=await supabase.storage.from("dv-trade-documents").remove([doc.storage_path]);if(storageError){setError("The document record was deleted, but the stored file could not be removed: "+storageError.message);await loadDocs(selected?.id);return}setDocs(old=>old.filter(x=>x.id!==doc.id));if(previewDoc?.id===doc.id){setPreviewDoc(null);setPreviewUrl("")}setMessage("Trade document deleted.");}catch(e){setError(e?.message||"Could not delete the trade document.")}finally{setBusy(false)}}
  async function setDocMatch(doc,match_status){
    const {data,error:e}=await supabase.from("dv_accounting_agent_trade_documents").update({match_status}).eq("id",doc.id).select().single();
    if(e){setError(e.message);return}setDocs(old=>old.map(d=>d.id===doc.id?data:d));
@@ -508,7 +509,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
               </div>}
              </details>
              <p className="agent-trade-muted" style={{marginTop:10}}>Scanned PDFs may require OCR. Extracted values are suggestions and must be checked against the original APS.</p>
-             {selected&&<><h3>Attached documents</h3>{docs.map(d=><div className="agent-trade-doc" key={d.id}><div><strong>{d.document_name}</strong><div className="agent-trade-muted">{d.document_type}</div></div><button className="secondary" type="button" onClick={()=>openDoc(d)}><ExternalLink size={14}/> View</button></div>)}</>}
+             {selected&&<><h3>Attached documents</h3>{docs.map(d=><div className="agent-trade-doc" key={d.id}><div><strong>{d.document_name}</strong><div className="agent-trade-muted">{d.document_type}</div></div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}><button className="secondary" type="button" onClick={()=>openDoc(d)}><ExternalLink size={14}/> View</button>{canDeleteDocuments&&<button className="textbutton danger" type="button" disabled={busy} onClick={()=>deleteTradeDocument(d)}><Trash2 size={14}/> Delete</button>}</div></div>)}</>}
              {selected&&<><Field label="Additional document type"><select value={docType} onChange={e=>setDocType(e.target.value)}>{docTypes.map(([type,label])=><option key={type} value={type}>{label}</option>)}</select></Field><Field label="Select additional files"><input type="file" accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx" multiple onChange={e=>setFiles(Array.from(e.target.files||[]))}/></Field><button className="secondary" style={{marginTop:10}} type="button" disabled={!files.length||busy} onClick={uploadFile}><Upload size={16}/> Upload {files.length||""} Selected Document{files.length===1?"":"s"}</button></>}
            </section>
            <section><h3 style={{marginTop:0}}>2. Review and complete trade details</h3><p className="agent-trade-muted">Fields highlighted in red are required and still need your attention. Verify every value extracted from the PDF.</p>
