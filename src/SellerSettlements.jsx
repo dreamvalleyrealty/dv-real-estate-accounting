@@ -1,9 +1,10 @@
-import {useEffect,useMemo,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 import {AlertCircle,CheckCircle2,RefreshCw,Save,ArrowLeftRight,ShieldCheck,Printer} from "lucide-react";
 import {supabase} from "./lib/supabase";
 
 const today=()=>new Date().toISOString().slice(0,10);
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(n||0));
+function useAutoRefresh(load,enabled=true){const loadRef=useRef(load);const running=useRef(false);loadRef.current=load;useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>{if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;if(running.current)return;running.current=true;Promise.resolve().then(()=>loadRef.current()).catch(()=>{}).finally(()=>{running.current=false})},30000);return()=>clearInterval(timer)},[enabled])}
 const emptyForm=()=>({transaction_id:"",company_id:"",seller_client_name:"",matter:"",seller_proceeds_amount:"",seller_paid_amount:"",seller_payment_reference:"",seller_payment_date:today(),listing_commission_amount:"",cooperating_commission_amount:"",commission_hst_amount:"",real_estate_trust_account_id:"",commission_trust_account_id:"",commission_transfer_reference:"",commission_transfer_date:today(),notes:""});
 
 export default function SellerSettlements({initialTransactionId=null}){
@@ -15,7 +16,7 @@ export default function SellerSettlements({initialTransactionId=null}){
  const isCommissionTrustAccount=a=>normalizedAccountType(a)==="COMMISSIONTRUST"||(/COMMISSION\s*TRUST/i.test(String(a?.name||"")));
  const trustAccounts=accounts.filter(a=>isRealEstateTrustAccount(a)||isCommissionTrustAccount(a));
  const realEstateAccounts=trustAccounts.filter(isRealEstateTrustAccount),commissionAccounts=trustAccounts.filter(isCommissionTrustAccount);
- async function load(){if(!supabase){setLoading(false);return}setLoading(true);const results=await Promise.all([
+ async function load(background=false){if(!supabase){setLoading(false);return}if(!background)setLoading(true);const results=await Promise.all([
   supabase.from("dv_accounting_transactions").select("id,transaction_number,property_address,company_id,side,transaction_type,is_own_listing,listing_id,status,close_date,sale_price,deposit_amount,trust_bank_account_id").order("transaction_number",{ascending:false}),
   supabase.from("dv_accounting_companies").select("id,name").order("name"),
   supabase.from("dv_accounting_bank_accounts").select("*").order("name"),
@@ -24,7 +25,7 @@ export default function SellerSettlements({initialTransactionId=null}){
   if(tx.error){console.error("Seller Settlements transaction load failed:",tx.error);alert("Seller Settlements could not load transactions: "+tx.error.message)}if(co.error)console.error("Seller Settlements company load failed:",co.error);if(ba.error){console.error("Seller Settlements bank account load failed:",ba.error);alert("Seller Settlements could not load bank accounts: "+ba.error.message)}if(se.error){console.error("Seller Settlements records load failed:",se.error);alert("Seller Settlements could not load saved settlements: "+se.error.message)}
   setTrades(tx.data||[]);setCompanies(co.data||[]);setAccounts(ba.data||[]);setRows(se.data||[]);setLoading(false)
  }
- useEffect(()=>{load()},[]);
+ useEffect(()=>{load()},[]);useAutoRefresh(()=>load(true));
  function isEligibleTrade(tx){const ownListing=tx?.is_own_listing===true||String(tx?.is_own_listing||"").toUpperCase()==="YES"||String(tx?.is_own_listing||"").toLowerCase()==="true"||!!tx?.listing_id;return !!tx&&String(tx.status||"").trim().toUpperCase()==="CLOSED"&&ownListing&&["SELLER","LANDLORD","LISTING"].includes(String(tx.side||"").trim().toUpperCase())}
  function hasSellerBalance(row){return Number(row?.seller_proceeds_amount||0)-Number(row?.seller_paid_amount||0)>0.009}
  const eligibleTrades=trades.filter(tx=>{if(!isEligibleTrade(tx))return false;const existing=rows.find(row=>row.transaction_id===tx.id);return !existing||hasSellerBalance(existing)||["DEPOSIT_HELD","SELLER_PROCEEDS_CALCULATED","SELLER_PAID"].includes(String(existing.status||"").toUpperCase())});
