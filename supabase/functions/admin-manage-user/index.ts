@@ -13,6 +13,8 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: { ...cors, "Content-Type": "application/json" } });
 
   let createdUserId: string | null = null;
+  let createdAgentId: string | null = null;
+  let createdEmployeeId: string | null = null;
   try {
     const authorization = req.headers.get("Authorization") || "";
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -30,11 +32,53 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
+    const action = String(body?.action || "create").trim().toLowerCase();
+    if (action === "link_existing") {
+      const existingUserId = String(body?.existing_user_id || "").trim();
+      const agentIdToLink = String(body?.agent_id || "").trim() || null;
+      const employeeIdToLink = String(body?.employee_id || "").trim() || null;
+      if (!existingUserId) throw new Error("Select an existing login account.");
+      if (Boolean(agentIdToLink) === Boolean(employeeIdToLink)) throw new Error("Select exactly one agent or payroll staff record.");
+      const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
+      const { data: profile, error: profileError } = await admin.from("dv_accounting_user_profiles").select("user_id,email,display_name,role,active").eq("user_id", existingUserId).maybeSingle();
+      if (profileError) throw profileError;
+      if (!profile || profile.active === false) throw new Error("The selected login is missing or inactive.");
+      if (agentIdToLink) {
+        const { data: record, error } = await admin.from("dv_accounting_agents").select("id,email,user_id").eq("id", agentIdToLink).maybeSingle();
+        if (error) throw error;
+        if (!record) throw new Error("The agent record could not be found.");
+        if (record.user_id) throw new Error("This agent is already linked to a login.");
+        if (!profile.email || String(profile.email).trim().toLowerCase() !== String(record.email || "").trim().toLowerCase()) throw new Error("The login email must match the agent email.");
+        const { data: linked, error: linkError } = await admin.from("dv_accounting_agents").update({ user_id: existingUserId }).eq("id", agentIdToLink).is("user_id", null).select("id").maybeSingle();
+        if (linkError) throw linkError;
+        if (!linked) throw new Error("Could not link the agent. Refresh the page and try again.");
+        const { data: authData, error: authError } = await admin.auth.admin.getUserById(existingUserId);
+        if (authError) throw authError;
+        const { error: metaError } = await admin.auth.admin.updateUserById(existingUserId, { app_metadata: { ...(authData.user.app_metadata || {}), agent_id: agentIdToLink }, user_metadata: { ...(authData.user.user_metadata || {}), agent_id: agentIdToLink } });
+        if (metaError) throw metaError;
+      } else {
+        const { data: record, error } = await admin.from("dv_accounting_employees").select("id,email,user_id").eq("id", employeeIdToLink).maybeSingle();
+        if (error) throw error;
+        if (!record) throw new Error("The payroll staff record could not be found.");
+        if (record.user_id) throw new Error("This payroll staff member is already linked to a login.");
+        if (!profile.email || String(profile.email).trim().toLowerCase() !== String(record.email || "").trim().toLowerCase()) throw new Error("The login email must match the payroll staff email.");
+        const { data: linked, error: linkError } = await admin.from("dv_accounting_employees").update({ user_id: existingUserId }).eq("id", employeeIdToLink).is("user_id", null).select("id").maybeSingle();
+        if (linkError) throw linkError;
+        if (!linked) throw new Error("Could not link payroll staff. Refresh the page and try again.");
+        const { data: authData, error: authError } = await admin.auth.admin.getUserById(existingUserId);
+        if (authError) throw authError;
+        const { error: metaError } = await admin.auth.admin.updateUserById(existingUserId, { app_metadata: { ...(authData.user.app_metadata || {}), employee_id: employeeIdToLink }, user_metadata: { ...(authData.user.user_metadata || {}), employee_id: employeeIdToLink } });
+        if (metaError) throw metaError;
+      }
+      return new Response(JSON.stringify({ ok: true, linked: true, user_id: existingUserId }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+    if (action !== "create") throw new Error("Unsupported account action.");
     const displayName = String(body?.display_name || "").trim().slice(0, 120);
     const email = String(body?.email || "").trim().toLowerCase();
     const password = String(body?.temporary_password || "");
     const role = String(body?.role || "STAFF").trim().toUpperCase();
     const agentId = String(body?.agent_id || "").trim() || null;
+    const employeeId = String(body?.employee_id || "").trim() || null;
 
     if (!displayName) throw new Error("Enter the user's full name.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email address.");
@@ -42,24 +86,34 @@ Deno.serve(async (req) => {
     if (!allowedRoles.has(role)) throw new Error("Select a permitted role. Super Admin accounts cannot be created from this form.");
     if (role === "AGENT" && !agentId) throw new Error("Select the agent record to link to this login.");
     if (role !== "AGENT" && agentId) throw new Error("Only an Agent role can be linked to an agent record.");
+    if (role === "AGENT" && employeeId) throw new Error("An Agent login must be linked through the agent record, not a payroll staff record.");
 
     const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
-    let agent: { id: string; email: string | null; first_name: string; last_name: string; user_id?: string | null } | null = null;
+    let agent: { id: string; email: string | null; name: string | null; first_name: string | null; last_name: string | null; user_id?: string | null } | null = null;
+    let employee: { id: string; email: string | null; name: string | null; user_id?: string | null } | null = null;
     if (agentId) {
-      const { data, error } = await admin.from("dv_accounting_agents").select("id,email,first_name,last_name,user_id").eq("id", agentId).maybeSingle();
+      const { data, error } = await admin.from("dv_accounting_agents").select("id,email,name,first_name,last_name,user_id").eq("id", agentId).maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("The selected agent record could not be found.");
       if (String(data.email || "").trim().toLowerCase() !== email) throw new Error("The login email must match the selected agent's email address.");
       if (data.user_id) throw new Error("This agent is already linked to a login account.");
       agent = data;
     }
+    if (employeeId) {
+      const { data, error } = await admin.from("dv_accounting_employees").select("id,email,name,user_id").eq("id", employeeId).maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("The selected payroll staff record could not be found.");
+      if (String(data.email || "").trim().toLowerCase() !== email) throw new Error("The login email must match the payroll staff email address.");
+      if (data.user_id) throw new Error("This payroll staff member is already linked to a login account.");
+      employee = data;
+    }
 
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      app_metadata: { role, ...(agentId ? { agent_id: agentId } : {}) },
-      user_metadata: { display_name: displayName, ...(agentId ? { agent_id: agentId } : {}), must_change_password: true },
+      app_metadata: { role, ...(agentId ? { agent_id: agentId } : {}), ...(employeeId ? { employee_id: employeeId } : {}) },
+      user_metadata: { display_name: displayName, ...(agentId ? { agent_id: agentId } : {}), ...(employeeId ? { employee_id: employeeId } : {}), must_change_password: true },
     });
     if (createError) throw createError;
     if (!created.user?.id) throw new Error("Supabase did not return the new user ID.");
@@ -75,10 +129,16 @@ Deno.serve(async (req) => {
     if (profileError) throw profileError;
 
     if (agent) {
-      const { error: linkError } = await admin.from("dv_accounting_agents").update({ user_id: createdUserId }).eq("id", agent.id).is("user_id", null);
+      const { data: linked, error: linkError } = await admin.from("dv_accounting_agents").update({ user_id: createdUserId }).eq("id", agent.id).is("user_id", null).select("id").maybeSingle();
       if (linkError) throw linkError;
-      const { data: linked } = await admin.from("dv_accounting_agents").select("id").eq("id", agent.id).eq("user_id", createdUserId).maybeSingle();
       if (!linked) throw new Error("The login was created but the agent link could not be verified. Please contact the Super Admin.");
+      createdAgentId = agent.id;
+    }
+    if (employee) {
+      const { data: linked, error: linkError } = await admin.from("dv_accounting_employees").update({ user_id: createdUserId }).eq("id", employee.id).is("user_id", null).select("id").maybeSingle();
+      if (linkError) throw linkError;
+      if (!linked) throw new Error("The login was created but the payroll staff link could not be verified. Please contact the Super Admin.");
+      createdEmployeeId = employee.id;
     }
 
     return new Response(JSON.stringify({ ok: true, user_id: createdUserId, email, role, must_change_password: true }), {
@@ -91,7 +151,8 @@ Deno.serve(async (req) => {
       if (supabaseUrl && serviceKey) {
         const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
         await admin.from("dv_accounting_user_profiles").delete().eq("user_id", createdUserId);
-        await admin.from("dv_accounting_agents").update({ user_id: null }).eq("user_id", createdUserId);
+        if (createdAgentId) await admin.from("dv_accounting_agents").update({ user_id: null }).eq("id", createdAgentId).eq("user_id", createdUserId);
+        if (createdEmployeeId) await admin.from("dv_accounting_employees").update({ user_id: null }).eq("id", createdEmployeeId).eq("user_id", createdUserId);
         await admin.auth.admin.deleteUser(createdUserId);
       }
     }
