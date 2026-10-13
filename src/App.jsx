@@ -139,7 +139,36 @@ function Expenses({canApprove=false}){
     const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
     for(let pn=1;pn<=Math.min(pdf.numPages,3);pn++){const page=await pdf.getPage(pn),content=await page.getTextContent();text+=content.items.map(x=>x.str||"").join(" ")+"\n"}
     if(!text.trim()){const page=await pdf.getPage(1),viewport=page.getViewport({scale:2}),canvas=document.createElement("canvas");canvas.width=viewport.width;canvas.height=viewport.height;await page.render({canvasContext:canvas.getContext("2d"),viewport}).promise;const{createWorker}=await import("tesseract.js");const worker=await createWorker("eng");try{const result=await worker.recognize(canvas);text=result.data.text||""}finally{await worker.terminate()}}
-   }else{const{createWorker}=await import("tesseract.js");const worker=await createWorker("eng");try{const result=await worker.recognize(file);text=result.data.text||""}finally{await worker.terminate()}}
+   }else{
+    // Find the likely white paper area in a phone photo and OCR that crop,
+    // rather than the desk/background around the invoice.
+    let imageUrl=null;
+    try{
+     imageUrl=URL.createObjectURL(file);
+     const image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=imageUrl});
+     const source=document.createElement("canvas");source.width=image.naturalWidth;source.height=image.naturalHeight;
+     const sourceCtx=source.getContext("2d",{willReadFrequently:true});sourceCtx.drawImage(image,0,0);
+     const w=source.width,h=source.height, pixels=sourceCtx.getImageData(0,0,w,h).data;
+     const rowHits=new Uint32Array(h),colHits=new Uint32Array(w);
+     // Paper is generally bright and nearly neutral; ignore isolated bright pixels.
+     for(let y=0;y<h;y+=2)for(let x=0;x<w;x+=2){const i=(y*w+x)*4,r=pixels[i],g=pixels[i+1],b=pixels[i+2],max=Math.max(r,g,b),min=Math.min(r,g,b),lum=(r+g+b)/3;if(lum>190&&max-min<65){rowHits[y]++;colHits[x]++;}}
+     const rowThreshold=Math.max(3,Math.floor(w*0.12/2)),colThreshold=Math.max(3,Math.floor(h*0.12/2));
+     let top=-1,bottom=-1,left=-1,right=-1;
+     for(let y=0;y<h;y+=2)if(rowHits[y]>=rowThreshold){if(top<0)top=y;bottom=y}
+     for(let x=0;x<w;x+=2)if(colHits[x]>=colThreshold){if(left<0)left=x;right=x}
+     let crop={x:0,y:0,width:w,height:h};
+     // Only apply the detected crop if it is a plausible page-sized region.
+     if(left>=0&&top>=0&&right-left>w*0.35&&bottom-top>h*0.35&&(right-left)<w*0.99&&(bottom-top)<h*0.99){
+      const padX=Math.round((right-left)*0.025),padY=Math.round((bottom-top)*0.025);
+      const x=Math.max(0,left-padX),y=Math.max(0,top-padY),x2=Math.min(w,right+padX),y2=Math.min(h,bottom+padY);
+      crop={x,y,width:x2-x,height:y2-y};
+     }
+     const cropped=document.createElement("canvas");cropped.width=crop.width;cropped.height=crop.height;
+     cropped.getContext("2d").drawImage(source,crop.x,crop.y,crop.width,crop.height,0,0,crop.width,crop.height);
+     const{createWorker}=await import("tesseract.js");const worker=await createWorker("eng");
+     try{const result=await worker.recognize(cropped);text=result.data.text||""}finally{await worker.terminate()}
+    }finally{if(imageUrl)URL.revokeObjectURL(imageUrl)}
+   }
    if(!text.trim())throw new Error("No readable text found. Try a clearer, well-lit photo or PDF.");
    const clean=text.replace(/\u00a0/g," ").replace(/[ \t]+/g," ").replace(/\r/g,"\n");
    const dateMatches=[...clean.matchAll(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b|\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b/g)];
