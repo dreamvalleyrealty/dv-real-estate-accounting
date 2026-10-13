@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PDFDocument } from "pdf-lib";
 import { AlertCircle, CheckCircle2, Clock3, FileText, Plus, RefreshCw, Send, Upload, XCircle, ExternalLink, X, Trash2 } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import AgentSearchSelect from "./AgentSearchSelect";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
+function useAutoRefresh(load,enabled=true){const loadRef=useRef(load);const running=useRef(false);loadRef.current=load;useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>{if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;if(running.current)return;running.current=true;Promise.resolve().then(()=>loadRef.current()).catch(()=>{}).finally(()=>{running.current=false})},30000);return()=>clearInterval(timer)},[enabled])}
 const AGENT_PORTAL_VERSION = "0.6.206";
 
 const blank = {
@@ -71,6 +72,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  },[]);
 
  useEffect(()=>{load()},[load]);
+ useAutoRefresh(load);
  useEffect(()=>{if(!supabase)return;let active=true;(async()=>{const{data,error:e}=await supabase.from("dv_accounting_listing_submissions").select("*").in("status",["APPROVED","PUBLISHED"]).order("created_at",{ascending:false});if(!active)return;if(e){setError("Could not load approved listings: "+e.message);setListingRows([])}else setListingRows(data||[])})();return()=>{active=false}},[]);
  const selectableListings=listingRows.filter(l=>adminMode||l.agent_id===agentId||(Array.isArray(l.additional_agent_ids)&&l.additional_agent_ids.includes(agentId)));
  useEffect(()=>{if(!supabase)return;supabase.from("dv_accounting_companies").select("id").limit(1).maybeSingle().then(({data})=>{if(data?.id)setCompanyId(data.id)});},[]);
@@ -78,7 +80,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  useEffect(()=>{if(!supabase)return;supabase.from("dv_accounting_companies").select("*").limit(1).maybeSingle().then(({data})=>{if(data)setCompanyProfile(data)});},[]);
  useEffect(()=>{if(!supabase)return;Promise.all([supabase.from("dv_accounting_contacts").select("*"),supabase.from("dv_accounting_law_firms").select("*"),supabase.from("dv_accounting_external_brokerages").select("*"),supabase.from("dv_accounting_external_brokerage_agents").select("*")]).then(([contacts,firms,brokerages,brokerageAgents])=>{if(!contacts.error)setContactDirectory(contacts.data||[]);if(!firms.error)setLawFirmDirectory(firms.data||[]);if(!brokerages.error)setBrokerageDirectory((brokerages.data||[]).map(b=>({...b,agents:(brokerageAgents.data||[]).filter(a=>a.brokerage_id===b.id)})));});},[]);
  useEffect(()=>{if(!supabase||!companyId)return;Promise.all([supabase.from("dv_accounting_settings").select("value").eq("company_id",companyId).eq("key","TRADE_REQUIRED_DOCUMENT_TYPES").maybeSingle(),supabase.from("dv_accounting_settings").select("value").eq("company_id",companyId).eq("key","TRADE_DOCUMENT_TYPES").maybeSingle(),supabase.from("dv_accounting_settings").select("value").eq("company_id",companyId).eq("key","TRADE_REQUIRED_DOCUMENT_COUNTS").maybeSingle(),supabase.from("dv_accounting_settings").select("value").eq("company_id",companyId).eq("key","TRADE_DOCUMENT_REQUIREMENTS_BY_SIDE").maybeSingle()]).then(([required,custom,counts,sideRules])=>{const globalTypes=Array.isArray(required.data?.value)?required.data.value:["APS","MLS","COMMISSION"];if(Array.isArray(required.data?.value))setRequiredTypes(required.data.value);if(Array.isArray(custom.data?.value)&&custom.data.value.length)setDocTypes(custom.data.value.filter(x=>Array.isArray(x)&&x.length>=2));if(counts.data?.value&&typeof counts.data.value==="object")setRequiredDocCounts(counts.data.value);if(sideRules.data?.value&&typeof sideRules.data.value==="object")setRequirementsBySide(sideRules.data.value);else setRequirementsBySide(Object.fromEntries(["SELLER","BUYER","LANDLORD","TENANT"].map(side=>[side,{types:globalTypes,counts:counts.data?.value||{}}])));});},[companyId]);
- useEffect(()=>{const timer=setInterval(load,45000);return()=>clearInterval(timer)},[load]);
+ useEffect(()=>{const timer=setInterval(()=>{if(typeof document==="undefined"||document.visibilityState!=="hidden")load()},30000);return()=>clearInterval(timer)},[load]);
  useEffect(()=>{if(!adminMode||!supabase)return;supabase.from("dv_accounting_audit_log").select("id,table_name,record_id,action,actor_id,actor_email,changed_at,old_data,new_data").order("changed_at",{ascending:false}).limit(100).then(({data,error:e})=>{if(!e)setAuditLogs(data||[]);});},[adminMode,submissions.length]);
   useEffect(()=>{if(!adminMode||!supabase)return;const channel=supabase.channel("dv-agent-trade-submission-alerts").on("postgres_changes",{event:"INSERT",schema:"public",table:"dv_accounting_agent_trade_submissions"},payload=>{if(payload.new?.status==="SUBMITTED"){setMessage("New agent trade submission received. Please review the queue.");load();if(typeof window!=="undefined"&&"Notification" in window&&Notification.permission==="granted")new Notification("Dream Valley — Trade submitted",{body:"An agent submitted a trade for approval."})}}).subscribe();return()=>{supabase.removeChannel(channel)}},[adminMode,load]);
  useEffect(()=>{if(selected?.id)loadDocs(selected.id);else setDocs([])},[selected?.id,loadDocs]);
