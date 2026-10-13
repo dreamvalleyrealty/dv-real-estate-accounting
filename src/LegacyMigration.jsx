@@ -1,6 +1,7 @@
 import {useCallback,useState} from "react";
 import {AlertTriangle,CheckCircle2,Database,Download,FileArchive,RefreshCw,ShieldCheck} from "lucide-react";
 import {supabase} from "./lib/supabase";
+import LegacyChartMapping from "./LegacyChartMapping";
 
 const SOURCE_TARGETS=[
   {key:"listings",label:"Legacy Listings",source:"dv_listings",target:"dv_accounting_listings",targetLabel:"New Listings"},
@@ -45,7 +46,7 @@ function downloadJson(report){
   a.href=url;a.download="dv-legacy-migration-preflight.json";a.click();URL.revokeObjectURL(url);
 }
 export default function LegacyMigration({user,role}){
-  const [loading,setLoading]=useState(false),[error,setError]=useState(""),[report,setReport]=useState(null);
+  const [loading,setLoading]=useState(false),[error,setError]=useState(""),[report,setReport]=useState(null),[activeTab,setActiveTab]=useState("scan");
   const isSuperAdmin=String(role||"").toUpperCase()==="SUPERADMIN";
   const scan=useCallback(async()=>{
     if(!supabase){setError("Supabase is not configured. No scan was run.");return}
@@ -72,6 +73,12 @@ export default function LegacyMigration({user,role}){
   const totalFiles=report?.buckets?.reduce((n,b)=>n+(b.count||0),0)??0;
   const sourceRecords=report?.rows?.reduce((n,r)=>n+(r.sourceCount||0),0)??0;
   return <div className="workspace" style={{display:"grid",gap:18}}>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      <button className={activeTab==="scan"?"primary":"secondary"} onClick={()=>setActiveTab("scan")}>Migration preflight</button>
+      <button className={activeTab==="accounts"?"primary":"secondary"} onClick={()=>setActiveTab("accounts")}>Chart of Accounts mapping</button>
+    </div>
+    {activeTab==="accounts"&&<LegacyChartMapping user={user}/>}
+    {activeTab==="scan"&&<>
     <section className="panel" style={{padding:22}}>
       <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:10}}>
         <div style={{background:"#0f2141",color:"#9e8556",width:46,height:46,borderRadius:12,display:"grid",placeItems:"center"}}><Database size={24}/></div>
@@ -131,5 +138,6 @@ export default function LegacyMigration({user,role}){
         <li>Duplicate detection and a migration audit log are required before the import stage is enabled.</li>
       </ul>
     </section>
+    </>}
   </div>
 }
