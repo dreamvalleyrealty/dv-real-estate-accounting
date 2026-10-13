@@ -241,6 +241,30 @@ function Expenses({canApprove=false}){
   const{error}=await supabase.from("dv_accounting_expenses").delete().eq("id",row.id).is("posted_at",null);
   if(error){alert("Could not delete invoice: "+error.message);return}await load();
  }
+ async function saveRecurring(e){
+  e.preventDefault();setRecurringSaving(true);
+  const total=Number(recurringForm.invoice_total||0),rate=Number(recurringForm.hst_rate||0);
+  if(!recurringForm.vendor.trim()||total<=0){alert("Enter a vendor and invoice total greater than zero.");setRecurringSaving(false);return}
+  const{data:{user}}=await supabase.auth.getUser();
+  const payload={company_id:companies.rows[0]?.id||null,vendor:recurringForm.vendor.trim(),description:recurringForm.description.trim()||null,category:recurringForm.category||null,invoice_total:total,hst_rate:rate,frequency:recurringForm.frequency,start_date:recurringForm.next_invoice_date,next_invoice_date:recurringForm.next_invoice_date,due_days:Number(recurringForm.due_days||0),active:true,created_by:user?.id||null};
+  const{error}=await supabase.from("dv_accounting_recurring_expenses").insert([payload]);
+  if(error){alert("Could not save recurring invoice: "+error.message);setRecurringSaving(false);return}
+  setRecurringShow(false);setRecurringSaving(false);setRecurringForm({vendor:"",description:"",category:"",invoice_total:"",hst_rate:"13",frequency:"MONTHLY",start_date:today(),next_invoice_date:today(),due_days:"0"});await load();
+ }
+ function advanceRecurringDate(date,frequency){const d=new Date(String(date).slice(0,10)+"T12:00:00");if(frequency==="WEEKLY")d.setDate(d.getDate()+7);else if(frequency==="MONTHLY")d.setMonth(d.getMonth()+1);else if(frequency==="QUARTERLY")d.setMonth(d.getMonth()+3);else d.setFullYear(d.getFullYear()+1);return d.toISOString().slice(0,10)}
+ async function generateRecurringInvoice(template){
+  if(!template.active)return;const period=String(template.next_invoice_date).slice(0,10);
+  if(period>today()){alert("This invoice is not due to be generated until "+period+".");return}
+  if(!window.confirm("Create a draft A/P invoice for "+template.vendor+" dated "+period+"? It will not be automatically approved or paid."))return;
+  if(rows.some(x=>x.recurring_template_id===template.id&&String(x.recurring_period_date||"").slice(0,10)===period)){alert("An invoice for this recurring period already exists.");return}
+  const total=Number(template.invoice_total),rate=Number(template.hst_rate||0),net=Math.round((total/(1+rate/100)+Number.EPSILON)*100)/100,tax=Math.round((total-net+Number.EPSILON)*100)/100;
+  const due=new Date(period+"T12:00:00");due.setDate(due.getDate()+Number(template.due_days||0));const{data:{user}}=await supabase.auth.getUser();
+  const payload={company_id:template.company_id||companies.rows[0]?.id||null,expense_date:period,vendor:template.vendor,invoice_number:null,due_date:due.toISOString().slice(0,10),category:template.category,description:template.description||"Recurring invoice",amount:net,hst_amount:tax,hst_rate:rate,status:"OPEN",payment_status:"UNPAID",approval_status:"PENDING",approved_at:null,approved_by:null,bank_account_id:null,created_by:user?.id||null,recurring_template_id:template.id,recurring_period_date:period};
+  const{error}=await supabase.from("dv_accounting_expenses").insert([payload]);if(error){alert("Could not create recurring invoice: "+error.message);return}
+  const next=advanceRecurringDate(period,template.frequency);const{error:updateError}=await supabase.from("dv_accounting_recurring_expenses").update({next_invoice_date:next,updated_at:new Date().toISOString()}).eq("id",template.id);
+  if(updateError)alert("Draft invoice created, but the next schedule date did not update. Check the template before generating another invoice: "+updateError.message);else alert("Draft invoice created. Review it, attach the supplier document if available, then approve/post and record payment through the normal workflow.");await load();
+ }
+ async function toggleRecurring(template){const{error}=await supabase.from("dv_accounting_recurring_expenses").update({active:!template.active,updated_at:new Date().toISOString()}).eq("id",template.id);if(error){alert("Could not update recurring schedule: "+error.message);return}await load()}
  async function openInvoice(row){
   if(!row.invoice_storage_path){alert("No invoice file is attached to this record.");return}
   const{data,error}=await supabase.storage.from("dv-vendor-invoices").createSignedUrl(row.invoice_storage_path,300);
