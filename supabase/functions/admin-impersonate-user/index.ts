@@ -49,10 +49,14 @@ Deno.serve(async (req) => {
 
   const { error: auditError } = await admin.from("dv_accounting_audit_log").insert({
     user_id: callerResult.user.id,
+    table_name: "auth.users",
+    record_id: targetUserId,
     action: "USER_IMPERSONATION_STARTED",
-    entity_type: "USER",
-    entity_id: targetUserId,
-    details: { target_email: targetEmail, target_name: targetProfile.display_name || targetEmail, target_role: targetRole, method: "verified_magiclink_session", started_at: new Date().toISOString() },
+    actor_id: callerResult.user.id,
+    actor_email: callerResult.user.email || null,
+    changed_at: new Date().toISOString(),
+    old_data: null,
+    new_data: { target_email: targetEmail, target_name: targetProfile.display_name || targetEmail, target_role: targetRole, method: "verified_magiclink_session", started_at: new Date().toISOString() },
   });
   if (auditError) return respond({ error: "Impersonation was not started because the audit entry failed: " + auditError.message }, 500);
 
