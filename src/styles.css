@@ -462,3 +462,11 @@ body, #root, .app { font-size: 15px; }
  .listing-detail-panel .listing-requirement-preview-pane .listing-document-preview-frame{height:65vh;min-height:340px}
  .listing-detail-panel .listing-requirement-preview-pane .listing-document-preview-image{height:60vh;min-height:280px}
 }
+
+/* Trade submission queue uses the full available browser width. */
+.content.trade-submissions-fullwidth{width:100%;max-width:none;box-sizing:border-box;padding-left:20px;padding-right:20px;margin:0}
+.content.trade-submissions-fullwidth>.agent-trade-portal{width:100%;max-width:none;min-width:0}
+.content.trade-submissions-fullwidth .agent-trade-layout{width:100%;min-width:0;grid-template-columns:minmax(0,1fr);}
+.content.trade-submissions-fullwidth .agent-trade-layout>section{width:100%;min-width:0;box-sizing:border-box}
+.content.trade-submissions-fullwidth .agent-trade-queue-list,.content.trade-submissions-fullwidth .agent-trade-queue-row{width:100%;min-width:0}
+@media(max-width:760px){.content.trade-submissions-fullwidth{padding-left:12px;padding-right:12px}}
