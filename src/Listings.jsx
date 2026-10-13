@@ -29,9 +29,9 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
    const legacy=Array.isArray(map.LISTING_DOCUMENT_REQUIREMENTS)?map.LISTING_DOCUMENT_REQUIREMENTS:[];
    const types=Array.isArray(listingRules?.types)?listingRules.types:[];
    const required=Array.isArray(listingRules?.required)?listingRules.required:types;
-   const configured=types.map(code=>master.find(x=>x.code===String(code))||legacy.find(x=>String(x.code)===String(code))||{code:String(code),label:String(code)}).filter(x=>x.code);
-   if(configured.length){const withOther=configured.some(x=>x.code==="OTHER")?configured:[...configured,{code:"OTHER",label:"Other Supporting Documents"}];setRequirements(withOther.map(x=>({...x,required:x.code==="OTHER"?false:required.includes(x.code)})));}
-   else if(legacy.length){const withOther=legacy.filter(x=>x&&x.code&&x.label).map(x=>({code:String(x.code),label:String(x.label),required:x.required!==false}));if(!withOther.some(x=>x.code==="OTHER"))withOther.push({code:"OTHER",label:"Other Supporting Documents",required:false});setRequirements(withOther);}
+   const configured=types.map(code=>{const normalizedCode=String(code);const found=master.find(x=>x.code===normalizedCode)||legacy.find(x=>String(x.code)===normalizedCode)||{code:normalizedCode,label:normalizedCode};return {...found,code:normalizedCode,label:normalizedCode==="OTHER"?"Other Supporting Documents":found.label};}).filter(x=>x.code);
+   if(configured.length){const withOther=configured.some(x=>x.code==="OTHER")?configured:[...configured,{code:"OTHER",label:"Other Supporting Documents"}];setRequirements(withOther.map(x=>({...x,label:x.code==="OTHER"?"Other Supporting Documents":x.label,required:x.code==="OTHER"?false:required.includes(x.code)})));}
+   else if(legacy.length){const withOther=legacy.filter(x=>x&&x.code&&x.label).map(x=>({code:String(x.code),label:String(x.code)==="OTHER"?"Other Supporting Documents":String(x.label),required:String(x.code)==="OTHER"?false:x.required!==false}));if(!withOther.some(x=>x.code==="OTHER"))withOther.push({code:"OTHER",label:"Other Supporting Documents",required:false});setRequirements(withOther);}
   }
   let q=supabase.from("dv_accounting_listing_submissions").select("*").order("created_at",{ascending:false});
   if(!isAdmin)q=q.eq("agent_id",agentId);
