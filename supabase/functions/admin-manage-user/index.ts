@@ -32,6 +32,47 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
+    const action = String(body?.action || "create").trim().toLowerCase();
+    if (action === "link_existing") {
+      const existingUserId = String(body?.existing_user_id || "").trim();
+      const agentIdToLink = String(body?.agent_id || "").trim() || null;
+      const employeeIdToLink = String(body?.employee_id || "").trim() || null;
+      if (!existingUserId) throw new Error("Select an existing login account.");
+      if (Boolean(agentIdToLink) === Boolean(employeeIdToLink)) throw new Error("Select exactly one agent or payroll staff record.");
+      const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
+      const { data: profile, error: profileError } = await admin.from("dv_accounting_user_profiles").select("user_id,email,display_name,role,active").eq("user_id", existingUserId).maybeSingle();
+      if (profileError) throw profileError;
+      if (!profile || profile.active === false) throw new Error("The selected login is missing or inactive.");
+      if (agentIdToLink) {
+        const { data: record, error } = await admin.from("dv_accounting_agents").select("id,email,user_id").eq("id", agentIdToLink).maybeSingle();
+        if (error) throw error;
+        if (!record) throw new Error("The agent record could not be found.");
+        if (record.user_id) throw new Error("This agent is already linked to a login.");
+        if (!profile.email || String(profile.email).trim().toLowerCase() !== String(record.email || "").trim().toLowerCase()) throw new Error("The login email must match the agent email.");
+        const { data: linked, error: linkError } = await admin.from("dv_accounting_agents").update({ user_id: existingUserId }).eq("id", agentIdToLink).is("user_id", null).select("id").maybeSingle();
+        if (linkError) throw linkError;
+        if (!linked) throw new Error("Could not link the agent. Refresh the page and try again.");
+        const { data: authData, error: authError } = await admin.auth.admin.getUserById(existingUserId);
+        if (authError) throw authError;
+        const { error: metaError } = await admin.auth.admin.updateUserById(existingUserId, { app_metadata: { ...(authData.user.app_metadata || {}), agent_id: agentIdToLink }, user_metadata: { ...(authData.user.user_metadata || {}), agent_id: agentIdToLink } });
+        if (metaError) throw metaError;
+      } else {
+        const { data: record, error } = await admin.from("dv_accounting_employees").select("id,email,user_id").eq("id", employeeIdToLink).maybeSingle();
+        if (error) throw error;
+        if (!record) throw new Error("The payroll staff record could not be found.");
+        if (record.user_id) throw new Error("This payroll staff member is already linked to a login.");
+        if (!profile.email || String(profile.email).trim().toLowerCase() !== String(record.email || "").trim().toLowerCase()) throw new Error("The login email must match the payroll staff email.");
+        const { data: linked, error: linkError } = await admin.from("dv_accounting_employees").update({ user_id: existingUserId }).eq("id", employeeIdToLink).is("user_id", null).select("id").maybeSingle();
+        if (linkError) throw linkError;
+        if (!linked) throw new Error("Could not link payroll staff. Refresh the page and try again.");
+        const { data: authData, error: authError } = await admin.auth.admin.getUserById(existingUserId);
+        if (authError) throw authError;
+        const { error: metaError } = await admin.auth.admin.updateUserById(existingUserId, { app_metadata: { ...(authData.user.app_metadata || {}), employee_id: employeeIdToLink }, user_metadata: { ...(authData.user.user_metadata || {}), employee_id: employeeIdToLink } });
+        if (metaError) throw metaError;
+      }
+      return new Response(JSON.stringify({ ok: true, linked: true, user_id: existingUserId }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+    if (action !== "create") throw new Error("Unsupported account action.");
     const displayName = String(body?.display_name || "").trim().slice(0, 120);
     const email = String(body?.email || "").trim().toLowerCase();
     const password = String(body?.temporary_password || "");
