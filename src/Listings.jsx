@@ -13,7 +13,7 @@ const fieldStyle={width:"100%",boxSizing:"border-box",minHeight:36,padding:"7px 
 const labelStyle={display:"grid",gap:4,fontSize:12,fontWeight:600};
 const statusLabel=s=>({DRAFT:"Draft",SUBMITTED:"Awaiting review",NEEDS_CHANGES:"Changes requested",APPROVED:"Approved — awaiting MLS",APPROVED_WITH_CHANGES:"Approved with minor changes — awaiting MLS",PUBLISHED:"Published to MLS"}[s]||s||"—");
 export default function Listings({user,agentId,adminMode=false,canDeleteDocuments=false}){
- const [rows,setRows]=useState([]),[docs,setDocs]=useState([]),[activeTab,setActiveTab]=useState("PROPERTY"),[selectedRequirementCode,setSelectedRequirementCode]=useState("LISTING_AGREEMENT"),[previewDocument,setPreviewDocument]=useState(null),[previewUrl,setPreviewUrl]=useState(""),[requirements,setRequirements]=useState(defaults),[companyId,setCompanyId]=useState(""),[agents,setAgents]=useState([]),[assignedAgentId,setAssignedAgentId]=useState(""),[additionalAgentIds,setAdditionalAgentIds]=useState([]),[additionalAgentSearch,setAdditionalAgentSearch]=useState(""),[selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[newListing,setNewListing]=useState(false),[uploadType,setUploadType]=useState(defaults[0].code),[fileBatch,setFileBatch]=useState([]),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[message,setMessage]=useState(""),[mlsNumber,setMlsNumber]=useState(""),[adminNotes,setAdminNotes]=useState(""),[autoSplit,setAutoSplit]=useState(false),[splitPreview,setSplitPreview]=useState(null),[splitting,setSplitting]=useState(false),[changeRequests,setChangeRequests]=useState([]),[requestText,setRequestText]=useState("");
+ const [rows,setRows]=useState([]),[docs,setDocs]=useState([]),[activeTab,setActiveTab]=useState("PROPERTY"),[selectedRequirementCode,setSelectedRequirementCode]=useState("LISTING_AGREEMENT"),[previewDocument,setPreviewDocument]=useState(null),[previewUrl,setPreviewUrl]=useState(""),[requirements,setRequirements]=useState(defaults),[companyId,setCompanyId]=useState(""),[agents,setAgents]=useState([]),[assignedAgentId,setAssignedAgentId]=useState(""),[additionalAgentIds,setAdditionalAgentIds]=useState([]),[additionalAgentSearch,setAdditionalAgentSearch]=useState(""),[selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[newListing,setNewListing]=useState(false),[uploadType,setUploadType]=useState(defaults[0].code),[fileBatch,setFileBatch]=useState([]),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[message,setMessage]=useState(""),[mlsNumber,setMlsNumber]=useState(""),[adminNotes,setAdminNotes]=useState(""),[autoSplit,setAutoSplit]=useState(false),[splitPreview,setSplitPreview]=useState(null),[splitting,setSplitting]=useState(false),[changeRequests,setChangeRequests]=useState([]),[requestText,setRequestText]=useState(""),[renamingDocumentId,setRenamingDocumentId]=useState(null),[documentNameDraft,setDocumentNameDraft]=useState("");
  const isAdmin=adminMode;
  const load=useCallback(async()=>{
   if(!supabase){setLoading(false);return}
@@ -30,8 +30,8 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
    const types=Array.isArray(listingRules?.types)?listingRules.types:[];
    const required=Array.isArray(listingRules?.required)?listingRules.required:types;
    const configured=types.map(code=>master.find(x=>x.code===String(code))||legacy.find(x=>String(x.code)===String(code))||{code:String(code),label:String(code)}).filter(x=>x.code);
-   if(configured.length)setRequirements(configured.map(x=>({...x,required:required.includes(x.code)})));
-   else if(legacy.length)setRequirements(legacy.filter(x=>x&&x.code&&x.label).map(x=>({code:String(x.code),label:String(x.label),required:x.required!==false})));
+   if(configured.length){const withOther=configured.some(x=>x.code==="OTHER")?configured:[...configured,{code:"OTHER",label:"Other Supporting Documents"}];setRequirements(withOther.map(x=>({...x,required:x.code==="OTHER"?false:required.includes(x.code)})));}
+   else if(legacy.length){const withOther=legacy.filter(x=>x&&x.code&&x.label).map(x=>({code:String(x.code),label:String(x.label),required:x.required!==false}));if(!withOther.some(x=>x.code==="OTHER"))withOther.push({code:"OTHER",label:"Other Supporting Documents",required:false});setRequirements(withOther);}
   }
   let q=supabase.from("dv_accounting_listing_submissions").select("*").order("created_at",{ascending:false});
   if(!isAdmin)q=q.eq("agent_id",agentId);
@@ -162,6 +162,17 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
   }catch(e){setError(e?.message||"Upload failed. Please try again.");}
   finally{setBusy(false);await loadDocs(listing.id);}
  }
+ async function saveDocumentName(doc){
+  const name=String(documentNameDraft||"").trim();
+  if(!name){setError("Enter a name for this document.");return}
+  if(!doc?.id)return;
+  setBusy(true);setError("");setMessage("");
+  const {data,error:e}=await supabase.from("dv_accounting_listing_documents").update({document_name:name}).eq("id",doc.id).select().single();
+  if(e){setError("Could not rename document: "+e.message);setBusy(false);return}
+  setDocs(old=>old.map(d=>d.id===doc.id?data:d));
+  if(previewDocument?.id===doc.id)setPreviewDocument(data);
+  setRenamingDocumentId(null);setDocumentNameDraft("");setMessage("Document name updated.");setBusy(false);
+ }
  async function adminUpdate(status){
   if(!selected?.id)return;
   if(["APPROVED","APPROVED_WITH_CHANGES"].includes(status)){const missing=requirements.filter(r=>r.required&&!docs.some(d=>d.document_type===r.code));if(missing.length){setError("Cannot approve until required listing documents are uploaded: "+missing.map(x=>x.label).join(", "));return}}
@@ -211,11 +222,11 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
       {docs.some(d=>d.document_type===selectedRequirementCode)&&<div className="listing-category-files" style={{marginTop:10,padding:10,border:"1px solid var(--border,#d0d5dd)",borderRadius:8}}>
        <strong style={{fontSize:12}}>Files in this category ({docs.filter(d=>d.document_type===selectedRequirementCode).length})</strong>
        <div style={{display:"grid",gap:6,marginTop:7}}>
-        {docs.filter(d=>d.document_type===selectedRequirementCode).map((d,index)=><div key={d.id} style={{display:"flex",alignItems:"center",gap:8,justifyContent:"space-between",padding:"7px 8px",borderRadius:6,background:previewDocument?.id===d.id?"var(--surface-alt,#f2f4f7)":"transparent",border:"1px solid var(--border,#e4e7ec)"}}>
-         <button type="button" onClick={()=>openDocument(d)} style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1,border:0,padding:0,background:"transparent",color:"var(--navy)",textAlign:"left",cursor:"pointer"}}>
-          <FileText size={15}/><span style={{minWidth:0,overflowWrap:"anywhere",fontSize:12}}>{d.document_name||("Document "+(index+1))}<small className="muted" style={{display:"block"}}>{d.created_at?new Date(d.created_at).toLocaleString():""}</small></span>
-         </button>
-         {canDeleteDocuments&&<button type="button" className="textbutton danger" disabled={busy} onClick={()=>deleteListingDocument(d)}><Trash2 size={13}/> Delete</button>}
+        {docs.filter(d=>d.document_type===selectedRequirementCode).map((d,index)=><div key={d.id} style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",alignItems:"center",gap:8,padding:"7px 8px",borderRadius:6,background:previewDocument?.id===d.id?"var(--surface-alt,#f2f4f7)":"transparent",border:"1px solid var(--border,#e4e7ec)"}}>
+         <div style={{minWidth:0}}>
+          {renamingDocumentId===d.id?<div style={{display:"flex",gap:6,alignItems:"center"}}><input aria-label="Document display name" style={{...fieldStyle,minWidth:0}} value={documentNameDraft} onChange={e=>setDocumentNameDraft(e.target.value)} maxLength={180} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();saveDocumentName(d)}if(e.key==="Escape"){setRenamingDocumentId(null);setDocumentNameDraft("")}}}/><button type="button" className="primary" disabled={busy||!documentNameDraft.trim()} onClick={()=>saveDocumentName(d)}>Save</button><button type="button" className="secondary" onClick={()=>{setRenamingDocumentId(null);setDocumentNameDraft("")}}>Cancel</button></div>:<button type="button" onClick={()=>openDocument(d)} style={{display:"flex",alignItems:"center",gap:7,minWidth:0,width:"100%",border:0,padding:0,background:"transparent",color:"var(--navy)",textAlign:"left",cursor:"pointer"}}><FileText size={15}/><span style={{minWidth:0,overflowWrap:"anywhere",fontSize:12}}>{d.document_name||("Document "+(index+1))}<small className="muted" style={{display:"block"}}>{d.created_at?new Date(d.created_at).toLocaleString():""}</small></span></button>}
+         </div>
+         <div style={{display:"flex",alignItems:"center",gap:6}}>{canUploadDocs&&renamingDocumentId!==d.id&&<button type="button" className="textbutton" disabled={busy} onClick={()=>{setRenamingDocumentId(d.id);setDocumentNameDraft(d.document_name||"")}}>Rename</button>}{canDeleteDocuments&&<button type="button" className="textbutton danger" disabled={busy} onClick={()=>deleteListingDocument(d)}><Trash2 size={13}/> Delete</button>}</div>
         </div>)}
        </div>
       </div>}
