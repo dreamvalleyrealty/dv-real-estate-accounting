@@ -13,7 +13,7 @@ import AccountingPeriods from "./AccountingPeriods";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
-const APP_VERSION = "0.6.222";
+const APP_VERSION = "0.6.223";
 const nav=[["Dashboard",LayoutDashboard,"dashboard.view"],["Transactions",ArrowLeftRight,"transactions.view"],["Trade Submissions",ClipboardCheck,"trade_submissions.view"],["Listings",FileText,"listings.view"],["Contacts",Users,"contacts.view"],["Banking & Reconciliation",Landmark,"banking.view"],["Expenses & A/P",ReceiptText,"expenses.view"],["Agents",Users,"agents.view"],["Agent Rankings",BarChart3,"agents.view"],["Agent Fees & Plans",ReceiptText,"fees.view"],["Commission Payroll",ReceiptText,"commission.view"],["Staff Payroll",Clock3,"staff.view"],["HST / Tax",Percent,"tax.view"],["Reports",BarChart3,"reports.view"],["Compliance & Month End",ClipboardCheck,"compliance.view"],["Recent Audit Log",ShieldCheck,"settings.view"],["Settings",Settings,"settings.view"]];
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
 const today=()=>new Date().toISOString().slice(0,10);
@@ -148,8 +148,7 @@ function Expenses({canApprove=false}){
     const{error:updateError}=await supabase.from("dv_accounting_expenses").update({invoice_storage_path:uploadedPath,invoice_file_name:invoiceFile.name,invoice_content_type:invoiceFile.type||null,invoice_uploaded_at:new Date().toISOString()}).eq("id",data.id);
     if(updateError){await supabase.storage.from("dv-vendor-invoices").remove([uploadedPath]);await supabase.from("dv_accounting_expenses").delete().eq("id",data.id);alert("Invoice metadata could not be saved; the expense was not posted. "+updateError.message);setSaving(false);return}
    }
-   const{error:pe}=await supabase.rpc("dv_accounting_post_expense",{p_expense_id:data.id});
-   if(pe){alert("Expense was saved but could not be posted to the ledger. Please review this record before retrying: "+pe.message);setSaving(false);await load();return}
+   // New vendor invoices must be approved before they are posted to the general ledger.
    setShow(false);setForm(empty);setInvoiceFile(null);await load();
   }else{setRows(x=>[{...payload,id:Date.now(),status:"POSTED",posted_at:new Date().toISOString(),invoice_file_name:invoiceFile?.name||null},...x]);setShow(false);setForm(empty);setInvoiceFile(null)}
   setSaving(false)
@@ -162,7 +161,18 @@ function Expenses({canApprove=false}){
  }
  const paidFor=row=>paymentRows.filter(p=>p.expense_id===row.id).reduce((sum,p)=>sum+Number(p.amount||0),0);
  const totalFor=row=>Number(row.amount||0)+Number(row.hst_amount||0);
- async function setApproval(row,status){if(!canApprove){alert("Only an authorized invoice approver can change approval status.");return}const{data:{user}}=await supabase.auth.getUser();const update={approval_status:status,approved_at:status==="APPROVED"?new Date().toISOString():null,approved_by:status==="APPROVED"?(user?.id||null):null};const{error}=await supabase.from("dv_accounting_expenses").update(update).eq("id",row.id);if(error)alert("Could not update invoice approval: "+error.message);else await load()}
+ async function setApproval(row,status){
+  if(!canApprove){alert("Only an authorized invoice approver can change approval status.");return}
+  const{data:{user}}=await supabase.auth.getUser();
+  const update={approval_status:status,approved_at:status==="APPROVED"?new Date().toISOString():null,approved_by:status==="APPROVED"?(user?.id||null):null};
+  const{error}=await supabase.from("dv_accounting_expenses").update(update).eq("id",row.id);
+  if(error){alert("Could not update invoice approval: "+error.message);return}
+  if(status==="APPROVED"&&!row.posted_at){
+   const{error:postError}=await supabase.rpc("dv_accounting_post_expense",{p_expense_id:row.id});
+   if(postError){alert("Invoice approval was saved, but ledger posting failed. Please review this invoice before retrying: "+postError.message);await load();return}
+  }
+  await load()
+ }
  async function pay(row){
   const remaining=Math.max(0,totalFor(row)-paidFor(row));
   const bankId=prompt("Enter the ID of the Operating bank account to pay from:");
