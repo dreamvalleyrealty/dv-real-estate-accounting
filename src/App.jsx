@@ -13,7 +13,7 @@ import AccountingPeriods from "./AccountingPeriods";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
-const APP_VERSION = "0.6.236";
+const APP_VERSION = "0.6.237";
 const nav=[["Dashboard",LayoutDashboard,"dashboard.view"],["Transactions",ArrowLeftRight,"transactions.view"],["Trade Submissions",ClipboardCheck,"trade_submissions.view"],["Listings",FileText,"listings.view"],["Contacts",Users,"contacts.view"],["Banking & Reconciliation",Landmark,"banking.view"],["Expenses & A/P",ReceiptText,"expenses.view"],["Agents",Users,"agents.view"],["Agent Rankings",BarChart3,"agents.view"],["Agent Fees & Plans",ReceiptText,"fees.view"],["Commission Payroll",ReceiptText,"commission.view"],["Staff Payroll",Clock3,"staff.view"],["HST / Tax",Percent,"tax.view"],["Reports",BarChart3,"reports.view"],["Compliance & Month End",ClipboardCheck,"compliance.view"],["Recent Audit Log",ShieldCheck,"settings.view"],["Settings",Settings,"settings.view"]];
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
 const today=()=>new Date().toISOString().slice(0,10);
@@ -195,7 +195,8 @@ function Expenses({canApprove=false}){
  function editInvoice(row){if(row.posted_at||paidFor(row)>0){alert("Posted or paid invoices cannot be edited directly. Use a reversal or adjustment to preserve the accounting audit trail.");return}setEditId(row.id);setApproveOnSave(false);setInvoiceFile(null);setForm({...empty,...row,invoice_total:totalFor(row).toFixed(2),hst_rate:String(row.hst_rate??13),bank_account_id:"",payment_status:"UNPAID"});setShow(true)}
  async function save(e){
   e.preventDefault();setSaving(true);
-  const{invoice_total,...invoiceFields}=form;const payload={...invoiceFields,invoice_number:form.invoice_number.trim()||null,due_date:form.due_date||null,amount:Number(form.amount||0),hst_amount:Number(form.hst_amount||0),hst_rate:Number(form.hst_rate||0),bank_account_id:null,payment_status:"UNPAID",approval_status:"PENDING",approved_at:null,approved_by:null};
+  const{invoice_total,...invoiceFields}=form;const payload={...invoiceFields,company_id:companies.rows[0]?.id||null,invoice_number:form.invoice_number.trim()||null,due_date:form.due_date||null,amount:Number(form.amount||0),hst_amount:Number(form.hst_amount||0),hst_rate:Number(form.hst_rate||0),bank_account_id:null,payment_status:"UNPAID",approval_status:"PENDING",approved_at:null,approved_by:null};
+  if(!payload.company_id){alert("No accounting company is configured. Open Settings → Company Profile and finish setting up the company before saving or posting invoices.");setSaving(false);return}
   if(Number(form.invoice_total||0)<=0||payload.amount<=0){alert("Enter an invoice total greater than zero.");setSaving(false);return}
   if(form.payment_status==="PAID"&&form.payment_source==="BANK"&&!form.bank_account_id){alert("Select an Operating bank account for payment.");setSaving(false);return}
   if(form.payment_status==="PAID"&&form.payment_source==="EMPLOYEE"&&!form.payment_employee_id){alert("Select the employee who paid the invoice.");setSaving(false);return}
