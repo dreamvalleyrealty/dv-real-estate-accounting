@@ -13,7 +13,7 @@ import AccountingPeriods from "./AccountingPeriods";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
-const APP_VERSION = "0.6.235";
+const APP_VERSION = "0.6.236";
 const nav=[["Dashboard",LayoutDashboard,"dashboard.view"],["Transactions",ArrowLeftRight,"transactions.view"],["Trade Submissions",ClipboardCheck,"trade_submissions.view"],["Listings",FileText,"listings.view"],["Contacts",Users,"contacts.view"],["Banking & Reconciliation",Landmark,"banking.view"],["Expenses & A/P",ReceiptText,"expenses.view"],["Agents",Users,"agents.view"],["Agent Rankings",BarChart3,"agents.view"],["Agent Fees & Plans",ReceiptText,"fees.view"],["Commission Payroll",ReceiptText,"commission.view"],["Staff Payroll",Clock3,"staff.view"],["HST / Tax",Percent,"tax.view"],["Reports",BarChart3,"reports.view"],["Compliance & Month End",ClipboardCheck,"compliance.view"],["Recent Audit Log",ShieldCheck,"settings.view"],["Settings",Settings,"settings.view"]];
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
 const today=()=>new Date().toISOString().slice(0,10);
@@ -208,7 +208,7 @@ function Expenses({canApprove=false}){
    if(!vendorName){alert("Enter or select a vendor name.");setSaving(false);return}
    const existingVendor=vendors.rows.find(v=>String(v.name||"").trim().toLowerCase()===vendorName.toLowerCase());
    if(!existingVendor){const{data:newVendor,error:vendorError}=await supabase.from("dv_accounting_vendors").insert([{name:vendorName,company_id:companies.rows[0]?.id||null,active:true}]).select().single();if(vendorError){alert("Could not add new vendor: "+vendorError.message);setSaving(false);return}vendors.setRows(list=>[newVendor,...list])}
-   const{data,error}=editId?await supabase.from("dv_accounting_expenses").update(payload).eq("id",editId).is("posted_at",null).select().single():await supabase.from("dv_accounting_expenses").insert([payload]).select().single();
+   const{payment_source:ignoredPaymentSource,payment_employee_id:ignoredPaymentEmployee,payment_payee_name:ignoredPaymentPayee,...dbPayload}=payload;const{data,error}=editId?await supabase.from("dv_accounting_expenses").update(dbPayload).eq("id",editId).is("posted_at",null).select().single():await supabase.from("dv_accounting_expenses").insert([dbPayload]).select().single();
    if(error){alert(error.message);setSaving(false);return}
    let uploadedPath=null;
    if(invoiceFile){
