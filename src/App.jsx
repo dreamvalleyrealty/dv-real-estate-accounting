@@ -15,7 +15,7 @@ import LegacyMigration from "./LegacyMigration";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
-const APP_VERSION = "0.6.295";
+const APP_VERSION = "0.6.296";
 const nav=[["Dashboard",LayoutDashboard,"dashboard.view"],["Transactions",ArrowLeftRight,"transactions.view"],["Trade Submissions",ClipboardCheck,"trade_submissions.view"],["Listings",FileText,"listings.view"],["Contacts",Users,"contacts.view"],["Banking & Reconciliation",Landmark,"banking.view"],["Expenses & A/P",ReceiptText,"expenses.view"],["Agents",Users,"agents.view"],["Agent Rankings",BarChart3,"agents.view"],["Agent Fees & Plans",ReceiptText,"fees.view"],["Commission Payroll",ReceiptText,"commission.view"],["Staff Payroll",Clock3,"staff.view"],["HST / Tax",Percent,"tax.view"],["Reports",BarChart3,"reports.view"],["Compliance & Month End",ClipboardCheck,"compliance.view"],["Recent Audit Log",ShieldCheck,"settings.view"],["Settings",Settings,"settings.view"],["Data Migration",Database,"settings.view"]];
 function formatPhoneNumber(value){const digits=String(value??"").replace(/\D/g,"");if(!digits)return "";const hasCountryCode=digits.length===11&&digits.startsWith("1");const national=(hasCountryCode?digits.slice(1):digits).slice(0,10);const a=national.slice(0,3),b=national.slice(3,6),c=national.slice(6,10);const local=a+(national.length>3?"-"+b:"")+(national.length>6?"-"+c:"");return national.length===10?"+1 "+a+"-"+b+"-"+c:local}
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -365,6 +365,13 @@ function Expenses({canApprove=false,permissions={},role="STAFF"}){
  function nextExpenseChequeNumber(bankId){const used=paymentRows.filter(p=>String(p.bank_account_id||"")===String(bankId||"")&&String(p.payment_method||"").toUpperCase()==="CHEQUE").map(p=>Number(p.cheque_number||p.reference)).filter(n=>Number.isFinite(n)&&n>0);return String(Math.max(0,...used)+1)}
  function pay(row){const remaining=Math.max(0,totalFor(row)-paidFor(row));const bankId=operatingBanks[0]?.id||"";setPaymentTarget(row);setPaymentForm({source:"BANK",bank_account_id:bankId,employee_id:"",payee_name:"",amount:remaining.toFixed(2),payment_date:today(),payment_method:"CHEQUE",cheque_number:nextExpenseChequeNumber(bankId),reference:""});}
 
+ function chequeAmountInWords(value){
+  const amount=Math.max(0,Number(value)||0),dollars=Math.floor(amount+0.000001),cents=Math.round((amount-dollars)*100);
+  const ones=["Zero","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"],tens=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+  const underThousand=n=>{let out=[];if(n>=100){out.push(ones[Math.floor(n/100)],"Hundred");n%=100}if(n>=20){out.push(tens[Math.floor(n/10)]);if(n%10)out.push(ones[n%10])}else if(n>0)out.push(ones[n]);return out.join(" ")};
+  const words=n=>{if(n===0)return "Zero";const parts=[];for(const [size,label] of [[1000000000,"Billion"],[1000000,"Million"],[1000,"Thousand"],[1,""]]){if(n>=size){const group=Math.floor(n/size);parts.push(underThousand(group)+(label?" "+label:""));n%=size}}return parts.join(" ")};
+  const roundedCents=Math.round(amount*100)%100;return words(dollars)+" "+(dollars===1?"Dollar":"Dollars")+" and "+words(roundedCents)+" "+(roundedCents===1?"Cent":"Cents")+" Only";
+ }
  function printExpenseCheque(payment,expense){
   if(String(payment.payment_method||"CHEQUE").toUpperCase()!=="CHEQUE"){alert("This payment is not recorded as a cheque.");return}
   const bank=banks.rows.find(b=>b.id===(payment.bank_account_id||payment.bank_id));
@@ -378,7 +385,7 @@ function Expenses({canApprove=false,permissions={},role="STAFF"}){
   const payee=payment.payee_name||expense.vendor||"";
   const note=expense.description||expense.invoice_number||"Vendor invoice";
   const w=Number(cfg.paperWidth)||8.5,h=Number(cfg.paperHeight)||11;
-  const fields=[["date",date,"date"],["amountNumeric",(cfg.displayOptions?.includeDollarSign==="Yes"?"$":"")+amount.toLocaleString("en-CA",{minimumFractionDigits:2,maximumFractionDigits:2}),"amount"],["amountWords",amount.toLocaleString("en-CA",{style:"currency",currency:"CAD"})+" only","words"],["payee",(cfg.displayOptions?.showPayToOrder==="Yes"?"TO THE ORDER OF: ":"")+payee,"payee"],["memo",(cfg.displayOptions?.customNote||"")+(note?"  "+note:""),"memo"],["chequeNumber",num,"number"]];
+  const fields=[["date",date,"date"],["amountNumeric",(cfg.displayOptions?.includeDollarSign==="Yes"?"$":"")+amount.toLocaleString("en-CA",{minimumFractionDigits:2,maximumFractionDigits:2}),"amount"],["amountWords",chequeAmountInWords(amount),"words"],["payee",(cfg.displayOptions?.showPayToOrder==="Yes"?"TO THE ORDER OF: ":"")+payee,"payee"],["memo",(cfg.displayOptions?.customNote||"")+(note?"  "+note:""),"memo"],["chequeNumber",num,"number"]];
   const html=fields.map(([key,value,cls])=>{const x=p(key,"x",0),y=p(key,"y",0);return '<div class="'+cls+'" style="left:'+x+'in;top:'+y+'in">'+esc(value).replace(/\n/g,"<br>")+'</div>'}).join("");
   const win=window.open("","_blank","width=900,height=700");if(!win){alert("Please allow pop-ups to print the cheque.");return}
   win.document.write('<!doctype html><html><head><title>Cheque '+esc(num)+'</title><style>@page{size:'+w+'in '+h+'in;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif}.cheque{position:relative;width:'+w+'in;height:'+h+'in;overflow:hidden}.cheque>div{position:absolute;font-size:11pt;white-space:pre-wrap}.amount{font-weight:bold}.words{width:5.5in}.payee{width:5in}.memo{font-size:9pt}</style></head><body><main class="cheque">'+html+'</main><script>window.onload=()=>{window.focus();window.print()}</script></body></html>');
