@@ -165,7 +165,7 @@ begin
     delete from public.dv_accounting_transaction_people where transaction_id=v_tx_id;
     delete from public.dv_accounting_commissions where transaction_id=v_tx_id;
 
-    delete from public.dv_accounting_agent_trade_submissions where transaction_id=v_tx_id and id=any(v_submission_ids) returning id into s.id;
+    delete from public.dv_accounting_agent_trade_submissions where transaction_id=v_tx_id and id=any(v_submission_ids);
     -- Also remove the requested pending submission if it was identified independently.
     if p_submission_id is not null then
       delete from public.dv_accounting_agent_trade_submissions where id=p_submission_id;
