@@ -13,7 +13,7 @@ function splitStreetAddress(address,streetNumber="",streetName=""){
  const number=String(streetNumber||"").trim(),name=String(streetName||"").trim();
  if(number||name)return {street_number:number,street_name:name};
  const raw=String(address||"").trim();
- const matched=raw.match(/^(\\d+[A-Za-z]?(?:[-/]\\d+[A-Za-z]?)?)\\s+(.+)$/);
+ const matched=raw.match(/^(\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?)\s+(.+)$/);
  return matched?{street_number:matched[1],street_name:matched[2]}:{street_number:"",street_name:raw};
 }
 const defaults=[{code:"LISTING_AGREEMENT",label:"Listing Agreement",required:true},{code:"MLS_DATA",label:"MLS Data / Listing Information",required:true},{code:"PROPERTY_DETAILS",label:"Property Details / Feature Sheet",required:true},{code:"SELLER_DIRECTION",label:"Seller Direction / Authorization",required:true},{code:"ID_FINTRAC",label:"Identification / FINTRAC",required:true},{code:"OTHER",label:"Other Supporting Documents",required:false}];
