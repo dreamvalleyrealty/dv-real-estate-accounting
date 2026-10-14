@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 function cleanMoney(value) {
-  let text = String(value ?? "").replace(/[,$\\s]/g, "").replace(/[^0-9.\\-]/g, "");
+  let text = String(value ?? "").replace(/[,$%\\s]/g, "").replace(/[^0-9.\\-]/g, "");
   const negative = text.startsWith("-");
   text = text.replace(/-/g, "");
   const point = text.indexOf(".");
@@ -42,6 +42,7 @@ export default function MoneyInput({
   style,
   className = "",
   prefix = "$",
+  suffix = "",
   ...inputProps
 }) {
   const inputRef = useRef(null);
