@@ -511,7 +511,38 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
   async function removeDocType(type){if(requiredTypes.includes(type)||Object.values(requirementsBySide||{}).some(v=>(v.types||[]).includes(type))){setError("Make this document optional for every representation side before removing it.");return}if(!window.confirm("Remove this document type from the list? Existing uploaded documents will not be deleted."))return;await saveDocTypes(docTypes.filter(([id])=>id!==type));}
  async function adminSaveTrade(e){e?.preventDefault();if(!adminMode||!selected?.id)return;setBusy(true);setError("");const payload={...form,side:normalizeRepresentationSide(form.side,form.transaction_type),sale_price:form.sale_price===""?null:Number(form.sale_price),gross_commission:form.gross_commission===""?null:Number(form.gross_commission)};const{data,error:e2}=await supabase.from("dv_accounting_agent_trade_submissions").update({payload,updated_at:new Date().toISOString()}).eq("id",selected.id).select().single();if(e2){setError(e2.message);setBusy(false);return}if(data.transaction_id){const txUpdate={transaction_number:payload.transaction_number||null,transaction_date:payload.transaction_date||null,property_address:payload.property_address||[payload.street_number,payload.street_name,payload.unit_number?("Unit "+payload.unit_number):"",payload.city,payload.province,payload.postal_code].filter(Boolean).join(", ")||"Address pending",client_name:[payload.buyer_name,payload.seller_name].filter(Boolean).join(" / "),side:payload.side||null,sale_price:payload.sale_price||0,gross_commission:payload.gross_commission||0};const{error:txError}=await supabase.from("dv_accounting_transactions").update(txUpdate).eq("id",data.transaction_id);if(txError){setError("Trade details saved, but the linked accounting transaction could not be synchronized: "+txError.message);setSelected(data);setSubmissions(old=>old.map(x=>x.id===data.id?data:x));setBusy(false);return}}setSelected(data);setSubmissions(old=>old.map(x=>x.id===data.id?data:x));setMessage("Trade details saved and the linked transaction synchronized.");setBusy(false);}
  async function adminDeleteTrade(){if(!adminMode||!selected?.id)return;await adminDeleteTrades([selected.id]);}
- async function adminDeleteTrades(ids){if(!adminMode||!ids.length||!supabase)return;const targets=submissions.filter(s=>ids.includes(s.id));if(!targets.length)return;const linked=targets.filter(s=>s.transaction_id);if(linked.length){setError("Trade submissions linked to accounting transactions are retained as permanent transaction history and cannot be deleted here. Open the transaction to access its archived files.");return;}if(!window.confirm("Permanently delete "+targets.length+" selected trade submission(s) and their attached documents? This cannot be undone."))return;setBusy(true);setError("");setMessage("");let deleted=0;for(const trade of targets){const{data:docRows,error:readError}=await supabase.from("dv_accounting_agent_trade_documents").select("id,storage_path").eq("submission_id",trade.id);if(readError){setError("Stopped after "+deleted+" deletion(s): could not load documents for "+(trade.payload?.property_address||trade.id)+": "+readError.message);break;}const paths=(docRows||[]).map(d=>d.storage_path).filter(Boolean);if(paths.length){const{error:storageError}=await supabase.storage.from("dv-trade-documents").remove(paths);if(storageError){setError("Stopped after "+deleted+" deletion(s): could not remove files for "+(trade.payload?.property_address||trade.id)+": "+storageError.message);break;}}const{error:docError}=await supabase.from("dv_accounting_agent_trade_documents").delete().eq("submission_id",trade.id);if(docError){setError("Stopped after "+deleted+" deletion(s): could not delete document records: "+docError.message);break;}const{data:deletedTrade,error:tradeError}=await supabase.from("dv_accounting_agent_trade_submissions").delete().eq("id",trade.id).select("id");if(tradeError){setError("Stopped after "+deleted+" deletion(s): could not delete trade "+(trade.payload?.property_address||trade.id)+": "+tradeError.message);break;}if(!deletedTrade||deletedTrade.length===0){setError("Supabase did not delete trade "+(trade.payload?.property_address||trade.id)+". This usually means a Row Level Security (RLS) DELETE policy is missing for Super Admin. No trade row was returned as deleted.");break;}deleted++;}setSelectedTradeIds([]);if(selected&&ids.includes(selected.id)){setSelected(null);setDocs([]);}setBusy(false);if(deleted)setMessage(deleted+" trade submission(s) deleted.");await load();}
+ async function adminDeleteTrades(ids){
+   if(!adminMode||!isSuperAdmin||!ids.length||!supabase)return;
+   const targets=submissions.filter(s=>ids.includes(s.id));
+   if(!targets.length)return;
+   if(!window.confirm("Permanently delete "+targets.length+" selected trade submission(s), attached documents, and any linked RETURNED transaction? This is allowed only when no posted trust activity, reconciled bank entry, accounting journal, or paid commission is linked. This cannot be undone."))return;
+   setBusy(true);setError("");setMessage("");
+   let deleted=0;let storageWarning="";
+   for(const trade of targets){
+     const{data:docRows,error:readError}=await supabase.from("dv_accounting_agent_trade_documents").select("storage_path").eq("submission_id",trade.id);
+     if(readError){setError("Stopped after "+deleted+" deletion(s): could not load documents for "+(trade.payload?.property_address||trade.id)+": "+readError.message);break;}
+     const paths=(docRows||[]).map(d=>d.storage_path).filter(Boolean);
+     if(trade.transaction_id){
+       const{data:archiveRows,error:archiveError}=await supabase.from("dv_accounting_transaction_documents").select("storage_path").eq("transaction_id",trade.transaction_id);
+       if(archiveError){setError("Stopped after "+deleted+" deletion(s): could not load archived files: "+archiveError.message);break;}
+       paths.push(...(archiveRows||[]).map(d=>d.storage_path).filter(Boolean));
+     }
+     const{error:deleteError}=await supabase.rpc("dv_accounting_delete_trade_record",{p_transaction_id:null,p_submission_id:trade.id});
+     if(deleteError){setError("Stopped after "+deleted+" deletion(s): could not delete "+(trade.payload?.property_address||trade.id)+": "+deleteError.message);break;}
+     const uniquePaths=[...new Set(paths)];
+     if(uniquePaths.length){
+       const{error:storageError}=await supabase.storage.from("dv-trade-documents").remove(uniquePaths);
+       if(storageError)storageWarning="Database records were deleted, but some stored document files could not be removed: "+storageError.message;
+     }
+     deleted++;
+   }
+   setSelectedTradeIds([]);
+   if(selected&&ids.includes(selected.id)){setSelected(null);setDocs([]);}
+   setBusy(false);
+   if(deleted)setMessage(deleted+" trade submission(s) deleted"+(storageWarning?" (some stored files may remain in storage).":"."));
+   await load();
+   if(storageWarning)setError(storageWarning);
+ }
 
  return <div className="agent-trade-portal">
    <style>{`
