@@ -149,6 +149,7 @@ export default function MoneyInput({
           appearance: "textfield"
         }}
       />
+      {suffix && <span className="money-input-suffix" aria-hidden="true" style={{ flex: "0 0 auto", fontWeight: 650 }}>{suffix}</span>}
     </div>
   );
 }
