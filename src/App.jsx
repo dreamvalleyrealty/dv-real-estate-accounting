@@ -365,7 +365,7 @@ function Expenses({canApprove=false,permissions={},role="STAFF"}){
  function pay(row){const remaining=Math.max(0,totalFor(row)-paidFor(row));const bankId=operatingBanks[0]?.id||"";setPaymentTarget(row);setPaymentForm({source:"BANK",bank_account_id:bankId,employee_id:"",payee_name:"",amount:remaining.toFixed(2),payment_date:today(),payment_method:"CHEQUE",cheque_number:nextExpenseChequeNumber(bankId),reference:""});}
 
  function printExpenseCheque(payment,expense){
-  if(String(payment.payment_method||"").toUpperCase()!=="CHEQUE"){alert("This payment is not recorded as a cheque.");return}
+  if(String(payment.payment_method||"CHEQUE").toUpperCase()!=="CHEQUE"){alert("This payment is not recorded as a cheque.");return}
   const bank=banks.rows.find(b=>b.id===(payment.bank_account_id||payment.bank_id));
   const company=companies.rows.find(c=>c.id===(expense.company_id||companies.rows[0]?.id))||companies.rows[0]||{};
   const saved=accountingSettings.rows.find(x=>x.key==="CHEQUE_PRINTING_SETUP")?.value;
