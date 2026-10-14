@@ -7,7 +7,7 @@ import AgentSearchSelect from "./AgentSearchSelect";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 function useAutoRefresh(load,enabled=true){const loadRef=useRef(load);const running=useRef(false);loadRef.current=load;useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>{if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;if(running.current)return;running.current=true;Promise.resolve().then(()=>loadRef.current()).catch(()=>{}).finally(()=>{running.current=false})},30000);return()=>clearInterval(timer)},[enabled])}
-const AGENT_PORTAL_VERSION = "0.6.284";
+const AGENT_PORTAL_VERSION = "0.6.285";
 
 const localDateISO = (date=new Date()) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
 
