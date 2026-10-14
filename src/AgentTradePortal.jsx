@@ -7,7 +7,7 @@ import AgentSearchSelect from "./AgentSearchSelect";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 function useAutoRefresh(load,enabled=true){const loadRef=useRef(load);const running=useRef(false);loadRef.current=load;useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>{if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;if(running.current)return;running.current=true;Promise.resolve().then(()=>loadRef.current()).catch(()=>{}).finally(()=>{running.current=false})},30000);return()=>clearInterval(timer)},[enabled])}
-const AGENT_PORTAL_VERSION = "0.6.283";
+const AGENT_PORTAL_VERSION = "0.6.284";
 
 const localDateISO = (date=new Date()) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
 
@@ -465,14 +465,14 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  async function returnTransfer(){
    if(!adminMode||!selected?.id||selected.status!=="APPROVED")return;
    const confirmed=window.confirm(
-     "Return this approved trade to the review queue? The linked transaction must still be a DRAFT with no posted trust activity or paid/posted commission. The prior draft, its details, and its archived documents will be preserved as RETURNED history. The trade will become unapproved so you can edit and approve it again."
+     "Return this approved trade to the review queue? The linked transaction must still be a DRAFT and have no paid/posted commission. Trust deposits, liabilities, transaction details, and archived documents remain intact on the same transaction ID. The trade will become unapproved so you can edit and approve it again."
    );
    if(!confirmed)return;
    setBusy(true);setError("");setMessage("");
    try{
      const {data,error:e}=await supabase.rpc("dv_accounting_return_agent_trade_transfer",{p_submission_id:selected.id});
      if(e)throw e;
-     const returned={...selected,status:data?.status||"SUBMITTED",transaction_id:null,review_notes:data?.review_notes||selected.review_notes};
+     const returned={...selected,status:data?.status||"SUBMITTED",transaction_id:data?.transaction_id??selected.transaction_id??null,review_notes:data?.review_notes||selected.review_notes};
      setSelected(returned);
      setSubmissions(old=>old.map(row=>row.id===returned.id?returned:row));
      setReviewNotes(returned.review_notes||"");
@@ -586,7 +586,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
          {!adminMode&&selected.status!=="DRAFT"&&selected.status!=="NEEDS_CHANGES"&&form.transaction_type!=="LEASE"&&(()=>{const close=form.close_date||selected.payload?.close_date;const deadline=close?new Date(close+"T12:00:00"):null;if(deadline)deadline.setDate(deadline.getDate()-14);const isOpen=deadline&&new Date(new Date().toDateString())<=new Date(deadline.toDateString());const missingLawyers=lawyerKeys.some(k=>!String(form[k]||"").trim());return <section style={{marginTop:18,padding:14,border:"1px solid #d0d5dd",borderRadius:10,background:"#fbfcfe"}}><h3 style={{margin:"0 0 6px"}}>Lawyer information</h3><p className="agent-trade-muted">Lawyer details may be added after trade submission, but must be completed at least 14 calendar days before closing{close?" (deadline: "+displayDate(deadline.toISOString().slice(0,10))+")":"."}.</p>{isOpen?<form onSubmit={saveLawyerDetails}><h4 style={{margin:"12px 0 6px"}}>Seller’s lawyer</h4><div className="agent-trade-grid">{inputFields.filter(([key])=>key.startsWith("seller_lawyer_")).map(([key,label])=><Field key={key} label={label}>{key==="seller_lawyer_name"?<input list="dv-lawyer-options" value={form[key]||""} onChange={e=>{setForm(v=>({...v,[key]:e.target.value}));fillLawyer("seller",e.target.value)}}/>:key==="seller_lawyer_firm"?<input list="dv-lawfirm-options" value={form[key]||""} onChange={e=>{setForm(v=>({...v,[key]:e.target.value}));fillLawFirm("seller",e.target.value)}}/>:<input value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>}</Field>)}</div><h4 style={{margin:"16px 0 6px"}}>Buyer’s lawyer</h4><div className="agent-trade-grid">{inputFields.filter(([key])=>key.startsWith("buyer_lawyer_")).map(([key,label])=><Field key={key} label={label}>{key==="buyer_lawyer_name"?<input list="dv-lawyer-options" value={form[key]||""} onChange={e=>{setForm(v=>({...v,[key]:e.target.value}));fillLawyer("buyer",e.target.value)}}/>:key==="buyer_lawyer_firm"?<input list="dv-lawfirm-options" value={form[key]||""} onChange={e=>{setForm(v=>({...v,[key]:e.target.value}));fillLawFirm("buyer",e.target.value)}}/>:<input value={form[key]||""} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/>}</Field>)}</div><button className="primary" type="submit" disabled={busy} style={{marginTop:12}}>Save Lawyer Information</button></form>:<div className={missingLawyers?"agent-trade-alert":"agent-trade-success"}>{missingLawyers?"The 14-day lawyer-information deadline has passed. Contact the Trade Admin Manager to update the record.":"Lawyer information is recorded."}</div>}</section>})()}
          {adminMode&&selected.status==="APPROVED"&&<section style={{marginTop:14,padding:14,border:"1px solid #fdb022",borderRadius:8,background:"#fffcf5"}}>
            <h3 style={{margin:"0 0 6px",fontSize:14,color:"#93370d"}}>Return transfer &amp; unapprove</h3>
-           <p className="agent-trade-muted" style={{margin:"0 0 10px"}}>Return the trade to the review queue so you can edit it and approve it again. The previous draft and archived documents stay in history as RETURNED; posted trust activity or paid/posted commissions must be reversed first.</p>
+           <p className="agent-trade-muted" style={{margin:"0 0 10px"}}>Return the trade to the review queue so you can edit it and approve it again. The previous draft and archived documents stay in history as RETURNED. Trust deposits and liabilities remain linked to the same transaction, which is reused after reapproval. Paid commissions or linked commission charges, cheques, or corrections must be handled first.</p>
            <button className="secondary" type="button" disabled={busy} onClick={returnTransfer}><RefreshCw size={15}/>{busy?"Returning transfer…":"Return Transfer & Unapprove"}</button>
          </section>}
          {selected.status==="APPROVED"&&<div className="agent-trade-success" style={{marginTop:14}}>This trade was approved and transferred to the Transactions workflow. Transaction ID: {selected.transaction_id||"—"}</div>}
