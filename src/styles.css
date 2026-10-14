@@ -479,3 +479,12 @@ main:has(.content.trade-submissions-fullwidth){width:calc(100% - 276px);max-widt
 .content.trade-submissions-fullwidth .agent-trade-layout>section{width:100%;max-width:none;min-width:0;box-sizing:border-box}
 .content.trade-submissions-fullwidth .agent-trade-queue-list,.content.trade-submissions-fullwidth .agent-trade-queue-row,.content.trade-submissions-fullwidth .agent-trade-queue-card{width:100%;max-width:none;min-width:0;box-sizing:border-box}
 @media(max-width:760px){main:has(.content.trade-submissions-fullwidth){width:100%}.content.trade-submissions-fullwidth{padding:18px 10px 30px}}
+
+
+/* Currency inputs show a dollar prefix and consistently format amounts to two decimals. */
+.money-input-wrap{display:flex;align-items:center;gap:4px;box-sizing:border-box;width:100%;min-width:0;color:#101828;font:inherit;background:#fff;border:1px solid #d0d5dd;border-radius:8px;padding:7px 10px;min-height:38px}
+.money-input-wrap:focus-within{border-color:#9e8556;box-shadow:0 0 0 2px rgba(158,133,86,.14)}
+.money-input-wrap .money-input-prefix{color:#667085;user-select:none}
+.money-input-wrap input{min-width:0}
+.money-input-wrap:has(input:disabled){background:#f2f4f7}
+.agent-trade-field .money-input-wrap{min-height:32px;border-radius:6px;padding:6px 8px;font:inherit}
