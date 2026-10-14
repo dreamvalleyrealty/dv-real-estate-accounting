@@ -99,6 +99,7 @@ export default function MoneyInput({
       <input
         {...inputProps}
         ref={inputRef}
+        className="money-input-control"
         type="text"
         inputMode="decimal"
         value={focused ? draft : displayMoney(value)}
