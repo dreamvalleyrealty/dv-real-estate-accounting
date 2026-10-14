@@ -186,6 +186,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      const {data,error:e}=await supabase.from("dv_accounting_agent_trade_submissions").insert([{agent_id:targetAgentId,submitted_by:user.id,payload,status:submit?"SUBMITTED":"DRAFT",submitted_at:submit?new Date().toISOString():null}]).select().single();
      if(e){setError(e.message);setBusy(false);return}row=data;
    }
+   for(const [partyList,contactType] of [[payload.buyers||[],"BUYER"],[payload.sellers||[],"SELLER"]]){for(const person of partyList){const first_name=String(person.first_name||"").trim(),last_name=String(person.last_name||"").trim();if(!first_name&&!last_name)continue;const full=[first_name,last_name].filter(Boolean).join(" ").toLowerCase();if(contactDirectory.some(c=>String(c.contact_type||"").toUpperCase()===contactType&&contactName(c).toLowerCase()===full))continue;const{data:contact,error:contactError}=await supabase.from("dv_accounting_contacts").insert([{first_name,last_name,contact_type:contactType}]).select().single();if(!contactError&&contact)setContactDirectory(old=>[...old,contact]);}}
    setSelected(row);setAgentCreating(false);if(adminMode&&submit)setAdminCreating(false);setSubmissions(old=>[row,...old.filter(x=>x.id!==row.id)]);
    setMessage(submit?"Trade submitted to the Trade Admin Manager for review.":(form.property_address.trim()?"Draft saved.":"Draft created. Upload your documents first; extracted details will appear here for you to review."));
    setBusy(false);await loadDocs(row.id);await load();
