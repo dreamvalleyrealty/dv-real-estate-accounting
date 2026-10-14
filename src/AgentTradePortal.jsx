@@ -61,6 +61,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  const [selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[file,setFile]=useState(null),[files,setFiles]=useState([]),[docType,setDocType]=useState("APS"),[extractBusy,setExtractBusy]=useState(false),[extractedPreview,setExtractedPreview]=useState(null);
  const [bulkFile,setBulkFile]=useState(null),[bulkGroups,setBulkGroups]=useState([]),[bulkBusy,setBulkBusy]=useState(false),[bulkOriginal,setBulkOriginal]=useState(true);
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[reviewNotes,setReviewNotes]=useState("");
+ const draftWriteLock=useRef(false);
  const [previewUrl,setPreviewUrl]=useState(""),[previewDoc,setPreviewDoc]=useState(null);
  const [filter,setFilter]=useState("ALL"),[submissionSearch,setSubmissionSearch]=useState("");
  const [inlinePreviewUrl,setInlinePreviewUrl]=useState("");const [inlinePreviewDoc,setInlinePreviewDoc]=useState(null);
@@ -177,29 +178,31 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      if(missing.length){setError("Upload the required documents before submitting: "+missing.join(", ")+".");return}
    }
    if(submit&&!adminMode&&(![form.street_number,form.street_name,form.city,form.province,form.postal_code].some(v=>String(v||"").trim())||!form.close_date||!form.transaction_type)){setError("Before submitting, confirm the property address, transaction type and closing date.");return}
+   if(draftWriteLock.current)return;draftWriteLock.current=true;
    setBusy(true);setError("");setMessage("");
    const isCoopSide=["BUYER","TENANT"].includes(normalizeRepresentationSide(form.side,form.transaction_type));const coopCommission=form.commission_basis==="AMOUNT"?Number(form.coop_commission_amount||0):Number(form.sale_price||0)*Number(form.coop_commission_percent||0)/100;const listingCommission=form.commission_basis==="AMOUNT"?Number(form.listing_commission_amount||0):Number(form.sale_price||0)*Number(form.listing_commission_percent||0)/100;const computedCommission=isCoopSide?coopCommission:(coopCommission+listingCommission);const payload={...form,side:normalizeRepresentationSide(form.side,form.transaction_type),buyers:(form.buyers||[]).filter(p=>p.first_name||p.last_name),sellers:(form.sellers||[]).filter(p=>p.first_name||p.last_name),buyer_name:(form.buyers||[]).filter(p=>p.first_name||p.last_name).map(p=>[p.first_name,p.last_name].filter(Boolean).join(" ")).join("; "),seller_name:(form.sellers||[]).filter(p=>p.first_name||p.last_name).map(p=>[p.first_name,p.last_name].filter(Boolean).join(" ")).join("; "),conditions:(form.conditions||[]),listing_commission_amount:isCoopSide?null:(form.commission_basis==="AMOUNT"?Number(form.listing_commission_amount||0):listingCommission),coop_commission_amount:form.commission_basis==="AMOUNT"?Number(form.coop_commission_amount||0):coopCommission,property_address:[form.street_number,form.street_name,form.unit_number?("Unit "+form.unit_number):"",form.city,form.province,form.postal_code].filter(Boolean).join(", "),sale_price:form.sale_price===""?null:Number(form.sale_price),gross_commission:computedCommission||null};
    let row=selected;
    if(row?.id){
      const {data,error:e}=await supabase.from("dv_accounting_agent_trade_submissions").update({payload,status:submit?"SUBMITTED":row.status==="NEEDS_CHANGES"?"NEEDS_CHANGES":row.status,submitted_at:submit?new Date().toISOString():row.submitted_at,updated_at:new Date().toISOString()}).eq("id",row.id).select().single();
-     if(e){setError(e.message);setBusy(false);return}row=data;
+     if(e){setError(e.message);setBusy(false);draftWriteLock.current=false;return}row=data;
    }else{
      const {data,error:e}=await supabase.from("dv_accounting_agent_trade_submissions").insert([{agent_id:targetAgentId,submitted_by:user.id,payload,status:submit?"SUBMITTED":"DRAFT",submitted_at:submit?new Date().toISOString():null}]).select().single();
-     if(e){setError(e.message);setBusy(false);return}row=data;
+     if(e){setError(e.message);setBusy(false);draftWriteLock.current=false;return}row=data;
    }
    for(const [partyList,contactType] of [[payload.buyers||[],"BUYER"],[payload.sellers||[],"SELLER"]]){for(const person of partyList){const first_name=String(person.first_name||"").trim(),last_name=String(person.last_name||"").trim();if(!first_name&&!last_name)continue;const full=[first_name,last_name].filter(Boolean).join(" ").toLowerCase();if(contactDirectory.some(c=>String(c.contact_type||"").toUpperCase()===contactType&&contactName(c).toLowerCase()===full))continue;const{data:contact,error:contactError}=await supabase.from("dv_accounting_contacts").insert([{first_name,last_name,contact_type:contactType}]).select().single();if(!contactError&&contact)setContactDirectory(old=>[...old,contact]);}}
    setSelected(row);setAgentCreating(false);if(adminMode&&submit)setAdminCreating(false);setSubmissions(old=>[row,...old.filter(x=>x.id!==row.id)]);
    setMessage(submit?"Trade submitted to the Trade Admin Manager for review.":(form.property_address.trim()?"Draft saved.":"Draft created. Upload your documents first; extracted details will appear here for you to review."));
-   setBusy(false);await loadDocs(row.id);await load();return row;
+   setBusy(false);draftWriteLock.current=false;await loadDocs(row.id);await load();return row;
  }
  async function ensureDraftForUpload(){
    if(selected?.id)return selected;
    const targetAgentId=adminMode?selectedAgentId:agentId;
    if(!supabase||!targetAgentId){setError(adminMode?"Select the agent this trade belongs to.":"Your login is not linked to an active Dream Valley agent record. Ask the administrator to link your login email to your agent profile.");return null}
+   if(draftWriteLock.current){setError("A trade save is already in progress. Please wait a moment and try again.");return null}draftWriteLock.current=true;
    setBusy(true);setError("");
    const {data,error:e}=await supabase.from("dv_accounting_agent_trade_submissions").insert([{agent_id:targetAgentId,submitted_by:user.id,payload:{...form},status:"DRAFT"}]).select().single();
-   if(e){setError(e.message);setBusy(false);return null}
-   setSelected(data);setAgentCreating(false);if(adminMode)setAdminCreating(false);setForm(old=>({...blank,...old,...(data.payload||{})}));setSubmissions(old=>[data,...old.filter(x=>x.id!==data.id)]);setBusy(false);return data;
+   if(e){setError(e.message);setBusy(false);draftWriteLock.current=false;return null}
+   setSelected(data);setAgentCreating(false);if(adminMode)setAdminCreating(false);setForm(old=>({...blank,...old,...(data.payload||{})}));setSubmissions(old=>[data,...old.filter(x=>x.id!==data.id)]);setBusy(false);draftWriteLock.current=false;return data;
  }
  const lawyerKeys=["seller_lawyer_name","seller_lawyer_firm","seller_lawyer_address","seller_lawyer_phone","seller_lawyer_fax","seller_lawyer_email","buyer_lawyer_name","buyer_lawyer_firm","buyer_lawyer_address","buyer_lawyer_phone","buyer_lawyer_fax","buyer_lawyer_email"];
  async function saveLawyerDetails(e){e?.preventDefault();if(!selected?.id||!supabase)return;const close=form.close_date||selected.payload?.close_date;if(!close){setError("Add the closing date before saving lawyer information.");return}const deadline=new Date(close+"T12:00:00");deadline.setDate(deadline.getDate()-14);if(new Date(new Date().toDateString())>new Date(deadline.toDateString())){setError("Lawyer information must be completed no later than 14 calendar days before closing. The deadline for this trade has passed.");return}setBusy(true);setError("");setMessage("");const payload={...(selected.payload||{}),...Object.fromEntries(lawyerKeys.map(k=>[k,form[k]||""]))};const{data,error:e2}=await supabase.from("dv_accounting_agent_trade_submissions").update({payload,updated_at:new Date().toISOString()}).eq("id",selected.id).select().single();if(e2){setError(e2.message);setBusy(false);return}setSelected(data);setSubmissions(old=>old.map(x=>x.id===data.id?data:x));setForm({...blank,...(data.payload||{})});setMessage("Lawyer information saved.");setBusy(false);}
