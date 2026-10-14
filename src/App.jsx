@@ -15,7 +15,7 @@ import LegacyMigration from "./LegacyMigration";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import{calculateOntarioPayroll,PAY_PERIODS}from"./payroll/ontario2026";
 
-const APP_VERSION = "0.6.320";
+const APP_VERSION = "0.6.321";
 const nav=[["Dashboard",LayoutDashboard,"dashboard.view"],["Transactions",ArrowLeftRight,"transactions.view"],["Trade Submissions",ClipboardCheck,"trade_submissions.view"],["Listings",FileText,"listings.view"],["Contacts",Users,"contacts.view"],["Banking & Reconciliation",Landmark,"banking.view"],["Expenses & A/P",ReceiptText,"expenses.view"],["Agents",Users,"agents.view"],["Agent Rankings",BarChart3,"agents.view"],["Agent Fees & Plans",ReceiptText,"fees.view"],["Commission Payroll",ReceiptText,"commission.view"],["Staff Payroll",Clock3,"staff.view"],["HST / Tax",Percent,"tax.view"],["Reports",BarChart3,"reports.view"],["Compliance & Month End",ClipboardCheck,"compliance.view"],["Recent Audit Log",ShieldCheck,"settings.view"],["Settings",Settings,"settings.view"],["Data Migration",Database,"settings.view"]];
 function formatPhoneNumber(value){const digits=String(value??"").replace(/\D/g,"");if(!digits)return "";const hasCountryCode=digits.length===11&&digits.startsWith("1");const national=(hasCountryCode?digits.slice(1):digits).slice(0,10);const a=national.slice(0,3),b=national.slice(3,6),c=national.slice(6,10);const local=a+(national.length>3?"-"+b:"")+(national.length>6?"-"+c:"");return national.length===10?"+1 "+a+"-"+b+"-"+c:local}
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
@@ -835,7 +835,7 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,trustTran
   const date=dateLabel(payDate);
   const amountText="***"+Number(amount).toLocaleString("en-CA",{minimumFractionDigits:2,maximumFractionDigits:2});
   const licenseExpiry=agent?.reco_license_expiry?Math.ceil((new Date(agent.reco_license_expiry+"T12:00:00")-new Date(today()+"T12:00:00"))/86400000):null;
-  const licenseNotice=licenseExpiry!==null&&licenseExpiry>=0&&licenseExpiry<=30?("Your real estate license "+(licenseExpiry===0?"expires today":("renews in "+licenseExpiry+" day"+(licenseExpiry===1?"":"s"))):"");
+  const licenseNotice=licenseExpiry!==null&&licenseExpiry>=0&&licenseExpiry<=30?(licenseExpiry===0?"Your real estate license expires today":"Your real estate license renews in "+licenseExpiry+" day"+(licenseExpiry===1?"":"s")):"";
   const chequeFace= `<section class="chequeface">
     <div class="chequeNo">Cheque No. ${method==="CHEQUE"?escapeHtml(reference):""}</div>
     <div class="company">Dream Valley Realty Inc.</div>
