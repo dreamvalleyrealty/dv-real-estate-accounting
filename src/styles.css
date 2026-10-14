@@ -643,3 +643,12 @@ main:has(.content.trade-submissions-fullwidth){width:calc(100% - 276px);max-widt
 .cheque-preview{position:relative;width:100%;max-width:620px;border:1px dashed #9e8556;background-image:linear-gradient(#9e855622 1px,transparent 1px),linear-gradient(90deg,#9e855622 1px,transparent 1px);background-size:0.5in 0.5in;overflow:hidden}
 .cheque-preview-bank{position:absolute;left:8%;top:5%;font-size:11px}
 @media(max-width:760px){.cheque-format-top{grid-template-columns:repeat(2,minmax(0,1fr))}.cheque-format-body{grid-template-columns:minmax(0,1fr)}.cheque-format-actions{border-left:0;border-top:1px solid #e0e5eb;padding:12px 0 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.cheque-position-head,.cheque-position-row{grid-template-columns:minmax(110px,1fr) minmax(58px,70px) minmax(60px,75px);gap:5px}}
+
+/* Keep agent profile content reachable inside the fixed-height modal. */
+.agent-profile-content{overscroll-behavior:contain;scrollbar-gutter:stable;min-height:0!important;max-height:100%;overflow-y:auto!important;overflow-x:hidden!important}
+.agent-profile-content .personnel-files{min-height:0;overflow:visible}
+.agent-profile-content .personnel-doc-list{max-width:100%;overflow:visible}
+.agent-profile-content .personnel-doc-row{min-width:0;flex-wrap:wrap}
+.agent-profile-content .personnel-doc-main{min-width:160px}
+.agent-profile-content .personnel-doc-actions{flex-wrap:wrap}
+@media(max-width:700px){.agent-profile-content{padding:8px!important}.agent-profile-content .personnel-files{padding:10px!important}.agent-profile-content .personnel-upload{grid-template-columns:minmax(0,1fr)}.agent-profile-content .personnel-upload-fields{grid-template-columns:minmax(0,1fr)}}
