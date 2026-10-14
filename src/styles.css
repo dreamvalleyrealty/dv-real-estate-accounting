@@ -93,11 +93,11 @@ main{margin-left:276px;width:calc(100% - 276px);min-width:0}.top{height:76px;bac
 
 
 /* Agent profile + personnel documents v0.6.77 */
-.agent-profile-tabs{display:flex;gap:8px;overflow-x:auto;padding:4px;border:1px solid #e3e7ee;background:#f6f7fa;border-radius:12px;margin:0 0 18px;scrollbar-width:thin}
-.agent-profile-tab{flex:1;min-width:150px;display:flex;align-items:center;justify-content:center;gap:9px;border:0;background:transparent;color:#59667a;border-radius:9px;padding:11px 12px;cursor:pointer;text-align:left;transition:.15s ease}
+.agent-profile-tabs{display:flex;flex-wrap:wrap;gap:6px;overflow:visible;min-width:0;width:100%;box-sizing:border-box;padding:4px;border:1px solid #e3e7ee;background:#f6f7fa;border-radius:12px;margin:0 0 18px}
+.agent-profile-tab{flex:1 1 120px;min-width:0;max-width:100%;display:flex;align-items:center;justify-content:center;gap:6px;border:0;background:transparent;color:#59667a;border-radius:9px;padding:clamp(6px, .7vw, 11px) clamp(4px, .7vw, 12px);cursor:pointer;text-align:center;white-space:normal;transition:.15s ease}
 .agent-profile-tab:hover{background:#fff;color:var(--navy)}
 .agent-profile-tab span{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#e7eaf0;color:#647087;font-size:10px;font-weight:800}
-.agent-profile-tab strong{font-size:11px;white-space:nowrap}
+.agent-profile-tab strong{font-size:clamp(9px, .75vw, 11px);white-space:normal;overflow-wrap:anywhere}
 .agent-profile-tab.active{background:var(--navy);color:#fff;box-shadow:0 2px 7px #0f214122}
 .agent-profile-tab.active span{background:var(--gold);color:#fff}
 .personnel-files{margin-top:12px!important;padding:18px!important}
@@ -619,3 +619,7 @@ main:has(.content.trade-submissions-fullwidth){width:calc(100% - 276px);max-widt
 .trade-submission-search .search svg,.listing-search-toolbar .search svg{width:15px;height:15px;flex:0 0 15px}
 .trade-submission-search>button{height:34px;min-height:34px;padding:0 11px;font-size:11px;white-space:nowrap}
 @media(max-width:600px){.trade-submission-search .search,.listing-search-toolbar .search{flex:1 1 100%;width:100%;max-width:none;min-width:0}}
+
+/* Responsive agent edit tabs: wrap to the available modal width without horizontal scrolling. */
+.agent-edit-tabs{display:flex;flex-wrap:wrap;gap:6px;min-width:0;width:100%;}
+.agent-edit-tabs button{flex:1 1 110px;min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;font-size:clamp(10px, .8vw, 13px);padding:8px 6px;}
