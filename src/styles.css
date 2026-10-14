@@ -652,3 +652,11 @@ main:has(.content.trade-submissions-fullwidth){width:calc(100% - 276px);max-widt
 .agent-profile-content .personnel-doc-main{min-width:160px}
 .agent-profile-content .personnel-doc-actions{flex-wrap:wrap}
 @media(max-width:700px){.agent-profile-content{padding:8px!important}.agent-profile-content .personnel-files{padding:10px!important}.agent-profile-content .personnel-upload{grid-template-columns:minmax(0,1fr)}.agent-profile-content .personnel-upload-fields{grid-template-columns:minmax(0,1fr)}}
+
+/* Edit Agent modal: keep tabs visible and scroll the active form content. */
+.modal:has(.agent-edit-form){min-height:0}
+.modal:has(.agent-edit-form) .agent-edit-form{min-height:0!important;max-height:100%;overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:contain;scrollbar-gutter:stable;padding:14px 20px 20px!important}
+.modal:has(.agent-edit-form) .agent-edit-tabs{position:sticky;top:0;z-index:5;background:#fff;padding-top:4px;padding-bottom:10px;flex:0 0 auto}
+.modal:has(.agent-edit-form) .agent-edit-form>.formgrid,.modal:has(.agent-edit-form) .agent-edit-form>section,.modal:has(.agent-edit-form) .agent-edit-form>.panel{flex:0 0 auto;min-width:0}
+.modal:has(.agent-edit-form) .agent-edit-form>.modalactions{position:sticky;bottom:-20px;z-index:4;background:rgba(255,255,255,.97);padding:12px 0 max(8px,env(safe-area-inset-bottom));border-top:1px solid #e6e9ee;flex:0 0 auto}
+@media(max-width:700px){.modal:has(.agent-edit-form) .agent-edit-form{padding:10px!important}.modal:has(.agent-edit-form) .agent-edit-tabs{gap:5px}}
