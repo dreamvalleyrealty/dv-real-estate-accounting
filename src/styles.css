@@ -610,3 +610,12 @@ main:has(.content.trade-submissions-fullwidth){width:calc(100% - 276px);max-widt
 .transaction-toolbar>button.secondary{height:34px;min-height:34px;flex:0 0 auto;justify-content:center;padding:0 11px;font-size:11px;line-height:1;white-space:nowrap}
 .transaction-toolbar>button.secondary svg{width:14px;height:14px}
 @media(max-width:760px){.transaction-toolbar{gap:8px}.transaction-toolbar .search{flex:1 1 100%;width:100%;max-width:none;min-width:0}.transaction-toolbar>label{flex:1 1 auto}.transaction-toolbar>button.secondary{margin-left:auto}}
+
+
+/* Compact searchable queues for trade submissions and listings */
+.trade-submission-search,.listing-search-toolbar{display:flex;align-items:center;gap:8px;margin:10px 0 12px;flex-wrap:wrap}
+.trade-submission-search .search,.listing-search-toolbar .search{flex:0 1 460px;width:min(460px,100%);max-width:460px;min-width:220px;height:36px;min-height:36px;padding:0 10px;box-sizing:border-box}
+.trade-submission-search .search input,.listing-search-toolbar .search input{height:32px;min-height:0;padding:0!important;margin:0;line-height:1.3;font-size:12px;box-shadow:none!important;min-width:0}
+.trade-submission-search .search svg,.listing-search-toolbar .search svg{width:15px;height:15px;flex:0 0 15px}
+.trade-submission-search>button{height:34px;min-height:34px;padding:0 11px;font-size:11px;white-space:nowrap}
+@media(max-width:600px){.trade-submission-search .search,.listing-search-toolbar .search{flex:1 1 100%;width:100%;max-width:none;min-width:0}}
