@@ -7,7 +7,7 @@ import AgentSearchSelect from "./AgentSearchSelect";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 function useAutoRefresh(load,enabled=true){const loadRef=useRef(load);const running=useRef(false);loadRef.current=load;useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>{if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;if(running.current)return;running.current=true;Promise.resolve().then(()=>loadRef.current()).catch(()=>{}).finally(()=>{running.current=false})},30000);return()=>clearInterval(timer)},[enabled])}
-const AGENT_PORTAL_VERSION = "0.6.334";
+const AGENT_PORTAL_VERSION = "0.6.335";
 
 const localDateISO = (date=new Date()) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
 
@@ -103,7 +103,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
 
  useEffect(()=>{load()},[load]);
  // Restore the agent's open trade and tab after a browser refresh.
- useEffect(()=>{if(adminMode||typeof window==="undefined"||!submissions.length||selected)return;try{const savedId=window.sessionStorage.getItem("dv-agent-trade-selected-id");if(!savedId)return;const row=submissions.find(x=>x.id===savedId);if(row){setSelected(row);setForm({...blank,...(row.payload||{}),side:normalizeRepresentationSide((row.payload||{}).side,(row.payload||{}).transaction_type||blank.transaction_type)});setReviewNotes(row.review_notes||"");}}catch{}},[adminMode,submissions,selected]);
+ useEffect(()=>{if(adminMode||typeof window==="undefined"||!submissions.length||selected)return;try{const savedId=window.sessionStorage.getItem("dv-agent-trade-selected-id");if(!savedId)return;const row=submissions.find(x=>x.id===savedId);if(row){setSelected(row);setForm({...blank,...(row.payload||{}),side:normalizeRepresentationSide((row.payload||{}).side,(row.payload||{}).transaction_type||blank.transaction_type)});setReviewNotes(row.review_notes||"");if(row.status==="NEEDS_CHANGES")setActiveTab("REVIEW");}}catch{}},[adminMode,submissions,selected]);
  useEffect(()=>{if(adminMode||typeof window==="undefined")return;try{if(selected?.id)window.sessionStorage.setItem("dv-agent-trade-selected-id",selected.id);else window.sessionStorage.removeItem("dv-agent-trade-selected-id");window.sessionStorage.setItem("dv-agent-trade-active-tab",activeTab);}catch{}},[adminMode,selected?.id,activeTab]);
  useAutoRefresh(load);
  useEffect(()=>{if(!selected?.id||!supabase)return;let active=true;const refreshOrder=async()=>{if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;const {data,error:e}=await supabase.from("dv_accounting_agent_trade_documents").select("*").eq("submission_id",selected.id).order("sort_order",{ascending:true}).order("created_at",{ascending:true});if(active&&!e&&Array.isArray(data))setDocs(current=>{if(current.some(d=>d.id===data.find(x=>x.id===d.id)?.id&&d.sort_order!==data.find(x=>x.id===d.id)?.sort_order))return data;const currentOrder=current.map(d=>d.id).join("|"),nextOrder=data.map(d=>d.id).join("|");return currentOrder!==nextOrder?data:current;});};const timer=setInterval(refreshOrder,3000);refreshOrder();return()=>{active=false;clearInterval(timer)}},[selected?.id]);
