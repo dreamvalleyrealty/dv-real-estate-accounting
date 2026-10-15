@@ -828,7 +828,9 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,trustTran
  function printStub(){
   const amount=Number(issued?.net_amount??total),methodLabel=method==="EFT"?"PAID BY E.F.T.":"CHEQUE";
   const gross=Number(commission?.gross_commission||transaction?.gross_commission||0);
-  const adminFee=Number(commission?._admin_fee||0),leadFee=Number(commission?._lead_fee||0),otherFee=Number(commission?._other_fees||0);
+  const chequeCharges=charges.filter(ch=>(issued?.id&&ch.applied_to_cheque_id===issued.id)||(ch.commission_id===commission?.id&&String(ch.status||"").toUpperCase()==="APPLIED"));
+  const chargeSum=(types)=>chequeCharges.filter(ch=>types.includes(String(ch.charge_type||"").toUpperCase())).reduce((sum,ch)=>sum+Number(ch.amount||0),0);
+  const adminFee=Math.max(0,chargeSum(["ADMIN_FEE"])||Number(commission?._admin_fee||0)),leadFee=Math.max(0,chargeSum(["LEAD_FEE","DEAL_FEE"])||Number(commission?._lead_fee||0)),otherFee=Math.max(0,chargeSum(["ADD_ON_SERVICE","RECURRING_FEE","GENERAL_EXPENSE","GENERAL_EXP","OTHER_FEE"])||Number(commission?._other_fees||0));
   const hstAmount=Number(issued?.agent_hst_amount??hst);
   const address=transaction?.property_address||"";
   const payee=agent?.legal_name||agent?.corporation_name||agent?.name||[agent?.first_name,agent?.last_name].filter(Boolean).join(" ");
