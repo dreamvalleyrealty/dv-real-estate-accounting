@@ -37,6 +37,10 @@ begin
     for update;
 
     if found then
+      if upper(coalesce(t.status, 'DRAFT')) in ('PAID','CLOSED') and upper(coalesce(t.commission_payroll_status,''))='PAID' then
+        raise exception 'This trade is closed and paid. Return Transfer & Unapprove is not allowed.';
+      end if;
+
       if upper(coalesce(t.status, 'DRAFT')) <> 'DRAFT' then
         raise exception 'This transfer cannot be returned because its accounting transaction is %. Only draft transfers can be returned here.', t.status;
       end if;
