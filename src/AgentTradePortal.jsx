@@ -386,9 +386,18 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      const path=String(user.id)+"/"+String(draft.id)+"/"+Date.now()+"-"+uploaded+"-"+safe;
      const {error:upError}=await supabase.storage.from("dv-trade-documents").upload(path,currentFile,{upsert:false,contentType:currentFile.type||"application/octet-stream"});
      if(upError){setError("Uploaded "+uploaded+" file(s); "+currentFile.name+" failed: "+upError.message);break}
-     const {data,error:e}=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:docType,document_name:docType==="OTHER"?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id}]).select().single();
-     if(e){await supabase.storage.from("dv-trade-documents").remove([path]);setError("Uploaded "+uploaded+" file(s); "+currentFile.name+" could not be registered: "+e.message);break}
-     setDocs(old=>[...old,data]);uploaded++;
+     const rejectedDoc=!adminMode?docs.find(d=>d.submission_id===draft.id&&d.document_type===docType&&d.match_status==="MISMATCH"):null;
+     let data=null,error=e;
+     if(rejectedDoc){
+       const {data:updated,error:updateError}=await supabase.from("dv_accounting_agent_trade_documents").update({document_name:docType==="OTHER"?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id,match_status:"PENDING",match_notes:""}).eq("id",rejectedDoc.id).select().single();
+       data=updated;error=updateError;
+       if(!error&&rejectedDoc.storage_path)await supabase.storage.from("dv-trade-documents").remove([rejectedDoc.storage_path]);
+     }else{
+       const result=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:docType,document_name:docType==="OTHER"?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id}]).select().single();
+       data=result.data;error=result.error;
+     }
+     if(error){await supabase.storage.from("dv-trade-documents").remove([path]);setError("Uploaded "+uploaded+" file(s); "+currentFile.name+" could not be registered: "+error.message);break}
+     if(rejectedDoc)setDocs(old=>old.map(d=>d.id===rejectedDoc.id?data:d));else setDocs(old=>[...old,data]);uploaded++;
    }
    if(uploaded===filesToUpload.length){setFile(null);setFiles([]);setNewDocLabel("");setMessage(uploaded===1?"Document uploaded.":uploaded+" documents uploaded.");}
    setBusy(false);if(draft.id)await loadDocs(draft.id);
