@@ -20,7 +20,10 @@ declare
   v_destination_account_id uuid;
   v_reference text;
   v_existing_id uuid;
+  v_role text;
 begin
+  select upper(coalesce(role,'')) into v_role from public.dv_accounting_user_profiles where user_id=auth.uid();
+  if v_role not in ('SUPERADMIN','SUPERADMINISTRATOR') then raise exception 'Only a SuperAdmin may post the brokerage share transfer.'; end if;
   if p_transaction_id is null then raise exception 'Transaction is required.'; end if;
   select t.company_id,t.transaction_number,
          round(coalesce(nullif(t.commission_approved_amount,0),nullif(t.gross_commission,0),0)::numeric,2)
