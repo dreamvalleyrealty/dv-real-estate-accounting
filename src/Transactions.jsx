@@ -83,7 +83,7 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
  const companyRows=Array.isArray(companies.rows)?companies.rows:[], listingRows=(Array.isArray(listings.rows)?listings.rows:[]).filter(l=>["APPROVED","PUBLISHED"].includes(String(l.status||"").toUpperCase())), agentRows=Array.isArray(agents.rows)?agents.rows:[], bankRows=Array.isArray(banks.rows)?banks.rows:[], planRows=Array.isArray(plans.rows)?plans.rows:[], feeSettingRows=Array.isArray(feeSettings.rows)?feeSettings.rows:[], feeRuleRows=Array.isArray(feeRules.rows)?feeRules.rows:[], feeChargeRows=Array.isArray(feeCharges.rows)?feeCharges.rows:[], contactRows=Array.isArray(contacts.rows)?contacts.rows:[], brokerageRows=Array.isArray(brokerages.rows)?brokerages.rows:[], brokerageAgentRows=Array.isArray(brokerageAgents.rows)?brokerageAgents.rows:[];
  const selectedListing=listingRows.find(x=>x.id===form.listing_id);
  const selectedAgent=agentRows.find(x=>x.id===agentInfo.agent_id);
- const selectedAgentHstNumber=String(selectedAgent?.hst_number||"").trim();
+ const selectedAgentHstNumber=String(selectedAgent?.hst_number||selectedAgent?.prec_hst_number||selectedAgent?.precHstNumber||"").trim();
  const agentHstRate=13;
  const agentNetBeforeHst=Math.max(0,agentFee.netPayable);
  const agentHstAmount=selectedAgentHstNumber?Math.round(agentNetBeforeHst*agentHstRate)/100:0;
@@ -187,7 +187,7 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
  const subTotal=commissionData.reduce((s,x)=>s+x.amount,0), totalHst=commissionData.reduce((s,x)=>s+x.hst,0), totalCommission=subTotal+totalHst, receivableBase=commissionData.filter(x=>x.c.settlement_direction==="RECEIVABLE").reduce((s,x)=>s+x.amount,0), receivableHst=commissionData.filter(x=>x.c.settlement_direction==="RECEIVABLE").reduce((s,x)=>s+x.hst,0), receivableTotal=receivableBase+receivableHst, payableBase=commissionData.filter(x=>x.c.settlement_direction==="PAYABLE").reduce((s,x)=>s+x.amount,0), payableHst=commissionData.filter(x=>x.c.settlement_direction==="PAYABLE").reduce((s,x)=>s+x.hst,0), payableTotal=payableBase+payableHst;
  const agent=agentRows.find(a=>a.id===agentInfo.agent_id);
  const agentName=agent?[agent.first_name,agent.last_name].filter(Boolean).join(" "):"";
- const agentHst=agent?.hst_number||agent?.hst||"";
+ const agentHst=agent?.hst_number||agent?.prec_hst_number||agent?.precHstNumber||agent?.hst||"";
  const tradeAgentLabel=agentName?(agent.agent_number?agent.agent_number+" - ":"")+agentName:"";
  const trustActivity=Number(trust.amount||0)>0
    ? "<tr><td>"+esc(fmtDate(trust.deposit_date))+"</td><td>"+esc(trust.reference_number||"No Deposit")+"</td><td>"+cash(trust.amount)+"</td></tr><tr><td colspan='2' class='balance'>Balance</td><td>"+cash(trust.amount)+"</td></tr>"
