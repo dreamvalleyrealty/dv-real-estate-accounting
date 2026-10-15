@@ -831,7 +831,7 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,trustTran
   const chequeCharges=charges.filter(ch=>(issued?.id&&ch.applied_to_cheque_id===issued.id)||(ch.commission_id===commission?.id&&String(ch.status||"").toUpperCase()==="APPLIED"));
   const chargeSum=(types)=>chequeCharges.filter(ch=>types.includes(String(ch.charge_type||"").toUpperCase())).reduce((sum,ch)=>sum+Number(ch.amount||0),0);
   const txAgent=transactionAgents.find(row=>row.transaction_id===commission?.transaction_id&&row.agent_id===commission?.agent_id);
-  const adminFee=Math.max(0,chargeSum(["ADMIN_FEE"])||Number(commission?._admin_fee||0)),leadFee=Math.max(0,chargeSum(["LEAD_FEE"])||Number(commission?._lead_fee||0)),dealFee=Math.max(0,chargeSum(["DEAL_FEE"])||Number(txAgent?.deal_fee||0)),otherFee=Math.max(0,chargeSum(["ADD_ON_SERVICE","RECURRING_FEE","GENERAL_EXPENSE","GENERAL_EXP","OTHER_FEE"])||Number(txAgent?.other_fees??commission?._other_fees??0));
+  const adminFee=Math.max(0,chargeSum(["ADMIN_FEE"])||Number(commission?._admin_fee||0)),dealFee=Math.max(0,gross-Number(issued?.agent_share??commission?.agent_share??txAgent?.agent_payable??0)),otherFee=Math.max(0,Number(issued?.total_fees||0)-adminFee-(chargeSum(["RECURRING_FEE","ADD_ON_SERVICE"])||0));
   const hstAmount=Number(issued?.agent_hst_amount??hst);
   const address=transaction?.property_address||"";
   const payee=agent?.legal_name||agent?.corporation_name||agent?.name||[agent?.first_name,agent?.last_name].filter(Boolean).join(" ");
