@@ -1106,7 +1106,7 @@ function Agents({user,mode="agents",permissions={},setActive,role}){
    if(error)throw error;
    if(!data?.ok)throw new Error("The database did not confirm that the commission was returned.");
    comm.setRows(rows=>rows.map(row=>row.id===c.id?{...row,status:"RETURNED"}:row));
-   t.setRows(rows=>rows.map(row=>row.id===txr.id?{...row,commission_payroll_status:"RETURNED"}:row));
+   t.setRows(rows=>rows.map(row=>row.id===txr.id?{...row,commission_payroll_status:"NOT_READY"}:row));
    setFixTrade(txr);
    alert("Commission returned to transaction "+(txr.transaction_number||"")+" for review. It has been removed from Commission Payroll.");
   }catch(error){alert("Could not return the commission: "+String(error?.message||error))}
