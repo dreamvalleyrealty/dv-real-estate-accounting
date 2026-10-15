@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { readFileSync } from "node:fs";
 
 const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-const buildVersion = `${packageJson.version}+${new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14)}`;
+const buildVersion = packageJson.version;
 
 export default defineConfig({
   plugins: [react()],
