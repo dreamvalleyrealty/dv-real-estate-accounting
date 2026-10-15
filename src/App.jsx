@@ -1106,8 +1106,11 @@ function Agents({user,mode="agents",permissions={},setActive,role}){
    const{data,error}=await supabase.rpc("dv_accounting_send_commission_back_to_transaction",{p_commission_id:c.id});
    if(error)throw error;
    if(!data?.ok)throw new Error("The database did not confirm that the commission was returned.");
-   comm.setRows(rows=>rows.map(row=>row.id===c.id?{...row,status:"RETURNED"}:row));
+   comm.setRows(rows=>rows.filter(row=>row.id!==c.id));
    t.setRows(rows=>rows.map(row=>row.id===txr.id?{...row,commission_payroll_status:"NOT_READY"}:row));
+   await comm.load();
+   await t.load();
+   if(comm.rows.some(row=>row.id===c.id&&String(row.status||"").toUpperCase()!=="RETURNED")){comm.setRows(rows=>rows.filter(row=>row.id!==c.id));}
    setFixTrade(txr);
    alert("Commission returned to transaction "+(txr.transaction_number||"")+" for review. It has been removed from Commission Payroll.");
   }catch(error){alert("Could not return the commission: "+String(error?.message||error))}
