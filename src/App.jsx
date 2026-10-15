@@ -1101,11 +1101,16 @@ function Agents({user,mode="agents",permissions={},setActive,role}){
   if(!c?.id||!txr?.id)return alert("The related transaction could not be found.");
   if(!confirm("Send this commission back to the transaction? It will be removed from Commission Payroll until it is reviewed and finalized again."))return;
   setSendingBack(true);
-  const{error}=await supabase.from("dv_accounting_commissions").update({status:"RETURNED"}).eq("id",c.id);
-  if(error){alert("Could not return the commission: "+error.message);setSendingBack(false);return}
-  comm.setRows(rows=>rows.map(row=>row.id===c.id?{...row,status:"RETURNED"}:row));
-  setFixTrade(txr);
-  setSendingBack(false);
+  try{
+   const{data,error}=await supabase.rpc("dv_accounting_send_commission_back_to_transaction",{p_commission_id:c.id});
+   if(error)throw error;
+   if(!data?.ok)throw new Error("The database did not confirm that the commission was returned.");
+   comm.setRows(rows=>rows.map(row=>row.id===c.id?{...row,status:"RETURNED"}:row));
+   t.setRows(rows=>rows.map(row=>row.id===txr.id?{...row,commission_payroll_status:"RETURNED"}:row));
+   setFixTrade(txr);
+   alert("Commission returned to transaction "+(txr.transaction_number||"")+" for review. It has been removed from Commission Payroll.");
+  }catch(error){alert("Could not return the commission: "+String(error?.message||error))}
+  finally{setSendingBack(false)}
  }
  async function previewFees(c){if(!supabase)return;const{data,error}=await supabase.rpc("dv_accounting_calculate_commission_fees",{p_agent_id:c.agent_id,p_transaction_id:c.transaction_id,p_gross_commission:Number(c.gross_commission||0),p_as_of:today()});if(error)alert(error.message);else alert("Agent share "+money(data.agent_share)+" | Admin "+money(data.admin_fee)+" | Lead "+money(data.lead_fee)+" | Net "+money(data.net_transaction_commission))}
  const volume=t.rows.reduce((s,x)=>s+Number(x.sale_price||0),0),gci=comm.rows.reduce((s,x)=>s+Number(x.gross_commission||0),0);
