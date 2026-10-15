@@ -68,6 +68,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  const [expandedDocGroups,setExpandedDocGroups]=useState({});
  const [documentOrder,setDocumentOrder]=useState({});
  const [draggedDocId,setDraggedDocId]=useState(null);
+ const [draggedUploadIndex,setDraggedUploadIndex]=useState(null);
  const [activeTab,setActiveTab]=useState("PROPERTY");
  const [tradeConditions,setTradeConditions]=useState([]);
  const [adminCreating,setAdminCreating]=useState(false),[agentCreating,setAgentCreating]=useState(false),[selectedAgentId,setSelectedAgentId]=useState("");
