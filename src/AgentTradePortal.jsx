@@ -7,7 +7,7 @@ import AgentSearchSelect from "./AgentSearchSelect";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 function useAutoRefresh(load,enabled=true){const loadRef=useRef(load);const running=useRef(false);loadRef.current=load;useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>{if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;if(running.current)return;running.current=true;Promise.resolve().then(()=>loadRef.current()).catch(()=>{}).finally(()=>{running.current=false})},30000);return()=>clearInterval(timer)},[enabled])}
-const AGENT_PORTAL_VERSION = "0.6.336";
+const AGENT_PORTAL_VERSION = "0.6.337";
 
 const localDateISO = (date=new Date()) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
 
@@ -392,15 +392,16 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      const rejectedDoc=!adminMode?docs.find(d=>d.submission_id===draft.id&&d.document_type===docType&&d.match_status==="MISMATCH"):null;
      let data=null,error=null;
      if(rejectedDoc){
-       const {data:updated,error:updateError}=await supabase.from("dv_accounting_agent_trade_documents").update({document_name:docType==="OTHER"?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id,match_status:"PENDING",match_notes:""}).eq("id",rejectedDoc.id).select().single();
-       data=updated;error=updateError;
+       const {error:updateError}=await supabase.from("dv_accounting_agent_trade_documents").update({document_name:docType==="OTHER"?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id,match_status:"PENDING",match_notes:""}).eq("id",rejectedDoc.id);
+       error=updateError;
        if(!error&&rejectedDoc.storage_path)await supabase.storage.from("dv-trade-documents").remove([rejectedDoc.storage_path]);
      }else{
-       const result=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:docType,document_name:docType==="OTHER"?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id}]).select().single();
-       data=result.data;error=result.error;
+       const result=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:docType,document_name:docType==="OTHER"?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id}]);
+       error=result.error;
      }
      if(error){await supabase.storage.from("dv-trade-documents").remove([path]);setError("Uploaded "+uploaded+" file(s); "+currentFile.name+" could not be registered: "+error.message);break}
-     if(rejectedDoc)setDocs(old=>old.map(d=>d.id===rejectedDoc.id?data:d));else setDocs(old=>[...old,data]);uploaded++;
+     uploaded++;
+     await loadDocs(draft.id);
    }
    if(uploaded===filesToUpload.length){setFile(null);setFiles([]);setNewDocLabel("");setMessage(uploaded===1?"Document uploaded.":uploaded+" documents uploaded.");}
    setBusy(false);if(draft.id)await loadDocs(draft.id);
