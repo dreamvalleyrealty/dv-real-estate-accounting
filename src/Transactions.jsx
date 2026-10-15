@@ -353,10 +353,20 @@ async function approveAmount(id){if(!supabase)return;const{error}=await supabase
    else throw new Error("A paid commission record already exists for this trade. Use the paid-commission correction workflow instead of creating a duplicate payment.");
    await load();alert("Commission Payroll record is ready for review. Dream Valley commission: "+money(gross)+". The agent payment remains subject to the approved split, fees, and payment controls.");return;
   }
-  const{data,error}=await supabase.from("dv_accounting_commissions").update({status:"READY"}).eq("transaction_id",tx.id).eq("status","RETURNED").select("id");
-  if(error)throw error;
-  if(!data?.length)throw new Error("No returned commission record was found. For seller-side trades, complete Seller Settlements first; otherwise review the agent commission details.");
-  await load();alert("Commission sent back to Commission Payroll for review. Payment remains blocked until commission AR is fully received.");
+  const {data: commissionRows,error: commissionReadError}=await supabase.from("dv_accounting_commissions").select("id,status").eq("transaction_id",tx.id);
+  if(commissionReadError)throw commissionReadError;
+  const unpaidRows=(commissionRows||[]).filter(row=>String(row.status||"").toUpperCase()!=="PAID");
+  if(!unpaidRows.length){
+    if((commissionRows||[]).some(row=>String(row.status||"").toUpperCase()==="PAID"))throw new Error("A paid commission record already exists for this trade. It will not be reopened or duplicated.");
+    throw new Error("No commission payroll record exists for this trade. Close the transaction through Close & Send to Payroll first.");
+  }
+  for(const row of unpaidRows){
+    const {error}=await supabase.from("dv_accounting_commissions").update({status:"READY"}).eq("id",row.id);
+    if(error)throw error;
+  }
+  const {error: transactionError}=await supabase.from("dv_accounting_transactions").update({commission_payroll_status:"READY"}).eq("id",tx.id);
+  if(transactionError)throw transactionError;
+  await load();alert("Commission sent to Commission Payroll and marked READY for review. The existing AR receipt is unchanged; no duplicate receipt was created.");
  }catch(error){alert("Could not send the trade to Commission Payroll: "+String(error?.message||error))}
 }async function confirmCloseAndSend(){if(!supabase||!closeTarget)return;if(closeForm.received==="YES"&&(!closeForm.date||Number(closeForm.amount)<=0||!closeForm.bank_account_id)){alert("If AR payment was received, enter the date, actual amount, and Commission Trust account.");return}setCloseBusy(true);const p={ar_payment_received:closeForm.received==="YES",ar_payment_received_date:closeForm.received==="YES"?closeForm.date:null,ar_payment_amount:closeForm.received==="YES"?Number(closeForm.amount):0,ar_payment_bank_account_id:closeForm.received==="YES"?closeForm.bank_account_id:null,ar_payment_reference:closeForm.received==="YES"?(closeForm.reference.trim()||null):null};const s=await supabase.from("dv_accounting_transactions").update(p).eq("id",closeTarget.id);if(s.error){alert("Could not save AR details. Ensure migration 0056 is run. "+s.error.message);setCloseBusy(false);return}const r=await supabase.rpc("dv_accounting_close_transaction",{p_transaction_id:closeTarget.id});if(r.error){alert("Close/payroll posting failed. Ensure migration 0056 is run. "+r.error.message);setCloseBusy(false);return}setCloseBusy(false);setCloseTarget(null);await load();alert(closeForm.received==="YES"?"Closed and sent to payroll; AR receipt posted to Commission Trust.":"Closed and sent to payroll; no AR receipt was recorded.")} async function markDft(){if(!supabase||!dftTarget)return;setDftBusy(true);const {data,error}=await supabase.rpc("dv_accounting_mark_transaction_dft",{p_transaction_id:dftTarget.id,p_refund_bank_account_id:dftForm.bank_account_id||null,p_refund_date:dftForm.date||today(),p_refund_method:dftForm.method,p_refund_reference:dftForm.reference||null,p_authority_reference:dftForm.authority||null,p_release_authorized:!!dftForm.authorized});if(error){alert("Could not mark DFT / issue deposit refund: "+error.message);setDftBusy(false);return}setDftTarget(null);setDftBusy(false);await load();alert(data?.deposit_refunded?"Deal marked DFT and deposit refund recorded.":"Deal marked DFT. No deposit held by Dream Valley was recorded for refund.");} async function deleteTransaction(tx){
   if(!supabase)return;
