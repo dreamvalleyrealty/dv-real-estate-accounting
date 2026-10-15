@@ -258,6 +258,7 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
  </div>
 }
 export function AgentListingsWorkspace({user,agentId,TradePortal}){
- const [mode,setMode]=useState("LISTINGS");
+ const [mode,setMode]=useState(()=>{try{return window.sessionStorage.getItem("dv-agent-workspace-mode")||(window.sessionStorage.getItem("dv-agent-trade-selected-id")?"TRADES":"LISTINGS")}catch{return "LISTINGS"}});
+ useEffect(()=>{try{window.sessionStorage.setItem("dv-agent-workspace-mode",mode)}catch{}},[mode]);
  return <div><div className="tx-tabs" style={{display:"flex",gap:6,padding:"8px 12px",flexWrap:"wrap"}}><button type="button" className={mode==="LISTINGS"?"active":""} onClick={()=>setMode("LISTINGS")}>Listings</button><button type="button" className={mode==="TRADES"?"active":""} onClick={()=>setMode("TRADES")}>Trade Submissions</button></div>{mode==="LISTINGS"?<Listings user={user} agentId={agentId}/>:<TradePortal user={user} agentId={agentId}/>}</div>
 }
