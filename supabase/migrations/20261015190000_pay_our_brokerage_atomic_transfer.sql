@@ -10,6 +10,9 @@ declare
   v_transaction_number text;
   v_gross numeric(14,2);
   v_agent_split numeric(7,4);
+  v_hst_rate numeric(7,4);
+  v_admin_fee numeric(14,2);
+  v_cheque_fees numeric(14,2);
   v_amount numeric(14,2);
   v_cheque_date date;
   v_cheque_reference text;
@@ -33,8 +36,8 @@ begin
   for update;
   if not found or v_company_id is null then raise exception 'Closed transaction was not found.'; end if;
 
-  select q.id,coalesce(q.cheque_date,current_date),coalesce(nullif(trim(q.payment_reference),''),nullif(trim(q.cheque_number),''))
-    into v_cheque_id,v_cheque_date,v_cheque_reference
+  select q.id,coalesce(q.cheque_date,current_date),coalesce(nullif(trim(q.payment_reference),''),nullif(trim(q.cheque_number),'')),coalesce(q.total_fees,0)
+    into v_cheque_id,v_cheque_date,v_cheque_reference,v_cheque_fees
   from public.dv_accounting_commission_cheques q
   join public.dv_accounting_commissions c on c.id=q.commission_id
   where c.transaction_id=p_transaction_id and upper(coalesce(q.status,''))='ISSUED'
@@ -50,7 +53,17 @@ begin
   if v_agent_split is null or v_agent_split < 0 or v_agent_split > 100 then
     raise exception 'A valid agent split percentage is required to calculate the brokerage share.';
   end if;
-  v_amount := round(v_gross * (100-v_agent_split) / 100,2);
+  select coalesce(max(tc.hst_rate),13) into v_hst_rate
+  from public.dv_accounting_transaction_commissions tc where tc.transaction_id=p_transaction_id;
+  select coalesce(max(i.admin_fee),0) into v_admin_fee
+  from public.dv_accounting_transaction_agent_info i where i.transaction_id=p_transaction_id;
+  -- Brokerage share + HST on that share + HST on admin fee + all fees deducted from the issued agent cheque.
+  v_amount := round(
+    (v_gross * (100-v_agent_split) / 100)
+    + ((v_gross * (100-v_agent_split) / 100) * v_hst_rate / 100)
+    + (v_admin_fee * v_hst_rate / 100)
+    + coalesce(v_cheque_fees,0), 2
+  );
   if v_gross<=0 or v_amount<=0 then raise exception 'Calculated brokerage share must be greater than zero.'; end if;
 
   v_reference := 'OUR-BROKERAGE:'||p_transaction_id::text;
