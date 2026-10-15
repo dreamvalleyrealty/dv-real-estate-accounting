@@ -24,13 +24,13 @@ begin
  select coalesce(sum(amount + case when hst_applicable then coalesce(hst_amount,0) else 0 end),0) into desk_fees from public.dv_accounting_commission_charges
  where agent_id=c.agent_id and charge_type='DESK_FEE' and status='OPEN' and applied_to_cheque_id is null and created_at::date<=p_cheque_date;
  select coalesce(sum(amount + case when hst_applicable then coalesce(hst_amount,0) else 0 end),0) into general_fees from public.dv_accounting_commission_charges
- where agent_id=c.agent_id and charge_type in ('GENERAL_EXPENSE','GENERAL_EXP','OTHER_FEE') and status in ('OPEN','PARTIAL') and applied_to_cheque_id is null and created_at::date<=p_cheque_date;
+ where agent_id=c.agent_id and charge_type in ('GENERAL_EXPENSE','GENERAL_EXP','OTHER_FEE') and status='OPEN' and applied_to_cheque_id is null and created_at::date<=p_cheque_date;
  if not coalesce(p_deduct_desk_fees,false) then desk_fees:=0; end if;
- update public.dv_accounting_commission_charges set status='APPLIED',applied_to_cheque_id=cheque_id
- where agent_id=c.agent_id and charge_type in ('GENERAL_EXPENSE','GENERAL_EXP','OTHER_FEE') and status in ('OPEN','PARTIAL') and applied_to_cheque_id is null and created_at::date<=p_cheque_date;
  total_fees:=transaction_fees+recurring_fees+service_fees+desk_fees+general_fees;
  insert into public.dv_accounting_commission_cheques(company_id,agent_id,commission_id,cheque_number,cheque_date,gross_commission,agent_share,total_fees,adjustments,status,issued_at,notes)
  values(t.company_id,c.agent_id,c.id,p_cheque_number,p_cheque_date,coalesce(c.gross_commission,t.gross_commission,0),agent_share,total_fees,coalesce(p_adjustment,0),'ISSUED',now(),p_notes) returning id into cheque_id;
+ update public.dv_accounting_commission_charges set status='APPLIED',applied_to_cheque_id=cheque_id
+ where agent_id=c.agent_id and charge_type in ('GENERAL_EXPENSE','GENERAL_EXP','OTHER_FEE') and status in ('OPEN','PARTIAL') and applied_to_cheque_id is null and created_at::date<=p_cheque_date;
  insert into public.dv_accounting_commission_charges(commission_id,transaction_id,agent_id,charge_type,description,amount,source_rule_id,status,applied_to_cheque_id)
  select c.id,c.transaction_id,c.agent_id,x.charge_type,x.description,x.amount,
  case when x.charge_type in ('ADMIN_FEE','LEAD_FEE') then (calc->>'fee_rule_id')::uuid else null end,'APPLIED',cheque_id
