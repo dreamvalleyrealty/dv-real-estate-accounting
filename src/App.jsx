@@ -813,7 +813,7 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,trustTran
  const net=Number(commission?._net_before_hst??0);
  const hst=Number(commission?._agent_hst??0);
  const total=Number(commission?._payment_total??(net+hst));
- const outstandingDeskFees=charges.filter(ch=>ch.agent_id===agent?.id&&ch.charge_type==="DESK_FEE"&&ch.status==="OPEN"&&!ch.applied_to_cheque_id&&String(ch.created_at||"").slice(0,10)<=payDate).reduce((sum,ch)=>sum+Number(ch.amount||0),0);
+ const outstandingDeskFees=charges.filter(ch=>ch.agent_id===agent?.id&&ch.charge_type==="DESK_FEE"&&ch.status==="OPEN"&&!ch.applied_to_cheque_id&&String(ch.created_at||"").slice(0,10)<=payDate).reduce((sum,ch)=>sum+Number(ch.amount||0)+(ch.hst_applicable?Number(ch.hst_amount||0):0),0);
  const arDeposits=trustTransactions.filter(x=>x.transaction_id===commission?.transaction_id&&x.trust_account_type==="COMMISSION_TRUST"&&String(x.direction||"").toUpperCase()==="DEPOSIT");
  const arReceived=arDeposits.reduce((sum,x)=>sum+Number(x.amount||0),0);
  const arRequired=Number(commission?.gross_commission||0);
