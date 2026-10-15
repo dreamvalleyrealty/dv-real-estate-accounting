@@ -7,7 +7,7 @@ import AgentSearchSelect from "./AgentSearchSelect";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 function useAutoRefresh(load,enabled=true){const loadRef=useRef(load);const running=useRef(false);loadRef.current=load;useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>{if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;if(running.current)return;running.current=true;Promise.resolve().then(()=>loadRef.current()).catch(()=>{}).finally(()=>{running.current=false})},30000);return()=>clearInterval(timer)},[enabled])}
-const AGENT_PORTAL_VERSION = "0.6.329";
+const AGENT_PORTAL_VERSION = "0.6.330";
 
 const localDateISO = (date=new Date()) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
 
@@ -528,7 +528,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    }else{
      const {error:e}=await supabase.rpc("dv_accounting_review_agent_trade_submission",{p_submission_id:selected.id,p_status:status,p_notes:reviewNotes});
      if(e){setError(e.message);setBusy(false);return}
-     setMessage("Review decision saved and the agent can see your notes.");
+     setMessage(status==="NEEDS_CHANGES"?"Changes sent to the agent. The linked draft transaction has been created for processing.":"Review decision saved and the agent can see your notes.");
    }
    setBusy(false);setSelected(null);await load();
  }
