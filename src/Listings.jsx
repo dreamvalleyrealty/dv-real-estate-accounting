@@ -248,7 +248,7 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
   await load();setBusy(false);
  }
  async function openDocument(d){setError("");setSelectedRequirementCode(d.document_type);const {data,error:e}=await supabase.storage.from("dv-trade-documents").createSignedUrl(d.storage_path,3600);if(e){setError("Could not preview document: "+e.message);return}setPreviewDocument(d);setPreviewUrl(data.signedUrl);setActiveTab("DOCUMENTS")}
- async async function openReceiveDeposit(){
+ async function openReceiveDeposit(){
   if(!isAdmin||!selected?.id)return;
   setDepositError("");setDepositReceipt(null);
   setDepositForm({amount:"",date:new Date().toISOString().slice(0,10),received_from:"",payment_type:"CHEQUE",reference_number:"",trust_bank_account_id:""});
