@@ -489,7 +489,82 @@ function Payroll({user,permissions={},role}){
  {runShow&&<Modal title={runEditId?"Edit Payroll Run":"Run Payroll"} onClose={()=>{setRunShow(false);setRunEditId(null)}}><form onSubmit={runEditId?savePayrollRun:createRun}><div className="formgrid"><label>Period start<input type="date" required value={form.period_start} onChange={e=>setForm({...form,period_start:e.target.value})}/></label><label>Period end<input type="date" required value={form.period_end} onChange={e=>setForm({...form,period_end:e.target.value})}/></label><label>Pay date<input type="date" required value={form.pay_date} onChange={e=>setForm({...form,pay_date:e.target.value})}/></label></div><div className="notice"><AlertCircle/> Payroll calculates gross pay and CRA 2026 Ontario statutory deductions for each employee, then creates a CALCULATED run for management review. After review, the next workflow will post the payroll journal and track the CRA remittance.</div><div className="modalactions"><button type="button" className="secondary" onClick={()=>setRunShow(false)}>Cancel</button><button className="primary"><Save/> {runEditId?"Save Changes":"Calculate Payroll"}</button></div></form></Modal>}
  </>
 }
-function AgentRankings(){const agents=useRows("dv_accounting_agents"),transactions=useRows("dv_accounting_transactions"),agentInfo=useRows("dv_accounting_transaction_agent_info");const now=new Date(),monthStart=new Date(now.getFullYear(),now.getMonth(),1),iso=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");return y+"-"+m+"-"+day};const[period,setPeriod]=useState("MONTH"),[start,setStart]=useState(iso(monthStart)),[end,setEnd]=useState(iso(now)),[metric,setMetric]=useState("UNITS"),[search,setSearch]=useState("");function choosePeriod(value){setPeriod(value);const n=new Date(),y=n.getFullYear(),m=n.getMonth();let a=new Date(y,m,1),b=new Date(y,m+1,0);if(value==="QUARTER"){const q=Math.floor(m/3);a=new Date(y,q*3,1);b=new Date(y,q*3+3,0)}else if(value==="HALF"){a=new Date(y,m<6?0:6,1);b=new Date(y,m<6?6:12,0)}else if(value==="YEAR"){a=new Date(y,0,1);b=new Date(y,11,31)}else if(value==="MONTH"){a=new Date(y,m,1);b=new Date(y,m+1,0)}setStart(iso(a));setEnd(iso(b))}const completed=useMemo(()=>transactions.rows.filter(t=>{const st=String(t.status||"").toUpperCase().replace(/[^A-Z]/g,"");return st==="CLOSED"||st==="COMPLETED"||st==="FINALIZED"||st==="CLOSEDWON"}).filter(t=>{const d=String(t.close_date||t.closing_date||t.transaction_date||t.entry_date||"").slice(0,10);return d&&d>=start&&d<=end}),[transactions.rows,start,end]);const ranking=useMemo(()=>{const map=new Map();for(const t of completed){const links=agentInfo.rows.filter(x=>x.transaction_id===t.id&&x.agent_id);const unique=[...new Set(links.map(x=>x.agent_id))];for(const id of unique){const agent=agents.rows.find(a=>a.id===id);if(!agent)continue;const row=map.get(id)||{id,name:[agent.first_name,agent.last_name].filter(Boolean).join(" ")||agent.name||agent.legal_name||"Unnamed agent",agentNumber:agent.agent_number||"",units:0,volume:0,gci:0,transactions:[]};row.units+=1;row.volume+=Number(t.sale_price||t.purchase_price||0);row.gci+=Number(t.gross_commission||0);row.transactions.push(t);map.set(id,row)}}return [...map.values()].sort((a,b)=>metric==="VOLUME"?b.volume-a.volume:metric==="GCI"?b.gci-a.gci:b.units-a.units||b.volume-a.volume)},[completed,agentInfo.rows,agents.rows,metric]);const visible=ranking.filter(x=>!search||x.name.toLowerCase().includes(search.toLowerCase())||String(x.agentNumber).toLowerCase().includes(search.toLowerCase()));const cash=n=>money(n);function exportCsv(){const rows=[["Rank","Agent","Agent Number","Completed Units","Sales Volume","Gross Commission"],...visible.map((x,i)=>[i+1,x.name,x.agentNumber,x.units,x.volume.toFixed(2),x.gci.toFixed(2)])];const csv=rows.map(row=>row.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(",")).join("\n");const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));const a=document.createElement("a");a.href=url;a.download="agent-rankings-"+start+"-to-"+end+".csv";a.click();URL.revokeObjectURL(url)}return <><div className="pagehead"><div><h1>Agent Rankings & Top Producers</h1><p>Rank agents using completed transactions, units sold, sales volume, and recorded gross commission.</p></div><button className="secondary" type="button" onClick={()=>{agents.load();transactions.load();agentInfo.load()}}><RefreshCw size={16}/> Refresh</button></div><section className="panel"><div className="formgrid"><label>Reporting period<select value={period} onChange={e=>choosePeriod(e.target.value)}><option value="MONTH">Monthly</option><option value="QUARTER">Quarterly</option><option value="HALF">Half-yearly</option><option value="YEAR">Yearly</option><option value="CUSTOM">Custom date range</option></select></label><label>Rank by<select value={metric} onChange={e=>setMetric(e.target.value)}><option value="UNITS">Completed units</option><option value="VOLUME">Sales volume</option><option value="GCI">Gross commission</option></select></label><label>From date<input type="date" value={start} onChange={e=>{setStart(e.target.value);setPeriod("CUSTOM")}}/></label><label>To date<input type="date" value={end} min={start||undefined} onChange={e=>{setEnd(e.target.value);setPeriod("CUSTOM")}}/></label><label style={{gridColumn:"1 / -1"}}>Search agent<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Agent name or agent number"/></label></div><div className="muted" style={{marginTop:10}}>Only transactions with a status of Closed, Completed, or Finalized are included. The report uses the closing date where available, then transaction date. An agent must be linked through the transaction-agent information record to receive credit.</div><div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}><button className="primary" type="button" onClick={exportCsv} disabled={!visible.length}><FileSpreadsheet size={16}/> Export Ranking CSV</button></div></section><div className="grid3"><Card title="Completed Units" value={visible.reduce((n,x)=>n+x.units,0)} sub="Agent transaction credits in filtered list"/><Card title="Sales Volume" value={cash(visible.reduce((n,x)=>n+x.volume,0))} sub="Completed transactions"/><Card title="Gross Commission" value={cash(visible.reduce((n,x)=>n+x.gci,0))} sub="Recorded GCI"/></div><section className="panel"><div className="paneltitle"><div><h2>Top Producers</h2><p className="panelhint">{start||"—"} to {end||"—"} · ranked by {metric==="UNITS"?"completed units":metric==="VOLUME"?"sales volume":"gross commission"}</p></div><span className="pill">{visible.length} agents</span></div><div className="tablewrap"><table><thead><tr><th>Rank</th><th>Agent</th><th>Agent #</th><th>Completed Units</th><th>Sales Volume</th><th>Gross Commission</th></tr></thead><tbody>{visible.map((x,i)=><tr key={x.id}><td><strong>{i+1}</strong>{i===0&&<span className="pill" style={{marginLeft:6}}>Top Producer</span>}</td><td>{x.name}</td><td>{x.agentNumber||"—"}</td><td>{x.units}</td><td>{cash(x.volume)}</td><td>{cash(x.gci)}</td></tr>)}{!visible.length&&<tr><td colSpan="6"><div className="empty small"><BarChart3/><h3>No completed transactions found</h3><p>Try another date range, or verify that transactions have a Closed, Completed, or Finalized status and are linked to an agent.</p></div></td></tr>}</tbody></table></div></section></>}
+function AgentRankings(){
+ const agents=useRows("dv_accounting_agents"),transactions=useRows("dv_accounting_transactions"),agentInfo=useRows("dv_accounting_transaction_agent_info");
+ const now=new Date(),iso=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");return y+"-"+m+"-"+day};
+ const[period,setPeriod]=useState("MONTH"),[start,setStart]=useState(iso(new Date(now.getFullYear(),now.getMonth(),1))),[end,setEnd]=useState(iso(now)),[metric,setMetric]=useState("UNITS"),[search,setSearch]=useState("");
+ function choosePeriod(value){
+  setPeriod(value);const n=new Date(),y=n.getFullYear(),m=n.getMonth();let a=new Date(y,m,1),b=n;
+  if(value==="QUARTER"){const q=Math.floor(m/3);a=new Date(y,q*3,1)}
+  else if(value==="HALF"){a=new Date(y,m<6?0:6,1)}
+  else if(value==="YEAR"){a=new Date(y,0,1)}
+  else if(value==="MONTH"){a=new Date(y,m,1)}
+  else if(value==="CUSTOM"){return}
+  setStart(iso(a));setEnd(iso(b));
+ }
+ const completed=useMemo(()=>{
+  if(!start||!end||start>end)return [];
+  return transactions.rows.filter(t=>{
+   const status=String(t.status||"").toUpperCase().replace(/[^A-Z]/g,"");
+   if(!["CLOSED","COMPLETED","FINALIZED","CLOSEDWON"].includes(status))return false;
+   // Production is reported by actual closing date only; do not silently substitute entry/transaction dates.
+   const date=String(t.close_date||t.closing_date||"").slice(0,10);
+   return !!date&&date>=start&&date<=end;
+  });
+ },[transactions.rows,start,end]);
+ const ranking=useMemo(()=>{
+  const agentById=new Map(agents.rows.map(a=>[String(a.id),a]));
+  const infoByTransaction=new Map();
+  for(const link of agentInfo.rows){
+   if(!link.transaction_id||!link.agent_id)continue;
+   const key=String(link.transaction_id);
+   if(!infoByTransaction.has(key))infoByTransaction.set(key,[]);
+   infoByTransaction.get(key).push(link);
+  }
+  const map=new Map();
+  for(const t of completed){
+   const links=infoByTransaction.get(String(t.id))||[];
+   // The current schema supports one transaction-agent info row per transaction.
+   // De-duplicate defensively in case legacy or inconsistent data contains repeats.
+   const uniqueLinks=[...new Map(links.map(link=>[String(link.agent_id),link])).values()];
+   for(const link of uniqueLinks){
+    const id=String(link.agent_id),agent=agentById.get(id);
+    if(!agent)continue;
+    const row=map.get(id)||{id,name:[agent.first_name,agent.last_name].filter(Boolean).join(" ").trim()||agent.name||agent.legal_name||"Unnamed agent",agentNumber:agent.agent_number||"",units:0,volume:0,gci:0,transactions:[]};
+    row.units+=1;
+    row.volume+=Math.max(0,Number(t.sale_price??t.purchase_price??0)||0);
+    // Prefer the assigned agent's commission amount when present; fall back to transaction GCI.
+    const assignedGci=link.agent_gross;
+    row.gci+=Number(assignedGci??t.gross_commission??0)||0;
+    row.transactions.push(t);
+    map.set(id,row);
+   }
+  }
+  return [...map.values()].sort((a,b)=>{
+   const primary=metric==="VOLUME"?b.volume-a.volume:metric==="GCI"?b.gci-a.gci:b.units-a.units;
+   return primary||b.volume-a.volume||b.gci-a.gci||a.name.localeCompare(b.name);
+  }).map((row,index)=>({...row,rank:index+1}));
+ },[completed,agentInfo.rows,agents.rows,metric]);
+ const normalizedSearch=search.trim().toLowerCase();
+ const visible=ranking.filter(x=>!normalizedSearch||x.name.toLowerCase().includes(normalizedSearch)||String(x.agentNumber).toLowerCase().includes(normalizedSearch));
+ const cash=n=>money(n);
+ function exportCsv(){
+  const rows=[["Rank","Agent","Agent Number","Completed Units","Sales Volume","Gross Commission"],...visible.map(x=>[x.rank,x.name,x.agentNumber,x.units,x.volume.toFixed(2),x.gci.toFixed(2)])];
+  const csv=rows.map(row=>row.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(",")).join("\n");
+  const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));const a=document.createElement("a");a.href=url;a.download="agent-rankings-"+start+"-to-"+end+".csv";a.click();URL.revokeObjectURL(url);
+ }
+ return <><div className="pagehead"><div><h1>Agent Rankings & Top Producers</h1><p>Rank agents using completed transactions, units sold, sales volume, and recorded gross commission.</p></div><button className="secondary" type="button" onClick={()=>{agents.load();transactions.load();agentInfo.load()}}><RefreshCw size={16}/> Refresh</button></div>
+ <section className="panel"><div className="formgrid">
+ <label>Reporting period<select value={period} onChange={e=>choosePeriod(e.target.value)}><option value="MONTH">Monthly</option><option value="QUARTER">Quarterly</option><option value="HALF">Half-yearly</option><option value="YEAR">Yearly</option><option value="CUSTOM">Custom date range</option></select></label>
+ <label>Rank by<select value={metric} onChange={e=>setMetric(e.target.value)}><option value="UNITS">Completed units</option><option value="VOLUME">Sales volume</option><option value="GCI">Gross commission</option></select></label>
+ <label>From date<input type="date" value={start} max={end||undefined} onChange={e=>{setStart(e.target.value);setPeriod("CUSTOM")}}/></label>
+ <label>To date<input type="date" value={end} min={start||undefined} max={iso(now)} onChange={e=>{setEnd(e.target.value);setPeriod("CUSTOM")}}/></label>
+ <label style={{gridColumn:"1 / -1"}}>Search agent<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Agent name or agent number"/></label>
+ </div><div className="muted" style={{marginTop:10}}>Includes Closed, Completed, Finalized, and Closed Won transactions with an actual closing date inside the selected range. Transactions without a closing date or agent assignment are excluded. Summary totals remain based on the full reporting period when you search for an agent.</div>
+ <div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}><button className="primary" type="button" onClick={exportCsv} disabled={!visible.length}><FileSpreadsheet size={16}/> Export Ranking CSV</button></div></section>
+ <div className="grid3"><Card title="Completed Units" value={ranking.reduce((n,x)=>n+x.units,0)} sub="Agent transaction credits in reporting period"/><Card title="Sales Volume" value={cash(ranking.reduce((n,x)=>n+x.volume,0))} sub="Completed transactions"/><Card title="Gross Commission" value={cash(ranking.reduce((n,x)=>n+x.gci,0))} sub="Agent commission credited in reporting period"/></div>
+ <section className="panel"><div className="paneltitle"><div><h2>Top Producers</h2><p className="panelhint">{start||"—"} to {end||"—"} · ranked by {metric==="UNITS"?"completed units":metric==="VOLUME"?"sales volume":"gross commission"}</p></div><span className="pill">{visible.length} agents{normalizedSearch?" matched":""}</span></div><div className="tablewrap"><table><thead><tr><th>Rank</th><th>Agent</th><th>Agent #</th><th>Completed Units</th><th>Sales Volume</th><th>Gross Commission</th></tr></thead><tbody>{visible.map(x=><tr key={x.id}><td><strong>{x.rank}</strong>{x.rank===1&&<span className="pill" style={{marginLeft:6}}>Top Producer</span>}</td><td>{x.name}</td><td>{x.agentNumber||"—"}</td><td>{x.units}</td><td>{cash(x.volume)}</td><td>{cash(x.gci)}</td></tr>)}{!visible.length&&<tr><td colSpan="6"><div className="empty small"><BarChart3/><h3>No completed transactions found</h3><p>Try another date range, or verify that transactions have a closing date, an eligible status, and an agent assignment.</p></div></td></tr>}</tbody></table></div></section></>;
+}
 function Reports(){
  const[preview,setPreview]=useState(null),[selectedReport,setSelectedReport]=useState("Profit & Loss"),[dateFrom,setDateFrom]=useState(""),[dateTo,setDateTo]=useState(""),[statusFilter,setStatusFilter]=useState("ALL"),[agentFilter,setAgentFilter]=useState("ALL"),[searchFilter,setSearchFilter]=useState("");
  const tx=useRows("dv_accounting_transactions"),ex=useRows("dv_accounting_expenses"),
