@@ -17,7 +17,8 @@ function splitStreetAddress(address,streetNumber="",streetName=""){
  const matched=raw.match(/^(\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?)\s+(.+)$/);
  return matched?{street_number:matched[1],street_name:matched[2]}:{street_number:"",street_name:raw};
 }
-const defaults=[{code:"LISTING_AGREEMENT",label:"Listing Agreement",required:true},{code:"MLS_DATA",label:"MLS Data / Listing Information",required:true},{code:"PROPERTY_DETAILS",label:"Property Details / Feature Sheet",required:true},{code:"SELLER_DIRECTION",label:"Seller Direction / Authorization",required:true},{code:"ID_FINTRAC",label:"Identification / FINTRAC",required:true},{code:"OTHER",label:"Other Supporting Documents",required:false}];
+const recoGuide={code:"RECO_INFORMATION_GUIDE",label:"RECO Information Guide",required:true};
+const defaults=[{code:"LISTING_AGREEMENT",label:"Listing Agreement",required:true},{code:"MLS_DATA",label:"MLS Data / Listing Information",required:true},{code:"PROPERTY_DETAILS",label:"Property Details / Feature Sheet",required:true},{code:"SELLER_DIRECTION",label:"Seller Direction / Authorization",required:true},{code:"ID_FINTRAC",label:"Identification / FINTRAC",required:true},recoGuide,{code:"OTHER",label:"Other Supporting Documents",required:false}];
 const fieldStyle={width:"100%",boxSizing:"border-box",minHeight:36,padding:"7px 9px",border:"1px solid #d0d5dd",borderRadius:6};
 const labelStyle={display:"grid",gap:4,fontSize:12,fontWeight:600};
 function useAutoRefresh(load,enabled=true){const loadRef=useRef(load);const running=useRef(false);loadRef.current=load;useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>{if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;if(running.current)return;running.current=true;Promise.resolve().then(()=>loadRef.current()).catch(()=>{}).finally(()=>{running.current=false})},30000);return()=>clearInterval(timer)},[enabled])}
@@ -44,11 +45,15 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
    const types=[...new Set([...configuredTypes,...required].map(code=>String(code).trim()).filter(Boolean))];
    const normalizeCode=code=>String(code??"").trim().toUpperCase();
    const configured=types.map(code=>{const normalizedCode=normalizeCode(code);const found=master.find(x=>normalizeCode(x.code)===normalizedCode)||legacy.find(x=>normalizeCode(x.code)===normalizedCode)||{code:normalizedCode,label:normalizedCode};return {...found,code:normalizedCode,label:normalizedCode==="OTHER"?"Other Supporting Documents":found.label};}).filter(x=>x.code);
+   if(!configured.some(x=>x.code==="RECO_INFORMATION_GUIDE"))configured.push({...recoGuide});
+   else configured.forEach(x=>{if(x.code==="RECO_INFORMATION_GUIDE"){x.label="RECO Information Guide";x.required=true}});
+
    if(hasListingRules){
     const withOther=configured.some(x=>x.code==="OTHER")?configured:[...configured,{code:"OTHER",label:"Other Supporting Documents"}];
-    setRequirements(withOther.map(x=>({...x,label:x.code==="OTHER"?"Other Supporting Documents":x.label,required:x.code==="OTHER"?false:required.some(code=>normalizeCode(code)===normalizeCode(x.code))})));
+    setRequirements(withOther.map(x=>({...x,label:x.code==="OTHER"?"Other Supporting Documents":x.label,required:x.code==="OTHER"?false:x.code==="RECO_INFORMATION_GUIDE"||required.some(code=>normalizeCode(code)===normalizeCode(x.code))})));
    }else if(legacy.length){
-    const withOther=legacy.filter(x=>x&&x.code&&x.label).map(x=>({code:normalizeCode(x.code),label:normalizeCode(x.code)==="OTHER"?"Other Supporting Documents":String(x.label),required:normalizeCode(x.code)==="OTHER"?false:x.required!==false}));
+    const withOther=legacy.filter(x=>x&&x.code&&x.label).map(x=>({code:normalizeCode(x.code),label:normalizeCode(x.code)==="OTHER"?"Other Supporting Documents":String(x.label),required:normalizeCode(x.code)==="RECO_INFORMATION_GUIDE"?true:x.required!==false}));
+    if(!withOther.some(x=>x.code==="RECO_INFORMATION_GUIDE"))withOther.push({...recoGuide});
     if(!withOther.some(x=>x.code==="OTHER"))withOther.push({code:"OTHER",label:"Other Supporting Documents",required:false});
     setRequirements(withOther);
    }else{
