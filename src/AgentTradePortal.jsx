@@ -56,7 +56,7 @@ function requiredTradeFieldKeys(values){const isBuyerSide=["BUYER","TENANT"].inc
 function Field({label,children,required=false}) { return <label className="agent-trade-field"><span>{label}{required&&<em className="agent-trade-required-star" aria-label="required"> *</em>}</span>{children}</label> }
 function statusPill(status){return <span className="pill" style={{background:status==="APPROVED"?"#e8f7ee":status==="SUBMITTED"?"#fff3d9":status==="NEEDS_CHANGES"?"#fff0f0":"#edf1f7",color:status==="APPROVED"?"#167344":status==="SUBMITTED"?"#875600":status==="NEEDS_CHANGES"?"#b42318":"#344054"}}>{labelStatus(status)}</span>}
 
-export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAdmin=false,canDeleteDocuments=false}) {
+export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAdmin=false,canViewDocuments=false,canDeleteDocuments=false}) {
  const [submissions,setSubmissions]=useState([]),[docs,setDocs]=useState([]),[agents,setAgents]=useState([]);
  const [selected,setSelected]=useState(null),[selectedTransactionStatus,setSelectedTransactionStatus]=useState(""),[form,setForm]=useState({...blank}),[file,setFile]=useState(null),[files,setFiles]=useState([]),[docType,setDocType]=useState("APS"),[extractBusy,setExtractBusy]=useState(false),[extractedPreview,setExtractedPreview]=useState(null);
  const [bulkFile,setBulkFile]=useState(null),[bulkGroups,setBulkGroups]=useState([]),[bulkBusy,setBulkBusy]=useState(false),[bulkOriginal,setBulkOriginal]=useState(true);
@@ -485,8 +485,9 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    finally{setBulkBusy(false)}
  }
  async function openDoc(doc){
+   if(!adminMode&&!canViewDocuments){setError("You do not have permission to preview trade documents. Ask an administrator to enable View trade documents in Role & Permission.");return;}
    const {data,error:e}=await supabase.storage.from("dv-trade-documents").createSignedUrl(doc.storage_path,3600);
-   if(e){setError(e.message);return}setPreviewDoc(doc);setPreviewUrl(data.signedUrl);
+   if(e){setError("Could not preview trade document: "+e.message);return}setPreviewDoc(doc);setPreviewUrl(data.signedUrl);
  }
  async function persistDocumentOrder(next){setDocs(next);const id=selected?.id;if(!id||!supabase)return;setBusy(true);try{for(let i=0;i<next.length;i++){const {error:e}=await supabase.from("dv_accounting_agent_trade_documents").update({sort_order:i+1}).eq("id",next[i].id);if(e)throw e;}setMessage("Document order saved.");}catch(e){setError("Could not save document order. Apply the document-order database migration, then try again. "+(e?.message||""));}finally{setBusy(false)}}
  function reorderDocument(sourceId,targetId){if(!sourceId||!targetId||sourceId===targetId)return;const from=docs.findIndex(x=>x.id===sourceId),to=docs.findIndex(x=>x.id===targetId);if(from<0||to<0)return;const next=[...docs];const [item]=next.splice(from,1);next.splice(to,0,item);persistDocumentOrder(next);setDraggedDocId(null);}
