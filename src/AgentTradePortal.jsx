@@ -75,8 +75,8 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  const [adminCreating,setAdminCreating]=useState(false),[agentCreating,setAgentCreating]=useState(false),[selectedAgentId,setSelectedAgentId]=useState("");
  const [auditLogs,setAuditLogs]=useState([]);
  const [selectedTradeIds,setSelectedTradeIds]=useState([]);
- const [requiredTypes,setRequiredTypes]=useState(["APS","MLS","COMMISSION"]),[requiredDocCounts,setRequiredDocCounts]=useState({APS:1,MLS:1,COMMISSION:1});const [requirementsBySide,setRequirementsBySide]=useState(null);const activeSideRules=requirementsBySide?.[normalizeRepresentationSide(form.side,form.transaction_type)]||{types:requiredTypes,required:requiredTypes,counts:requiredDocCounts};const activeSideDocumentTypes=docTypes.filter(([type])=>(activeSideRules.types||requiredTypes).includes(type));
- const [docTypes,setDocTypes]=useState([["APS","Agreement of Purchase and Sale / Lease"],["MLS","MLS / Listing sheet"],["COMMISSION","Commission confirmation"],["ID","Identity / compliance document"],["OTHER","Other supporting document"]]);
+ const [requiredTypes,setRequiredTypes]=useState(["APS","MLS","COMMISSION"]),[requiredDocCounts,setRequiredDocCounts]=useState({APS:1,MLS:1,COMMISSION:1});const [requirementsBySide,setRequirementsBySide]=useState(null);
+ const [docTypes,setDocTypes]=useState([["APS","Agreement of Purchase and Sale / Lease"],["MLS","MLS / Listing sheet"],["COMMISSION","Commission confirmation"],["ID","Identity / compliance document"],["OTHER","Other supporting document"]]);const activeSideRules=requirementsBySide?.[normalizeRepresentationSide(form.side,form.transaction_type)]||{types:requiredTypes,required:requiredTypes,counts:requiredDocCounts};const activeSideDocumentTypes=docTypes.filter(([type])=>(activeSideRules.types||requiredTypes).includes(type));
  const [newDocLabel,setNewDocLabel]=useState("");
  const [companyId,setCompanyId]=useState("");
  const [representingAgent,setRepresentingAgent]=useState(null);
