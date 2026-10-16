@@ -1259,7 +1259,7 @@ function SettingsPage({user,permissions={},profileRole,onImpersonate}){
  const settingTabs=useMemo(()=>[["COMPANY","Company & Branches"],["BANKS","Bank Accounts"],["CHEQUES","Cheque Printing Setup"],["CATEGORIES","Chart of Accounts"],["PERIODS","Accounting Periods"],["PAYROLL","Payroll & CRA"],["DOCUMENTS","Trade & Listing Documents Requirements"],["AGENTDOCS","Agent Document Requirements"],["ROLES","Role & Permission"],["USERS","User Accounts"]].filter(([id])=>{
    if(id==="COMPANY"||id==="CATEGORIES"||id==="PAYROLL"||id==="PERIODS")return isSuperAdmin||!!permissions["settings.company.manage"]?.allowed;
    if(id==="BANKS"||id==="CHEQUES")return isSuperAdmin||!!permissions["settings.banking.manage"]?.allowed;
-   if(id==="DOCUMENTS")return isSuperAdmin;
+   if(id==="DOCUMENTS"||id==="AGENTDOCS")return isSuperAdmin;
    if(id==="ROLES")return canSeeRoleControls;
    if(id==="USERS")return canSeeUsers;
    return false;
