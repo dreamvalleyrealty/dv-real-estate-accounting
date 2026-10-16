@@ -505,10 +505,9 @@ function AgentRankings(){
  const completed=useMemo(()=>{
   if(!start||!end||start>end)return [];
   return transactions.rows.filter(t=>{
-   const status=String(t.status||"").toUpperCase().replace(/[^A-Z]/g,"");
-   if(!["CLOSED","COMPLETED","FINALIZED","CLOSEDWON","PAID"].includes(status))return false;
-   // Production is reported by actual closing date only; do not silently substitute entry/transaction dates.
-   const date=String(t.close_date||t.closing_date||"").slice(0,10);
+   const statuses=[t.status,t.transaction_status].map(value=>String(value||"").toUpperCase().replace(/[^A-Z]/g,""));
+   if(!statuses.some(status=>["CLOSED","COMPLETED","FINALIZED","CLOSEDWON","PAID"].includes(status)))return false;
+   const date=String(t.close_date||t.closing_date||t.finalized_date||t.transaction_date||t.entry_date||"").slice(0,10);
    return !!date&&date>=start&&date<=end;
   });
  },[transactions.rows,start,end]);
