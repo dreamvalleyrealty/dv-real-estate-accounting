@@ -490,7 +490,7 @@ function Payroll({user,permissions={},role}){
  </>
 }
 function AgentRankings(){
- const agents=useRows("dv_accounting_agents"),transactions=useRows("dv_accounting_transactions"),agentInfo=useRows("dv_accounting_transaction_agent_info"),tradeSubmissions=useRows("dv_accounting_agent_trade_submissions"),listingSubmissions=useRows("dv_accounting_listing_submissions");
+ const agents=useRows("dv_accounting_agents"),transactions=useRows("dv_accounting_transactions"),agentInfo=useRows("dv_accounting_transaction_agents"),tradeSubmissions=useRows("dv_accounting_agent_trade_submissions"),listingSubmissions=useRows("dv_accounting_listing_submissions");
  const now=new Date(),iso=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");return y+"-"+m+"-"+day};
  const[period,setPeriod]=useState("MONTH"),[start,setStart]=useState(iso(new Date(now.getFullYear(),now.getMonth(),1))),[end,setEnd]=useState(iso(now)),[metric,setMetric]=useState("UNITS"),[search,setSearch]=useState("");
  function choosePeriod(value){
@@ -506,7 +506,7 @@ function AgentRankings(){
   if(!start||!end||start>end)return [];
   return transactions.rows.filter(t=>{
    const status=String(t.status||"").toUpperCase().replace(/[^A-Z]/g,"");
-   if(!["CLOSED","COMPLETED","FINALIZED","CLOSEDWON"].includes(status))return false;
+   if(!["CLOSED","COMPLETED","FINALIZED","CLOSEDWON","PAID"].includes(status))return false;
    // Production is reported by actual closing date only; do not silently substitute entry/transaction dates.
    const date=String(t.close_date||t.closing_date||"").slice(0,10);
    return !!date&&date>=start&&date<=end;
@@ -536,7 +536,7 @@ function AgentRankings(){
     row.units+=1;
     row.volume+=Math.max(0,Number(t.sale_price??t.purchase_price??0)||0);
     // Prefer the assigned agent's commission amount when present; fall back to transaction GCI.
-    const assignedGci=link.agent_gross;
+    const assignedGci=link.commission_base??link.gross_commission??link.agent_gross;
     row.gci+=Number(assignedGci??t.gross_commission??0)||0;
     row.transactions.push(t);
     map.set(id,row);
