@@ -26,6 +26,35 @@ const statusLabel=s=>({DRAFT:"Draft",SUBMITTED:"Awaiting review",NEEDS_CHANGES:"
 export default function Listings({user,agentId,adminMode=false,canDeleteDocuments=false}){
  const [rows,setRows]=useState([]),[listingSearch,setListingSearch]=useState(""),[docs,setDocs]=useState([]),[activeTab,setActiveTab]=useState("PROPERTY"),[selectedRequirementCode,setSelectedRequirementCode]=useState("LISTING_AGREEMENT"),[previewDocument,setPreviewDocument]=useState(null),[previewUrl,setPreviewUrl]=useState(""),[requirements,setRequirements]=useState(defaults),[companyId,setCompanyId]=useState(""),[agents,setAgents]=useState([]),[assignedAgentId,setAssignedAgentId]=useState(""),[additionalAgentIds,setAdditionalAgentIds]=useState([]),[additionalAgentSearch,setAdditionalAgentSearch]=useState(""),[selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[newListing,setNewListing]=useState(false),[uploadType,setUploadType]=useState(defaults[0].code),[fileBatch,setFileBatch]=useState([]),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[message,setMessage]=useState(""),[mlsNumber,setMlsNumber]=useState(""),[adminNotes,setAdminNotes]=useState(""),[autoSplit,setAutoSplit]=useState(false),[splitPreview,setSplitPreview]=useState(null),[splitting,setSplitting]=useState(false),[changeRequests,setChangeRequests]=useState([]),[requestText,setRequestText]=useState(""),[renamingDocumentId,setRenamingDocumentId]=useState(null),[documentNameDraft,setDocumentNameDraft]=useState(""),[fileNameDrafts,setFileNameDrafts]=useState([]);
  const isAdmin=adminMode;
+ const localDraftKey=`dv-listing-unsaved-draft:${user?.id||"unknown"}:${isAdmin?"staff":"agent"}:${agentId||"assigned"}`;
+ const [draftRestored,setDraftRestored]=useState(false);
+ useEffect(()=>{
+  try{
+   const raw=window.localStorage.getItem(localDraftKey);
+   if(raw){
+    const draft=JSON.parse(raw);
+    if(draft&&draft.form&&typeof draft.form==="object"){
+     setForm({...blank,...draft.form});
+     setAssignedAgentId(draft.assignedAgentId||"");
+     setAdditionalAgentIds(Array.isArray(draft.additionalAgentIds)?draft.additionalAgentIds:[]);
+     setNewListing(true);
+     setActiveTab("PROPERTY");
+     setMessage("Restored your unsaved listing draft from this browser. Click Save Draft to store it permanently.");
+    }
+   }
+  }catch(e){console.warn("Could not restore unsaved listing draft",e)}
+  finally{setDraftRestored(true)}
+ },[localDraftKey]);
+ useEffect(()=>{
+  if(!draftRestored)return;
+  try{
+   if(newListing&&!selected){
+    window.localStorage.setItem(localDraftKey,JSON.stringify({form,assignedAgentId,additionalAgentIds,savedAt:new Date().toISOString()}));
+   }else if(selected?.id){
+    window.localStorage.removeItem(localDraftKey);
+   }
+  }catch(e){console.warn("Could not persist unsaved listing draft",e)}
+ },[draftRestored,localDraftKey,form,assignedAgentId,additionalAgentIds,newListing,selected]);
  const load=useCallback(async(background=false)=>{
   if(!supabase){setLoading(false);return}
   if(!background){setLoading(true);setError("");}
@@ -83,13 +112,15 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
   setBusy(true);setError("");setMessage("");
   try{
    if(!supabase)throw new Error("Database connection is unavailable. Refresh the page and sign in again.");
+   let resolvedCompanyId=companyId;if(!resolvedCompanyId){const {data:companyRow,error:companyLookupError}=await supabase.from("dv_accounting_companies").select("id").limit(1).maybeSingle();if(companyLookupError)throw new Error("Could not identify the brokerage company: "+companyLookupError.message);resolvedCompanyId=companyRow?.id||null;if(resolvedCompanyId)setCompanyId(resolvedCompanyId)}
    const payload={property_address:propertyAddress,additional_agent_ids:isAdmin?[...new Set([targetAgentId,...additionalAgentIds].filter(Boolean))]:[...new Set([agentId,...additionalAgentIds].filter(Boolean))],unit_number:form.unit_number||"",city:String(form.city).trim(),province:form.province||"ON",postal_code:form.postal_code||"",property_type:form.property_type||"RESIDENTIAL",listing_type:form.listing_type||"SALE",asking_price:form.asking_price?Number(form.asking_price):null,listing_start_date:form.listing_start_date||null,listing_expiry_date:form.listing_expiry_date||null,notes:form.notes||"",status:submit?"SUBMITTED":(selected?.status==="NEEDS_CHANGES"?"NEEDS_CHANGES":"DRAFT"),updated_at:new Date().toISOString()};
    let result;
    if(selected?.id)result=await supabase.from("dv_accounting_listing_submissions").update({...payload,...(isAdmin?{agent_id:targetAgentId}:{})}).eq("id",selected.id).select().single();
-   else result=await supabase.from("dv_accounting_listing_submissions").insert([{...payload,agent_id:targetAgentId,company_id:companyId||null,created_by:user?.id||null}]).select().single();
+   else result=await supabase.from("dv_accounting_listing_submissions").insert([{...payload,agent_id:targetAgentId,company_id:resolvedCompanyId,created_by:user?.id||null}]).select().single();
    if(result.error)throw new Error("Could not save listing: "+result.error.message);
    const saved=result.data;
    setSelected(saved);setAssignedAgentId(saved.agent_id||targetAgentId);setAdditionalAgentIds(Array.isArray(saved.additional_agent_ids)?saved.additional_agent_ids.filter(id=>id!==saved.agent_id):[]);setForm({...blank,...saved,...splitStreetAddress(saved.property_address,saved.street_number,saved.street_name)});setNewListing(false);
+   try{window.localStorage.removeItem(localDraftKey)}catch{}
    setMessage(submit?"Listing paperwork submitted for admin review.":"Listing draft saved.");
    await load();
    await loadDocs(saved.id);
