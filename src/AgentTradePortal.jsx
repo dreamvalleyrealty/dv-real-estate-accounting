@@ -7,7 +7,7 @@ import AgentSearchSelect from "./AgentSearchSelect";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 function useAutoRefresh(load,enabled=true){const loadRef=useRef(load);const running=useRef(false);loadRef.current=load;useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>{if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;if(running.current)return;running.current=true;Promise.resolve().then(()=>loadRef.current()).catch(()=>{}).finally(()=>{running.current=false})},30000);return()=>clearInterval(timer)},[enabled])}
-const AGENT_PORTAL_VERSION = "0.6.421";
+const AGENT_PORTAL_VERSION = __BUILD_VERSION__;
 
 const localDateISO = (date=new Date()) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
 
@@ -482,7 +482,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
        const {error:upError}=await supabase.storage.from("dv-trade-documents").upload(path,task.blob,{upsert:false,contentType:"application/pdf"});
        if(upError)throw new Error("Upload failed for "+task.name+": "+upError.message);
        uploadedPaths.push(path);
-       const {data:errorData,error:e}=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:task.type,document_name:task.name,storage_path:path,mime_type:"application/pdf",file_size:task.blob.size,uploaded_by:user.id,sort_order:(docs.length+uploaded+1)}]).select().single();
+       const {data:errorData,error:e}=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:task.type,document_name:task.name,storage_path:path,mime_type:"application/pdf",file_size:task.blob.size,uploaded_by:user.id}]).select().single();
        if(e){await supabase.storage.from("dv-trade-documents").remove([path]);uploadedPaths.pop();throw new Error("Could not register "+task.name+": "+e.message)}
        setDocs(old=>[...old,errorData]);uploaded++;
      }
