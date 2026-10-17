@@ -7,7 +7,7 @@ import AgentSearchSelect from "./AgentSearchSelect";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 function useAutoRefresh(load,enabled=true){const loadRef=useRef(load);const running=useRef(false);loadRef.current=load;useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>{if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;if(running.current)return;running.current=true;Promise.resolve().then(()=>loadRef.current()).catch(()=>{}).finally(()=>{running.current=false})},30000);return()=>clearInterval(timer)},[enabled])}
-const AGENT_PORTAL_VERSION = "0.6.411";
+const AGENT_PORTAL_VERSION = "0.6.412";
 
 const localDateISO = (date=new Date()) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
 
@@ -451,12 +451,13 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    }catch(e){setError("Could not analyze PDF: "+(e?.message||String(e)))}finally{setBulkBusy(false)}
  }
  function updateBulkGroup(id,patch){setBulkGroups(old=>old.map(g=>g.id===id?{...g,...patch,label:patch.type!==undefined?(docTypes.find(([t])=>t===patch.type)?.[1]||patch.type):g.label}:g))}
+ function moveBulkGroup(id,direction){setBulkGroups(old=>{const next=[...old],index=next.findIndex(g=>g.id===id),target=index+direction;if(index<0||target<0||target>=next.length)return old;[next[index],next[target]]=[next[target],next[index]];return next})}
  async function saveSplitDocuments(){
    if(!bulkFile||!bulkGroups.length||!supabase){setError("Choose and analyze a PDF first.");return}
    const parsedGroups=bulkGroups.map(g=>{let indices=[];const spec=String(g.pages||"").trim();if(spec){const parts=spec.split(",").map(x=>x.trim()).filter(Boolean);for(const part of parts){const m=part.match(/^(\d+)(?:\s*-\s*(\d+))?$/);if(!m)return{...g,_invalidPages:true};const a=Number(m[1]),b=Number(m[2]||m[1]);if(a<1||b<a||b>bulkPageCount)return{...g,_invalidPages:true};for(let n=a;n<=b;n++)indices.push(n)}}else{if(!Number.isInteger(Number(g.start))||!Number.isInteger(Number(g.end))||Number(g.start)<1||Number(g.end)<Number(g.start)||Number(g.end)>bulkPageCount)return{...g,_invalidPages:true};for(let n=Number(g.start);n<=Number(g.end);n++)indices.push(n)}return{...g,_indices:[...new Set(indices)].sort((a,b)=>a-b)}});
    if(parsedGroups.some(g=>!g.type||g._invalidPages||!g._indices?.length)){setError("Check document type and pages. Use specific pages like 1, 3, 7-9, or a valid From/To range.");return}
    const usedPages=new Set();for(const g of parsedGroups){for(const pn of g._indices){if(usedPages.has(pn)){setError("Page "+pn+" is assigned to more than one document. Each PDF page can belong to only one split document.");return}usedPages.add(pn)}}
-   const sorted=[...parsedGroups].sort((a,b)=>a._indices[0]-b._indices[0]);
+   const sorted=parsedGroups;
    const draft=await ensureDraftForUpload();if(!draft)return;
    setBulkBusy(true);setError("");setMessage("");
    const uploadedPaths=[];
@@ -647,8 +648,8 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
               <button className="secondary" type="button" disabled={!bulkFile||bulkBusy||busy} onClick={analyzeBulkPdf}><FileText size={15}/>{bulkBusy?"Analyzing…":"Analyze & Detect Forms"}</button>
               {bulkGroups.length>0&&<div style={{marginTop:10}}>
                <p className="agent-trade-muted">Review the detected sections. Page ranges must not overlap. Unrecognized pages are marked for review.</p>
-               <div style={{display:"grid",gap:7}}>{bulkGroups.map(g=><div key={g.id} style={{border:"1px solid #e4e7ec",borderRadius:7,padding:8,display:"grid",gridTemplateColumns:"minmax(140px,1fr) 62px 62px",gap:7,alignItems:"end"}}>
-                <Field label={"Document "+g.id}><select value={g.type} onChange={e=>updateBulkGroup(g.id,{type:e.target.value})}>{docTypes.map(([type,label])=><option key={type} value={type}>{label}</option>)}{!docTypes.some(([type])=>type==="OTHER")&&<option value="OTHER">Other / Review</option>}</select></Field>
+               <div style={{display:"grid",gap:7}}>{bulkGroups.map(g=><div key={g.id} style={{border:"1px solid #e4e7ec",borderRadius:7,padding:8,display:"grid",gridTemplateColumns:"minmax(140px,1fr) 62px 62px auto",gap:7,alignItems:"end"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{display:"flex",flexDirection:"column",gap:3}}><button type="button" className="secondary" title="Move document up" disabled={i===0||bulkBusy} onClick={()=>moveBulkGroup(g.id,-1)} style={{padding:"2px 7px",minHeight:22}}>↑</button><button type="button" className="secondary" title="Move document down" disabled={i===bulkGroups.length-1||bulkBusy} onClick={()=>moveBulkGroup(g.id,1)} style={{padding:"2px 7px",minHeight:22}}>↓</button></div><Field label={"Document "+(i+1)}><select value={g.type} onChange={e=>updateBulkGroup(g.id,{type:e.target.value})}>{docTypes.map(([type,label])=><option key={type} value={type}>{label}</option>)}{!docTypes.some(([type])=>type==="OTHER")&&<option value="OTHER">Other / Review</option>}</select></Field></div>
                 <Field label="From page"><input type="number" min="1" value={g.start} onChange={e=>updateBulkGroup(g.id,{start:e.target.value,pages:""})}/></Field>
                 <Field label="To page"><input type="number" min="1" value={g.end} onChange={e=>updateBulkGroup(g.id,{end:e.target.value,pages:""})}/></Field>
                 <Field label="Specific pages (optional)"><input type="text" placeholder="e.g. 1, 3, 7-9" value={g.pages||""} onChange={e=>updateBulkGroup(g.id,{pages:e.target.value})}/></Field>
