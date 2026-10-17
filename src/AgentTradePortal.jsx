@@ -59,7 +59,7 @@ function statusPill(status){return <span className="pill" style={{background:sta
 export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAdmin=false,canViewDocuments=false,canDeleteDocuments=false}) {
  const [submissions,setSubmissions]=useState([]),[docs,setDocs]=useState([]),[agents,setAgents]=useState([]);
  const [selected,setSelected]=useState(null),[selectedTransactionStatus,setSelectedTransactionStatus]=useState(""),[form,setForm]=useState({...blank}),[file,setFile]=useState(null),[files,setFiles]=useState([]),[docType,setDocType]=useState("APS"),[extractBusy,setExtractBusy]=useState(false),[extractedPreview,setExtractedPreview]=useState(null);
- const [bulkFile,setBulkFile]=useState(null),[bulkGroups,setBulkGroups]=useState([]),[bulkBusy,setBulkBusy]=useState(false),[bulkOriginal,setBulkOriginal]=useState(true);
+ const [bulkFile,setBulkFile]=useState(null),[bulkGroups,setBulkGroups]=useState([]),[bulkBusy,setBulkBusy]=useState(false),[bulkOriginal,setBulkOriginal]=useState(true),[bulkPageCount,setBulkPageCount]=useState(0);
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[reviewNotes,setReviewNotes]=useState("");
  const draftWriteLock=useRef(false);
  const [previewUrl,setPreviewUrl]=useState(""),[previewDoc,setPreviewDoc]=useState(null);
@@ -418,7 +418,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    try{
      const pdfjs=await import("pdfjs-dist/legacy/build/pdf.mjs");pdfjs.GlobalWorkerOptions.workerSrc=pdfWorkerUrl;
      const sourceBytes=new Uint8Array(await bulkFile.arrayBuffer());
-     const source=await pdfjs.getDocument({data:sourceBytes}).promise;
+     const source=await pdfjs.getDocument({data:sourceBytes}).promise;setBulkPageCount(source.numPages);
      const master=docTypes.filter(([type])=>(requirementsBySide?.[form.side]?.types||requiredTypes).includes(type));
      const detect=(raw)=>{
        const t=String(raw||"").toUpperCase().replace(/\s+/g," ");
