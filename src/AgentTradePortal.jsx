@@ -181,6 +181,33 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  function startNew(){setActiveTab("PROPERTY");setAdminCreating(false);setAgentCreating(true);setInlinePreviewDoc(null);setInlinePreviewUrl("");setSelectedAgentId("");setSelected(null);setForm(applyRepresentingDefaults({...blank,transaction_date:localDateISO()}));setFile(null);setFiles([]);setExtractedPreview(null);setMessage("");setError("");}
   function startAdminTrade(){setAdminCreating(true);setSelected(null);setSelectedAgentId("");setRepresentingAgent(null);setForm({...blank,transaction_date:localDateISO()});setFile(null);setFiles([]);setExtractedPreview(null);setMessage("");setError("");}
  function editSubmission(s){setActiveTab(adminMode?"DOCUMENTS":"PROPERTY");setInlinePreviewDoc(null);setInlinePreviewUrl("");setAgentCreating(false);setAdminCreating(false);setSelectedAgentId(s.agent_id||"");setSelected(s);setForm({...blank,...(s.payload||{}),side:normalizeRepresentationSide((s.payload||{}).side,(s.payload||{}).transaction_type||blank.transaction_type)});setFile(null);setFiles([]);setExtractedPreview(null);setMessage("");setError("");setReviewNotes(s.review_notes||"");}
+ async function syncListingDocumentsToTrade(submissionId,listingId){
+  if(!submissionId||!listingId||!supabase)return {copied:0,failed:0};
+  const {data:listingDocs,error:listingError}=await supabase.from("dv_accounting_listing_documents").select("*").eq("listing_id",listingId).order("created_at",{ascending:true});
+  if(listingError)throw new Error("Could not load listing documents: "+listingError.message);
+  if(!listingDocs?.length)return {copied:0,failed:0};
+  const {data:existingDocs,error:existingError}=await supabase.from("dv_accounting_agent_trade_documents").select("document_name").eq("submission_id",submissionId);
+  if(existingError)throw new Error("Could not check existing trade documents: "+existingError.message);
+  const existingNames=new Set((existingDocs||[]).map(d=>String(d.document_name||"")));
+  let copied=0,failed=0;
+  for(const doc of listingDocs){
+    const documentName="Listing: "+String(doc.document_name||doc.document_type||"Supporting document");
+    if(existingNames.has(documentName))continue;
+    const {data:file,error:downloadError}=await supabase.storage.from("dv-trade-documents").download(doc.storage_path);
+    if(downloadError||!file){failed++;continue;}
+    const safeName=String(doc.document_name||"listing-document").replace(/[^a-z0-9._-]+/gi,"-").slice(0,100)||"listing-document";
+    const path=user.id+"/"+submissionId+"/listing-"+listingId+"-"+doc.id+"-"+safeName;
+    const {error:uploadError}=await supabase.storage.from("dv-trade-documents").upload(path,file,{upsert:true,contentType:doc.mime_type||file.type||"application/octet-stream"});
+    if(uploadError){failed++;continue;}
+    const knownTypes=new Set(docTypes.map(([type])=>type));
+    const typeMap={MLS_DATA:"MLS",ID_FINTRAC:"ID"};
+    const type=knownTypes.has(doc.document_type)?doc.document_type:(typeMap[doc.document_type]||"OTHER");
+    const {error:insertError}=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:submissionId,document_type:type,document_name:documentName,storage_path:path,mime_type:doc.mime_type||file.type||null,file_size:doc.file_size||file.size,uploaded_by:user.id}]);
+    if(insertError){await supabase.storage.from("dv-trade-documents").remove([path]);failed++;continue;}
+    existingNames.add(documentName);copied++;
+  }
+  return {copied,failed};
+ }
  async function saveDraft({submit=false}={}){
    const targetAgentId=selected?.agent_id||(adminMode?selectedAgentId:agentId);
    if(!supabase||!targetAgentId){setError(adminMode?"Select the agent this trade belongs to.":"Your login is not linked to an active Dream Valley agent record. Ask the administrator to make sure your login email matches your agent profile email.");return}
@@ -206,7 +233,8 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    }
    for(const [partyList,contactType] of [[payload.buyers||[],"BUYER"],[payload.sellers||[],"SELLER"]]){for(const person of partyList){const first_name=String(person.first_name||"").trim(),last_name=String(person.last_name||"").trim();if(!first_name&&!last_name)continue;const full=[first_name,last_name].filter(Boolean).join(" ").toLowerCase();if(contactDirectory.some(c=>String(c.contact_type||"").toUpperCase()===contactType&&contactName(c).toLowerCase()===full))continue;const{data:contact,error:contactError}=await supabase.from("dv_accounting_contacts").insert([{first_name,last_name,contact_type:contactType}]).select().single();if(!contactError&&contact)setContactDirectory(old=>[...old,contact]);}}
    setSelected(row);setAgentCreating(false);if(adminMode&&submit)setAdminCreating(false);setSubmissions(old=>[row,...old.filter(x=>x.id!==row.id)]);
-   setMessage(submit?"Trade submitted to the Trade Admin Manager for review.":(form.property_address.trim()?"Draft saved.":"Draft created. Upload your documents first; extracted details will appear here for you to review."));
+   let listingDocumentResult={copied:0,failed:0};if(payload.listing_id){try{listingDocumentResult=await syncListingDocumentsToTrade(row.id,payload.listing_id)}catch(err){listingDocumentResult={copied:0,failed:1};console.warn("Could not sync listing documents to trade:",err?.message||err)}}
+   setMessage(listingDocumentResult.failed?"Trade saved, but "+listingDocumentResult.failed+" listing document(s) could not be copied. Re-save the draft or ask an administrator to check storage permissions.":listingDocumentResult.copied?listingDocumentResult.copied+" listing document(s) copied into Trade Documents. "+(submit?"Trade submitted to the Trade Admin Manager for review.":"Draft saved."):submit?"Trade submitted to the Trade Admin Manager for review.":(form.property_address.trim()?"Draft saved.":"Draft created. Upload your documents first; extracted details will appear here for you to review."));
    setBusy(false);draftWriteLock.current=false;await loadDocs(row.id);await load();return row;
  }
  async function ensureDraftForUpload(){
