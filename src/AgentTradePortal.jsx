@@ -592,6 +592,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    if(status==="APPROVED"){
      const {data,error:e}=await supabase.rpc("dv_accounting_approve_agent_trade_submission",{p_submission_id:selected.id});
      if(e){setError(e.message);setBusy(false);return}
+     if(data&&selected.payload?.listing_id){const listingFirmDate=selected.payload?.firm_date||null;const {error:linkError}=await supabase.from("dv_accounting_transactions").update({listing_id:selected.payload.listing_id,firm_date:listingFirmDate}).eq("id",data);if(linkError){setError("Trade approved, but the linked listing could not be connected to the accounting transaction: "+linkError.message);setBusy(false);return}if(listingFirmDate){const {error:listingStatusError}=await supabase.from("dv_accounting_listing_submissions").update({status:"SOLD",updated_at:new Date().toISOString()}).eq("id",selected.payload.listing_id);if(listingStatusError){setError("Trade approved and linked, but the listing could not be marked Sold: "+listingStatusError.message);setBusy(false);return}}}
      setMessage("Approved. A draft transaction has been created for the billing and payout workflow.");
    }else{
      const {error:e}=await supabase.rpc("dv_accounting_review_agent_trade_submission",{p_submission_id:selected.id,p_status:status,p_notes:reviewNotes});
