@@ -453,9 +453,10 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  function updateBulkGroup(id,patch){setBulkGroups(old=>old.map(g=>g.id===id?{...g,...patch,label:patch.type!==undefined?(docTypes.find(([t])=>t===patch.type)?.[1]||patch.type):g.label}:g))}
  async function saveSplitDocuments(){
    if(!bulkFile||!bulkGroups.length||!supabase){setError("Choose and analyze a PDF first.");return}
-   if(bulkGroups.some(g=>!g.type||!Number.isInteger(Number(g.start))||!Number.isInteger(Number(g.end))||Number(g.start)<1||Number(g.end)<Number(g.start))){setError("Check each document type and page range.");return}
-   const sorted=[...bulkGroups].sort((a,b)=>Number(a.start)-Number(b.start));
-   for(let i=1;i<sorted.length;i++){if(Number(sorted[i].start)<=Number(sorted[i-1].end)){setError("Page ranges overlap. Each page can belong to only one split document.");return}}
+   const parsedGroups=bulkGroups.map(g=>{let indices=[];const spec=String(g.pages||"").trim();if(spec){const parts=spec.split(",").map(x=>x.trim()).filter(Boolean);for(const part of parts){const m=part.match(/^(\d+)(?:\s*-\s*(\d+))?$/);if(!m)return{...g,_invalidPages:true};const a=Number(m[1]),b=Number(m[2]||m[1]);if(a<1||b<a||b>bulkPageCount)return{...g,_invalidPages:true};for(let n=a;n<=b;n++)indices.push(n)}}else{if(!Number.isInteger(Number(g.start))||!Number.isInteger(Number(g.end))||Number(g.start)<1||Number(g.end)<Number(g.start)||Number(g.end)>bulkPageCount)return{...g,_invalidPages:true};for(let n=Number(g.start);n<=Number(g.end);n++)indices.push(n)}return{...g,_indices:[...new Set(indices)].sort((a,b)=>a-b)}});
+   if(parsedGroups.some(g=>!g.type||g._invalidPages||!g._indices?.length)){setError("Check document type and pages. Use specific pages like 1, 3, 7-9, or a valid From/To range.");return}
+   const usedPages=new Set();for(const g of parsedGroups){for(const pn of g._indices){if(usedPages.has(pn)){setError("Page "+pn+" is assigned to more than one document. Each PDF page can belong to only one split document.");return}usedPages.add(pn)}}
+   const sorted=[...parsedGroups].sort((a,b)=>a._indices[0]-b._indices[0]);
    const draft=await ensureDraftForUpload();if(!draft)return;
    setBulkBusy(true);setError("");setMessage("");
    const uploadedPaths=[];
@@ -465,11 +466,11 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      const tasks=[];
      if(bulkOriginal)tasks.push({type:"BULK_ORIGINAL",name:bulkFile.name,blob:new Blob([originalBytes],{type:"application/pdf"})});
      for(const g of sorted){
-       const out=await PDFDocument.create(),indices=[];for(let pn=Number(g.start);pn<=Number(g.end);pn++)indices.push(pn-1);
+       const out=await PDFDocument.create(),indices=g._indices.map(pn=>pn-1);
        const copied=await out.copyPages(source,indices);copied.forEach(p=>out.addPage(p));
        const bytes=await out.save();const label=docTypes.find(([id])=>id===g.type)?.[1]||g.type;
        const clean=label.replace(/[^a-zA-Z0-9._-]+/g,"_").slice(0,70)||g.type;
-       tasks.push({type:g.type,name:clean+"_pages_"+g.start+"-"+g.end+".pdf",blob:new Blob([bytes],{type:"application/pdf"})});
+       tasks.push({type:g.type,name:clean+"_pages_"+g._indices.join("-")+".pdf",blob:new Blob([bytes],{type:"application/pdf"})});
      }
      let uploaded=0;
      for(const task of tasks){
@@ -648,8 +649,9 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
                <p className="agent-trade-muted">Review the detected sections. Page ranges must not overlap. Unrecognized pages are marked for review.</p>
                <div style={{display:"grid",gap:7}}>{bulkGroups.map(g=><div key={g.id} style={{border:"1px solid #e4e7ec",borderRadius:7,padding:8,display:"grid",gridTemplateColumns:"minmax(140px,1fr) 62px 62px",gap:7,alignItems:"end"}}>
                 <Field label={"Document "+g.id}><select value={g.type} onChange={e=>updateBulkGroup(g.id,{type:e.target.value})}>{docTypes.map(([type,label])=><option key={type} value={type}>{label}</option>)}{!docTypes.some(([type])=>type==="OTHER")&&<option value="OTHER">Other / Review</option>}</select></Field>
-                <Field label="From page"><input type="number" min="1" value={g.start} onChange={e=>updateBulkGroup(g.id,{start:e.target.value})}/></Field>
-                <Field label="To page"><input type="number" min="1" value={g.end} onChange={e=>updateBulkGroup(g.id,{end:e.target.value})}/></Field>
+                <Field label="From page"><input type="number" min="1" value={g.start} onChange={e=>updateBulkGroup(g.id,{start:e.target.value,pages:""})}/></Field>
+                <Field label="To page"><input type="number" min="1" value={g.end} onChange={e=>updateBulkGroup(g.id,{end:e.target.value,pages:""})}/></Field>
+                <Field label="Specific pages (optional)"><input type="text" placeholder="e.g. 1, 3, 7-9" value={g.pages||""} onChange={e=>updateBulkGroup(g.id,{pages:e.target.value})}/></Field>
                 <small className="agent-trade-muted" style={{gridColumn:"1 / -1"}}>{g.confidence==="Likely"?"Title/form number detected":g.confidence==="Inherited"?"Assumed continuation of previous form":"Please verify classification"} · {g.end-g.start+1} page(s)</small>
                </div>)}</div>
                <button className="primary" type="button" style={{marginTop:10}} disabled={bulkBusy||busy} onClick={saveSplitDocuments}><Upload size={15}/> Split &amp; Save Documents</button>
