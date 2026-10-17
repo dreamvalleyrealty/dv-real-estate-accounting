@@ -7,7 +7,7 @@ import AgentSearchSelect from "./AgentSearchSelect";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 function useAutoRefresh(load,enabled=true){const loadRef=useRef(load);const running=useRef(false);loadRef.current=load;useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>{if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;if(running.current)return;running.current=true;Promise.resolve().then(()=>loadRef.current()).catch(()=>{}).finally(()=>{running.current=false})},30000);return()=>clearInterval(timer)},[enabled])}
-const AGENT_PORTAL_VERSION = "0.6.412";
+const AGENT_PORTAL_VERSION = "0.6.413";
 
 const localDateISO = (date=new Date()) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
 
@@ -454,7 +454,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  function moveBulkGroup(id,direction){setBulkGroups(old=>{const next=[...old],index=next.findIndex(g=>g.id===id),target=index+direction;if(index<0||target<0||target>=next.length)return old;[next[index],next[target]]=[next[target],next[index]];return next})}
  async function saveSplitDocuments(){
    if(!bulkFile||!bulkGroups.length||!supabase){setError("Choose and analyze a PDF first.");return}
-   const parsedGroups=bulkGroups.map(g=>{let indices=[];const spec=String(g.pages||"").trim();if(spec){const parts=spec.split(",").map(x=>x.trim()).filter(Boolean);for(const part of parts){const m=part.match(/^(\d+)(?:\s*-\s*(\d+))?$/);if(!m)return{...g,_invalidPages:true};const a=Number(m[1]),b=Number(m[2]||m[1]);if(a<1||b<a||b>bulkPageCount)return{...g,_invalidPages:true};for(let n=a;n<=b;n++)indices.push(n)}}else{if(!Number.isInteger(Number(g.start))||!Number.isInteger(Number(g.end))||Number(g.start)<1||Number(g.end)<Number(g.start)||Number(g.end)>bulkPageCount)return{...g,_invalidPages:true};for(let n=Number(g.start);n<=Number(g.end);n++)indices.push(n)}return{...g,_indices:[...new Set(indices)].sort((a,b)=>a-b)}});
+   const parsedGroups=bulkGroups.map(g=>{let indices=[];const spec=String(g.pages||"").trim();if(spec){const parts=spec.split(",").map(x=>x.trim()).filter(Boolean);for(const part of parts){const m=part.match(/^(\d+)(?:\s*-\s*(\d+))?$/);if(!m)return{...g,_invalidPages:true};const a=Number(m[1]),b=Number(m[2]||m[1]);if(a<1||b<a||b>bulkPageCount)return{...g,_invalidPages:true};for(let n=a;n<=b;n++)indices.push(n)}}else{if(!Number.isInteger(Number(g.start))||!Number.isInteger(Number(g.end))||Number(g.start)<1||Number(g.end)<Number(g.start)||Number(g.end)>bulkPageCount)return{...g,_invalidPages:true};for(let n=Number(g.start);n<=Number(g.end);n++)indices.push(n)}return{...g,_indices:[...new Set(indices)]}});
    if(parsedGroups.some(g=>!g.type||g._invalidPages||!g._indices?.length)){setError("Check document type and pages. Use specific pages like 1, 3, 7-9, or a valid From/To range.");return}
    const usedPages=new Set();for(const g of parsedGroups){for(const pn of g._indices){if(usedPages.has(pn)){setError("Page "+pn+" is assigned to more than one document. Each PDF page can belong to only one split document.");return}usedPages.add(pn)}}
    const sorted=parsedGroups;
