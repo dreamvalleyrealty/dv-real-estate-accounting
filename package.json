@@ -1,7 +1,7 @@
 {
   "name": "dv-real-estate-accounting",
   "private": true,
-  "version": "0.6.424",
+  "version": "0.6.425",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,18 +11,11 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
     "lucide-react": "^0.468.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "react-router-dom": "^7.9.2",
-    "xlsx": "^0.18.5",
-    "pdfjs-dist": "^4.8.69",
-    "html2canvas": "^1.4.1",
-    "jspdf": "^4.2.1",
-    "tesseract.js": "^6.0.1",
-    "pdf-lib": "^1.17.1"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^6.0.5"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^5.0.2",
-    "vite": "^7.1.7"
+    "@vitejs/plugin-react": "^4.3.4"
   }
 }
