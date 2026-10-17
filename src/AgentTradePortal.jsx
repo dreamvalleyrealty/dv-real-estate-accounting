@@ -77,7 +77,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  const [selectedTradeIds,setSelectedTradeIds]=useState([]);
  const [requiredTypes,setRequiredTypes]=useState(["APS","MLS","COMMISSION"]),[requiredDocCounts,setRequiredDocCounts]=useState({APS:1,MLS:1,COMMISSION:1});const [requirementsBySide,setRequirementsBySide]=useState(null);
  const [docTypes,setDocTypes]=useState([["APS","Agreement of Purchase and Sale / Lease"],["MLS","MLS / Listing sheet"],["COMMISSION","Commission confirmation"],["ID","Identity / compliance document"],["OTHER","Other supporting document"]]);const activeSideRules=requirementsBySide?.[normalizeRepresentationSide(form.side,form.transaction_type)]||{types:requiredTypes,required:requiredTypes,counts:requiredDocCounts};const activeSideDocumentTypes=docTypes.filter(([type])=>(activeSideRules.types||requiredTypes).includes(type));
- const [newDocLabel,setNewDocLabel]=useState("");const [isMasterDocument,setIsMasterDocument]=useState(false);const isCustomSupportingDocument=docType==="OTHER"&&String(docTypes.find(([type])=>type===docType)?.[1]||"").toLowerCase().includes("other supporting");const useCustomDocumentName=isCustomSupportingDocument||isMasterDocument;
+ const [newDocLabel,setNewDocLabel]=useState("");const [isMasterDocument,setIsMasterDocument]=useState(false);const selectedDocumentLabel=String(docTypes.find(([type])=>type===docType)?.[1]||"");const isCustomSupportingDocument=docType==="OTHER"&&selectedDocumentLabel.toLowerCase().includes("other supporting");const isNamedSupportingType=selectedDocumentLabel.toLowerCase().includes("other supporting documents")||selectedDocumentLabel.toLowerCase().includes("custom document name");const useCustomDocumentName=isCustomSupportingDocument||isNamedSupportingType||isMasterDocument;
  const [companyId,setCompanyId]=useState("");
  const [representingAgent,setRepresentingAgent]=useState(null);
  const [companyProfile,setCompanyProfile]=useState(null);
@@ -401,7 +401,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
        error=updateError;
        if(!error&&rejectedDoc.storage_path)await supabase.storage.from("dv-trade-documents").remove([rejectedDoc.storage_path]);
      }else{
-       const result=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:docType,document_name:isCustomSupportingDocument?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id}]);
+       const result=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:docType,document_name:useCustomDocumentName?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id}]);
        error=result.error;
      }
      if(error){await supabase.storage.from("dv-trade-documents").remove([path]);setError("Uploaded "+uploaded+" file(s); "+currentFile.name+" could not be registered: "+error.message);break}
