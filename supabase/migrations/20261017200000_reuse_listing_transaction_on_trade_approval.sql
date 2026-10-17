@@ -42,7 +42,7 @@ begin
   listing_uuid := nullif(trim(coalesce(p->>'listing_id','')), '')::uuid;
   address_text := coalesce(
     nullif(trim(coalesce(p->>'property_address','')), ''),
-    nullif(trim(concat_ws(' ', nullif(p->>'street_number',''), nullif(p->>'street_name',''), case when nullif(p->>'unit_number','') is not null then 'Unit '||p->>'unit_number' end)), ''),
+    nullif(trim(concat_ws(' ', nullif(p->>'street_number',''), nullif(p->>'street_name',''), case when nullif(p->>'unit_number','') is not null then 'Unit ' || (p->>'unit_number') end)), ''),
     'Address pending'
   );
   side_text := nullif(trim(coalesce(p->>'side','')), '');
