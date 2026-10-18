@@ -434,7 +434,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
        const path=String(user.id)+"/"+String(draft.id)+"/"+Date.now()+"-"+uploaded+"-"+safe;
        const {error:upError}=await supabase.storage.from("dv-trade-documents").upload(path,currentFile,{upsert:false,contentType:currentFile.type||"application/octet-stream"});
        if(upError)throw new Error("Could not upload "+currentFile.name+": "+upError.message);
-       const pendingDoc=!adminMode?docs.find(d=>d.submission_id===draft.id&&d.document_type===docType&&!["MATCH","APPROVED"].includes(String(d.match_status||"").toUpperCase())&&String(d.match_status||"PENDING").toUpperCase()!=="MISMATCH"):null;
+       const pendingDoc=!adminMode?docs.find(d=>d.submission_id===draft.id&&d.document_type===docType&&!["MATCH","APPROVED"].includes(String(d.match_status||"").toUpperCase())):null;
        let insertError=null;
        if(pendingDoc){
          const {error:updateError}=await supabase.from("dv_accounting_agent_trade_documents").update({
