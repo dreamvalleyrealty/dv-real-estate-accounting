@@ -327,12 +327,17 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
    const trustByTransaction=new Map((trustRows||[]).map(t=>[t.transaction_id,t]));
    const bankById=new Map((bankRows||[]).map(b=>[b.id,b]));
    const postedByTransaction=new Set((ledgerRows||[]).map(row=>row.transaction_id));
-   setDepositHistory(transactions.map(tx=>{
+   const history=transactions.map(tx=>{
     const trust=trustByTransaction.get(tx.id);
     if(!trust||String(trust.received||"").toUpperCase()!=="YES")return null;
     const bank=bankById.get(trust.trust_bank_account_id||tx.trust_bank_account_id);
     return {...trust,id:trust.id,transaction_id:tx.id,transaction_number:tx.transaction_number||"—",property_address:[tx.property_address,tx.unit_number?"Unit "+tx.unit_number:"",tx.city,tx.province,tx.postal_code].filter(Boolean).join(", "),amount:trust.amount??tx.deposit_amount??0,bank_name:bank?.name||"—",receipt_number:"DR-"+String(tx.transaction_number||tx.id).replace(/[^A-Za-z0-9-]/g,""),posted:postedByTransaction.has(tx.id)};
-   }).filter(Boolean));
+   }).filter(Boolean);
+   // Listing deposit receipts can be mirrored onto the later trade transaction.
+   // When both rows describe the same deposit, show the actual trade receipt and hide the LST placeholder.
+   const signature=item=>[Number(item.amount||0).toFixed(2),String(item.deposit_date||item.created_at||"").slice(0,10),String(item.received_from||"").trim().toLowerCase()].join("|");
+   const tradeDepositSignatures=new Set(history.filter(item=>!String(item.transaction_number||"").startsWith("LST-")).map(signature));
+   setDepositHistory(history.filter(item=>!String(item.transaction_number||"").startsWith("LST-")||!tradeDepositSignatures.has(signature(item))));
   }catch(err){setDepositHistoryError(err?.message||"Could not load deposit history.");setDepositHistory([])}
   finally{setDepositHistoryLoading(false)}
  }
