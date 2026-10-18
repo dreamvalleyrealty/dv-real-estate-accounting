@@ -63,28 +63,54 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
  const dateControls=(key)=> <><div className="actions" style={{marginBottom:10,flexWrap:"wrap"}}><button type="button" className="secondary" onClick={()=>applyPreset(key,"thisMonth")}>This Month</button><button type="button" className="secondary" onClick={()=>applyPreset(key,"previousMonth")}>Previous Month</button><button type="button" className="secondary" onClick={()=>applyPreset(key,"nextMonth")}>Next Month</button><button type="button" className="secondary" onClick={()=>applyPreset(key,"thisYear")}>This Year</button></div><div className="formgrid" style={{marginBottom:12}}><label>From<input type="date" value={config[key]?.start||monthStart} onChange={e=>setConfig(v=>({...v,[key]:{...v[key],start:e.target.value}}))}/></label><label>To<input type="date" value={config[key]?.end||monthEnd} onChange={e=>setConfig(v=>({...v,[key]:{...v[key],end:e.target.value}}))}/></label></div></>;
  return <><div className="pagehead"><div><h1>Admin Dashboard</h1><p>People, licence deadlines, upcoming closings and brokerage bank balances.</p></div><div className="actions"><button className="secondary" disabled={!dashboardAdmin} title={dashboardAdmin?"Configure the shared dashboard":"Ask an administrator to configure your dashboard"} onClick={()=>{if(dashboardAdmin){setEditConfig(config);setConfigOpen(true)}}}><Settings size={16}/> Customize Dashboard</button><button className="primary" onClick={()=>setActive("Transactions")}><Plus size={17}/> New Transaction</button></div></div>
  {String(role||"").toUpperCase()==="SUPERADMIN"&&(()=>{
- const txDate=t=>String(t.finalized_date||t.finalized_at||t.closed_at||t.close_date||t.firm_date||t.entry_date||t.created_at||"").slice(0,10);
+ const txDate=t=>String(t.close_date||t.firm_date||t.closing_date||t.finalized_date||t.finalized_at||t.closed_at||t.entry_date||t.created_at||"").slice(0,10);
+ const excluded=new Set(["RETURNED","VOID","VOIDED","CANCELLED","DELETED","DFT","DEALFELLTHROUGH"]);
  const txById=new Map(transactions.rows.map(t=>[String(t.id),t]));
- const eligible=commissions.rows.filter(c=>{const t=txById.get(String(c.transaction_id));const status=String(t?.status||c.status||"").toUpperCase().replace(/[^A-Z]/g,"");return !!t&&!["RETURNED","VOID","VOIDED","CANCELLED","DELETED","DFT","DEALFELLTHROUGH"].includes(status)});
- const brokerageIncome=c=>Math.max(0,Number(c.brokerage_share??c.brokerage_income??c.brokerage_amount??0)||0);
- const expectedInRange=(start,end)=>eligible.reduce((sum,c)=>{const t=txById.get(String(c.transaction_id)),d=txDate(t);return d&&d>=start&&d<=end?sum+brokerageIncome(c):sum},0);
- const receivedInRange=(start,end)=>bankTx.rows.reduce((sum,b)=>{const d=String(b.transaction_date||b.entry_date||b.date||b.created_at||"").slice(0,10);const account=banks.rows.find(x=>String(x.id)===String(b.bank_account_id));const accountType=String(account?.account_type||account?.type||account?.name||"").toUpperCase();const desc=[b.description,b.reference,b.memo,b.category,b.transaction_type].filter(Boolean).join(" ").toLowerCase();const direction=String(b.direction||b.transaction_type||b.type||"").toUpperCase();const isCredit=["DEPOSIT","CREDIT","RECEIPT","INCOME"].some(v=>direction.includes(v))||Number(b.amount||0)>0&&!!b.direction&&["IN","CR"].includes(String(b.direction).toUpperCase());const isOperating=accountType.includes("OPERATING");const isCommission=/commission|brokerage income|brokerage fee/.test(desc);return d&&d>=start&&d<=end&&isCredit&&isOperating&&isCommission?sum+Math.abs(Number(b.amount||0)):sum},0);
+ // A transaction contributes one brokerage share, even if commission history contains multiple rows.
+ const commissionByTransaction=new Map();
+ commissions.rows.forEach(c=>{
+  const key=String(c.transaction_id||"");if(!key||!txById.has(key))return;
+  const status=String(c.status||"").toUpperCase().replace(/[^A-Z]/g,"");
+  if(excluded.has(status))return;
+  const previous=commissionByTransaction.get(key);
+  const rank=x=>String(x.status||"").toUpperCase()==="PAID"?3:String(x.status||"").toUpperCase()==="READY"?2:1;
+  if(!previous||rank(c)>rank(previous)||rank(c)===rank(previous)&&String(c.updated_at||c.created_at||"")>String(previous.updated_at||previous.created_at||""))commissionByTransaction.set(key,c);
+ });
+ const incomeByTransaction=new Map();
+ commissionByTransaction.forEach((c,key)=>{
+  const t=txById.get(key),share=Number(c.brokerage_share);
+  if(!Number.isFinite(share)||share<=0)return;
+  incomeByTransaction.set(key,{transaction:t,share:Math.round(share*100)/100,date:txDate(t)});
+ });
+ const inRange=(date,start,end)=>!!date&&!!start&&!!end&&date>=start&&date<=end;
+ const expectedInRange=(start,end)=>[...incomeByTransaction.values()].reduce((sum,x)=>inRange(x.date,start,end)?sum+x.share:sum,0);
+ const receivedInRange=(start,end)=>[...incomeByTransaction.entries()].reduce((sum,[,x])=>{
+  const t=x.transaction,received=t.ar_payment_received===true||String(t.ar_payment_received||"").toUpperCase()==="YES";
+  const d=String(t.ar_payment_received_date||"").slice(0,10);
+  if(!received||!inRange(d,start,end))return sum;
+  // Brokerage income is counted only when the transaction records commission receipt.
+  const gross=Number(t.commission_approved_amount||t.gross_commission||t.commission_receivable||0);
+  const paid=Number(t.ar_payment_amount||0);
+  const ratio=gross>0&&paid>0?Math.min(1,paid/gross):1;
+  return sum+Math.round(x.share*ratio*100)/100;
+ },0);
  const startOfMonth=new Date(now.getFullYear(),now.getMonth(),1),endOfMonth=new Date(now.getFullYear(),now.getMonth()+1,0),lastStart=new Date(now.getFullYear(),now.getMonth()-1,1),lastEnd=new Date(now.getFullYear(),now.getMonth(),0),nextStart=new Date(now.getFullYear(),now.getMonth()+1,1),nextEnd=new Date(now.getFullYear(),now.getMonth()+2,0),yearStart=iso(new Date(now.getFullYear(),0,1));
  const selectedExpected=expectedInRange(incomeRange.start,incomeRange.end),selectedReceived=receivedInRange(incomeRange.start,incomeRange.end);
- const incomeCard=(title,value,sub)=> <div className="card" style={{minWidth:0}}><div className="muted">{title}</div><div className="metric" style={{fontSize:24}}>{money(value)}</div><div className="sub">{sub}</div></div>;
+ const selectedOutstanding=Math.max(0,selectedExpected-selectedReceived);
+ const incomeCard=(title,value,sub)=><div className="card" style={{minWidth:0}}><div className="muted">{title}</div><div className="metric" style={{fontSize:24}}>{money(value)}</div><div className="sub">{sub}</div></div>;
  return <section className="panel" style={{marginBottom:18,borderTop:"3px solid var(--gold, #9e8556)"}}>
-  <div className="paneltitle"><div><h2>Brokerage Income</h2><p className="panelhint">See what the brokerage has earned, what has been received, and what is expected.</p></div><span className="pill">Super Admin</span></div>
+  <div className="paneltitle"><div><h2>Brokerage Income</h2><p className="panelhint">Brokerage share after agent commission, before HST. Each transaction is counted once.</p></div><span className="pill">Super Admin</span></div>
   <div className="grid4">
-   {incomeCard("Year to Date",expectedInRange(yearStart,iso(now)),"Expected brokerage share this year")}
-   {incomeCard("Last Month",expectedInRange(iso(lastStart),iso(lastEnd)),"Expected for "+lastStart.toLocaleDateString("en-CA",{month:"long"}))}
-   {incomeCard("This Month",expectedInRange(iso(startOfMonth),iso(endOfMonth)),"Expected for "+now.toLocaleDateString("en-CA",{month:"long"}))}
-   {incomeCard("Next Month",expectedInRange(iso(nextStart),iso(nextEnd)),"Expected for "+nextStart.toLocaleDateString("en-CA",{month:"long"}))}
+   {incomeCard("Year to Date",expectedInRange(yearStart,iso(now)),"Brokerage share on transactions dated this year")}
+   {incomeCard("Last Month",expectedInRange(iso(lastStart),iso(lastEnd)),"Brokerage share for "+lastStart.toLocaleDateString("en-CA",{month:"long"}))}
+   {incomeCard("This Month",expectedInRange(iso(startOfMonth),iso(endOfMonth)),"Brokerage share for "+now.toLocaleDateString("en-CA",{month:"long"}))}
+   {incomeCard("Next Month",expectedInRange(iso(nextStart),iso(nextEnd)),"Expected share for "+nextStart.toLocaleDateString("en-CA",{month:"long"}))}
   </div>
   <div className="grid4" style={{marginTop:12}}>
-   {incomeCard("Income Received",selectedReceived,"Matched commission deposits in Operating account")}
-   {incomeCard("Expected Income",Math.max(0,selectedExpected-selectedReceived),"Expected brokerage share less matched receipts")}
-   {incomeCard("Total Expected",selectedExpected,"Brokerage share for selected dates")}
-   {incomeCard("Still to Receive",Math.max(0,selectedExpected-selectedReceived),"Estimated outstanding amount")}
+   {incomeCard("Income Received",selectedReceived,"Recorded commission receipts, before HST")}
+   {incomeCard("Expected Income",selectedOutstanding,"Unreceived brokerage share for selected dates")}
+   {incomeCard("Total Brokerage Share",selectedExpected,"After agent share, before HST")}
+   {incomeCard("Still to Receive",selectedOutstanding,"Estimated outstanding brokerage share")}
   </div>
   <div style={{marginTop:16,padding:14,border:"1px solid var(--border, #dbe2ec)",borderRadius:10}}>
    <div style={{fontWeight:700,marginBottom:10}}>Choose a date range</div>
@@ -98,7 +124,7 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
     <label>From<input type="date" value={incomeRange.start} onChange={e=>setIncomeRange(v=>({...v,start:e.target.value}))}/></label>
     <label>To<input type="date" value={incomeRange.end} onChange={e=>setIncomeRange(v=>({...v,end:e.target.value}))}/></label>
    </div>
-   <div className="notice" style={{marginTop:12}}>Figures use brokerage-share amounts on commission records and commission-related deposits identifiable in the Operating account. Review unmatched or differently labelled bank deposits before relying on the received-income figure.</div>
+   <div className="notice" style={{marginTop:12}}>Income is calculated from the brokerage-share amount on the commission record, before HST. Receipts are counted only when the transaction is marked as commission received. Transactions without a recorded receipt date are treated as outstanding.</div>
   </div>
  </section>;
 })()}
