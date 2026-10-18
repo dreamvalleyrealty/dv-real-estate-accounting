@@ -796,8 +796,8 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
          </section>}
          {selected.status==="APPROVED"&&<div className="agent-trade-success" style={{marginTop:14}}>This trade was approved and transferred to the Transactions workflow. Transaction ID: {selected.transaction_id||"—"}</div>}
          
-       </div>:null}
-     </div>}
+       </div></div>:null}
+     </section>}
    </div>
    {previewUrl&&<div className="agent-trade-preview"><div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}><strong>{previewDoc?.document_name}</strong><button className="secondary" style={{marginLeft:"auto"}} onClick={()=>{setPreviewUrl("");setPreviewDoc(null)}}><X size={16}/> Close preview</button></div><iframe title="Trade document preview" src={previewUrl}/></div>}
    <div className="agent-trade-muted" style={{textAlign:"right",fontSize:11,paddingTop:4}}>DV Accounting · Agent Portal v{AGENT_PORTAL_VERSION}</div>
