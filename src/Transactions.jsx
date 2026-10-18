@@ -298,7 +298,10 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
    const esc=v=>String(v??"—").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
    const streetNumber=String(tx?.street_number||"").trim();
    let streetName=String(tx?.street_name||"").trim();
-   if(streetNumber&&streetName){const escapedNumber=streetNumber.replace(/[.*+?^${}()|[\]\\]/g,"\\const address=[tx?.street_number,tx?.street_name,tx?.unit_number?("Unit "+tx.unit_number):"",tx?.city,tx?.province,tx?.postal_code].filter(Boolean).join(", ");");streetName=streetName.replace(new RegExp("^(?:"+escapedNumber+"[\\s,]+)+","i"),"").trim()}
+   if(streetNumber&&streetName){
+    const escapedNumber=streetNumber.replace(/[.*+?^${}()|[\\]\\\\]/g,"\\\\$&");
+    streetName=streetName.replace(new RegExp("^(?:"+escapedNumber+"[\\\\s,]+)+","i"),"").trim();
+   }
    const address=[streetNumber,streetName,tx?.unit_number?("Unit "+tx.unit_number):"",tx?.city,tx?.province,tx?.postal_code].filter(Boolean).join(", ");
    const account=activeBanks.find(x=>x.id===deposit.trust_bank_account_id)?.name||"—";
    const amount=new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(deposit.amount||0));
