@@ -35,7 +35,7 @@ function Empty({icon:Icon=FileText,title="Nothing here yet",text="Create your fi
 function Toolbar({q,setQ,onRefresh}){return <div className="toolbar"><div className="search"><Search size={17}/><input placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)}/></div>{onRefresh&&<button className="secondary" onClick={onRefresh}><RefreshCw size={16}/> Refresh</button>}</div>}
 
 function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
- const agents=useRows("dv_accounting_agents"),transactions=useRows("dv_accounting_transactions"),commissions=useRows("dv_accounting_commissions"),transactionCommissions=useRows("dv_accounting_transaction_commissions"),transactionAgentInfo=useRows("dv_accounting_transaction_agent_info"),listingSubmissions=useRows("dv_accounting_listing_submissions"),legacyListings=useRows("dv_accounting_listings"),banks=useRows("dv_accounting_bank_accounts"),bankTx=useRows("dv_accounting_bank_transactions"),expenses=useRows("dv_accounting_expenses"),settings=useRows("dv_accounting_settings");
+ const agents=useRows("dv_accounting_agents"),transactions=useRows("dv_accounting_transactions"),commissions=useRows("dv_accounting_commissions"),transactionCommissions=useRows("dv_accounting_transaction_commissions"),transactionAgentInfo=useRows("dv_accounting_transaction_agent_info"),generalIncomeRows=useRows("dv_accounting_agent_charge_payments"),listingSubmissions=useRows("dv_accounting_listing_submissions"),legacyListings=useRows("dv_accounting_listings"),banks=useRows("dv_accounting_bank_accounts"),bankTx=useRows("dv_accounting_bank_transactions"),expenses=useRows("dv_accounting_expenses"),settings=useRows("dv_accounting_settings");
  const now=new Date(),iso=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");return y+"-"+m+"-"+day},monthStart=iso(new Date(now.getFullYear(),now.getMonth(),1)),monthEnd=iso(new Date(now.getFullYear(),now.getMonth()+1,0)),prevStart=iso(new Date(now.getFullYear(),now.getMonth()-1,1)),prevEnd=iso(new Date(now.getFullYear(),now.getMonth(),0));
  const [incomeRange,setIncomeRange]=useState({start:iso(new Date(now.getFullYear(),0,1)),end:iso(now)});
  const widgets=[{id:"birthdays",label:"Agent birthdays"},{id:"anniversaries",label:"Agent anniversaries"},{id:"licences",label:"Licences expiring"},{id:"balances",label:"Bank account balances"},{id:"closings",label:"Deals closing"},{id:"topAgents",label:"Top agents"}];
@@ -66,13 +66,13 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
  const txDate=t=>String(t.close_date||t.firm_date||t.closing_date||t.finalized_date||t.finalized_at||t.closed_at||t.entry_date||t.created_at||"").slice(0,10);
  const excluded=new Set(["RETURNED","VOID","VOIDED","CANCELLED","DELETED","DFT","DEALFELLTHROUGH"]);
  const txById=new Map(transactions.rows.map(t=>[String(t.id),t]));
- const officeCommissionsByTransaction=new Map();
- transactionCommissions.rows.forEach(line=>{
-  const key=String(line.transaction_id||"");if(!key||!txById.has(key))return;
-  if(!["LISTING","BUYER"].includes(String(line.side||"").toUpperCase()))return;
-  const amount=Number(line.amount||0);
-  if(!Number.isFinite(amount)||amount<=0)return;
-  officeCommissionsByTransaction.set(key,(officeCommissionsByTransaction.get(key)||0)+amount);
+ const commissionByTransaction=new Map();
+ // Saved brokerage share is authoritative and already excludes HST.
+ commissions.rows.forEach(row=>{
+  const key=String(row.transaction_id||"");if(!key||!txById.has(key))return;
+  const updated=String(row.updated_at||row.created_at||"");
+  const previous=commissionByTransaction.get(key);
+  if(!previous||updated>=previous.updated){const amount=Number(row.brokerage_share);commissionByTransaction.set(key,{amount:Number.isFinite(amount)?Math.max(0,amount):0,updated})}
  });
  const agentInfoByTransaction=new Map();
  transactionAgentInfo.rows.forEach(info=>{
@@ -80,23 +80,34 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
   const previous=agentInfoByTransaction.get(key);
   if(!previous||String(info.updated_at||info.created_at||"")>String(previous.updated_at||previous.created_at||""))agentInfoByTransaction.set(key,info);
  });
- // Use the same pre-HST "Net to Office" calculation printed on the Trade Record:
- // listing + selling commission before HST, less the agent's net payable before HST.
  const incomeByTransaction=new Map();
  txById.forEach((t,key)=>{
   const status=String(t.status||"").toUpperCase().replace(/[^A-Z]/g,"");
   if(excluded.has(status))return;
-  const commissionTotal=officeCommissionsByTransaction.get(key);
+  const savedShare=commissionByTransaction.get(key);
   const agentInfo=agentInfoByTransaction.get(key);
-  const agentNet=Number(agentInfo?.net_payable??t.agent_commission??0);
-  const totalCommission=Number.isFinite(commissionTotal)?commissionTotal:Number(t.gross_commission||t.commission_approved_amount||0);
-  const netToOffice=Math.round(Math.max(0,totalCommission-(Number.isFinite(agentNet)?agentNet:0))*100)/100;
-  if(netToOffice<=0)return;
-  incomeByTransaction.set(key,{transaction:t,share:netToOffice,date:txDate(t)});
+  const fallback=Number(agentInfo?.brokerage_share??t.brokerage_share??0);
+  const share=savedShare?savedShare.amount:(Number.isFinite(fallback)?Math.max(0,fallback):0);
+  if(share<=0)return;
+  incomeByTransaction.set(key,{transaction:t,share:Math.round(share*100)/100,date:txDate(t)});
+ });
+ // General income is independent of transaction income; deduplicate by receipt ID.
+ const generalIncomeById=new Map();
+ generalIncomeRows.rows.forEach(row=>{
+  const status=String(row.status||"").toUpperCase().replace(/[^A-Z]/g,"");
+  if(["VOID","VOIDED","REVERSED","CANCELLED","DELETED","UNPAID","OPEN","PENDING"].includes(status))return;
+  const amount=Number(row.amount??row.payment_amount??row.paid_amount??0);
+  if(!Number.isFinite(amount)||amount<=0)return;
+  const tax=Number(row.hst_amount??row.tax_amount??row.hst??0);
+  const date=String(row.payment_date||row.paid_date||row.received_date||row.created_at||"").slice(0,10);
+  const id=String(row.id||"");if(!id||generalIncomeById.has(id))return;
+  generalIncomeById.set(id,{amount:Math.round(Math.max(0,amount-tax)*100)/100,date});
  });
  const inRange=(date,start,end)=>!!date&&!!start&&!!end&&date>=start&&date<=end;
- const expectedInRange=(start,end)=>[...incomeByTransaction.values()].reduce((sum,x)=>inRange(x.date,start,end)?sum+x.share:sum,0);
- const receivedInRange=(start,end)=>[...incomeByTransaction.entries()].reduce((sum,[,x])=>{
+ const tradeIncomeInRange=(start,end)=>[...incomeByTransaction.values()].reduce((sum,x)=>sum+(inRange(x.date,start,end)?x.share:0),0);
+ const generalIncomeInRange=(start,end)=>[...generalIncomeById.values()].reduce((sum,x)=>sum+(inRange(x.date,start,end)?x.amount:0),0);
+ const expectedInRange=(start,end)=>Math.round((tradeIncomeInRange(start,end)+generalIncomeInRange(start,end))*100)/100;
+ const receivedInRange=(start,end)=>Math.round(([...incomeByTransaction.entries()].reduce((sum,[,x])=>{
   const t=x.transaction,received=t.ar_payment_received===true||String(t.ar_payment_received||"").toUpperCase()==="YES";
   const d=String(t.ar_payment_received_date||"").slice(0,10);
   if(!received||!inRange(d,start,end))return sum;
@@ -104,18 +115,18 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
   const paid=Number(t.ar_payment_amount||0);
   const ratio=gross>0&&paid>0?Math.min(1,paid/gross):1;
   return sum+Math.round(x.share*ratio*100)/100;
- },0);
+ },0)+generalIncomeInRange(start,end))*100)/100;
  const startOfMonth=new Date(now.getFullYear(),now.getMonth(),1),endOfMonth=new Date(now.getFullYear(),now.getMonth()+1,0),lastStart=new Date(now.getFullYear(),now.getMonth()-1,1),lastEnd=new Date(now.getFullYear(),now.getMonth(),0),nextStart=new Date(now.getFullYear(),now.getMonth()+1,1),nextEnd=new Date(now.getFullYear(),now.getMonth()+2,0),yearStart=iso(new Date(now.getFullYear(),0,1));
  const selectedExpected=expectedInRange(incomeRange.start,incomeRange.end),selectedReceived=receivedInRange(incomeRange.start,incomeRange.end);
  const selectedOutstanding=Math.max(0,selectedExpected-selectedReceived);
  const incomeCard=(title,value,sub)=><div className="card" style={{minWidth:0}}><div className="muted">{title}</div><div className="metric" style={{fontSize:24}}>{money(value)}</div><div className="sub">{sub}</div></div>;
  return <section className="panel" style={{marginBottom:18,borderTop:"3px solid var(--gold, #9e8556)"}}>
-  <div className="paneltitle"><div><h2>Brokerage Income</h2><p className="panelhint">Net to Office from each Trade Record, before HST. Each transaction is counted once.</p></div><span className="pill">Super Admin</span></div>
+  <div className="paneltitle"><div><h2>Brokerage Income</h2><p className="panelhint">Trade Record brokerage share plus separately recorded general income, excluding HST. Each entry is counted once.</p></div><span className="pill">Super Admin</span></div>
   <div className="grid4">
-   {incomeCard("Year to Date",expectedInRange(yearStart,iso(now)),"Trade Record Net to Office for transactions dated this year")}
-   {incomeCard("Last Month",expectedInRange(iso(lastStart),iso(lastEnd)),"Trade Record Net to Office for "+lastStart.toLocaleDateString("en-CA",{month:"long"}))}
-   {incomeCard("This Month",expectedInRange(iso(startOfMonth),iso(endOfMonth)),"Trade Record Net to Office for "+now.toLocaleDateString("en-CA",{month:"long"}))}
-   {incomeCard("Next Month",expectedInRange(iso(nextStart),iso(nextEnd)),"Expected Net to Office for "+nextStart.toLocaleDateString("en-CA",{month:"long"}))}
+   {incomeCard("Year to Date",expectedInRange(yearStart,iso(now)),"Trade and general income dated this year, before HST")}
+   {incomeCard("Last Month",expectedInRange(iso(lastStart),iso(lastEnd)),"Trade and general income for "+lastStart.toLocaleDateString("en-CA",{month:"long"}))}
+   {incomeCard("This Month",expectedInRange(iso(startOfMonth),iso(endOfMonth)),"Trade and general income for "+now.toLocaleDateString("en-CA",{month:"long"}))}
+   {incomeCard("Next Month",expectedInRange(iso(nextStart),iso(nextEnd)),"Expected trade and general income for "+nextStart.toLocaleDateString("en-CA",{month:"long"}))}
   </div>
   <div className="grid4" style={{marginTop:12}}>
    {incomeCard("Income Received",selectedReceived,"Recorded commission receipts, before HST")}
@@ -135,7 +146,7 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
     <label>From<input type="date" value={incomeRange.start} onChange={e=>setIncomeRange(v=>({...v,start:e.target.value}))}/></label>
     <label>To<input type="date" value={incomeRange.end} onChange={e=>setIncomeRange(v=>({...v,end:e.target.value}))}/></label>
    </div>
-   <div className="notice" style={{marginTop:12}}>Income is calculated from the brokerage-share amount on the commission record, before HST. Receipts are counted only when the transaction is marked as commission received. Transactions without a recorded receipt date are treated as outstanding.</div>
+   <div className="notice" style={{marginTop:12}}>Trade income uses the saved brokerage share before HST. Separately recorded paid agent charges are included as general income, with HST removed. Trade and general-income entries are deduplicated by their record IDs.</div>
   </div>
  </section>;
 })()}
