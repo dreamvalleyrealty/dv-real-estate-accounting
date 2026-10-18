@@ -35,7 +35,7 @@ function Empty({icon:Icon=FileText,title="Nothing here yet",text="Create your fi
 function Toolbar({q,setQ,onRefresh}){return <div className="toolbar"><div className="search"><Search size={17}/><input placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)}/></div>{onRefresh&&<button className="secondary" onClick={onRefresh}><RefreshCw size={16}/> Refresh</button>}</div>}
 
 function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
- const agents=useRows("dv_accounting_agents"),transactions=useRows("dv_accounting_transactions"),commissions=useRows("dv_accounting_commissions"),transactionCommissions=useRows("dv_accounting_transaction_commissions"),transactionAgentInfo=useRows("dv_accounting_transaction_agent_info"),generalIncomeRows=useRows("dv_accounting_agent_charge_payments"),listingSubmissions=useRows("dv_accounting_listing_submissions"),legacyListings=useRows("dv_accounting_listings"),banks=useRows("dv_accounting_bank_accounts"),bankTx=useRows("dv_accounting_bank_transactions"),expenses=useRows("dv_accounting_expenses"),settings=useRows("dv_accounting_settings");
+ const agents=useRows("dv_accounting_agents"),transactions=useRows("dv_accounting_transactions"),commissions=useRows("dv_accounting_commissions"),transactionCommissions=useRows("dv_accounting_transaction_commissions"),transactionAgentInfo=useRows("dv_accounting_transaction_agent_info"),generalIncomeRows=useRows("dv_accounting_agent_charge_payments"),generalChargeRows=useRows("dv_accounting_commission_charges"),listingSubmissions=useRows("dv_accounting_listing_submissions"),legacyListings=useRows("dv_accounting_listings"),banks=useRows("dv_accounting_bank_accounts"),bankTx=useRows("dv_accounting_bank_transactions"),expenses=useRows("dv_accounting_expenses"),settings=useRows("dv_accounting_settings");
  const now=new Date(),iso=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");return y+"-"+m+"-"+day},monthStart=iso(new Date(now.getFullYear(),now.getMonth(),1)),monthEnd=iso(new Date(now.getFullYear(),now.getMonth()+1,0)),prevStart=iso(new Date(now.getFullYear(),now.getMonth()-1,1)),prevEnd=iso(new Date(now.getFullYear(),now.getMonth(),0));
  const [incomeRange,setIncomeRange]=useState({start:iso(new Date(now.getFullYear(),0,1)),end:iso(now)});
  const widgets=[{id:"birthdays",label:"Agent birthdays"},{id:"anniversaries",label:"Agent anniversaries"},{id:"licences",label:"Licences expiring"},{id:"balances",label:"Bank account balances"},{id:"closings",label:"Deals closing"},{id:"topAgents",label:"Top agents"}];
@@ -66,42 +66,59 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
  const txDate=t=>String(t.close_date||t.firm_date||t.closing_date||t.finalized_date||t.finalized_at||t.closed_at||t.entry_date||t.created_at||"").slice(0,10);
  const excluded=new Set(["RETURNED","VOID","VOIDED","CANCELLED","DELETED","DFT","DEALFELLTHROUGH"]);
  const txById=new Map(transactions.rows.map(t=>[String(t.id),t]));
- const commissionByTransaction=new Map();
- // Saved brokerage share is authoritative and already excludes HST.
- commissions.rows.forEach(row=>{
-  const key=String(row.transaction_id||"");if(!key||!txById.has(key))return;
-  const updated=String(row.updated_at||row.created_at||"");
-  const previous=commissionByTransaction.get(key);
-  if(!previous||updated>=previous.updated){const amount=Number(row.brokerage_share);commissionByTransaction.set(key,{amount:Number.isFinite(amount)?Math.max(0,amount):0,updated})}
- });
  const agentInfoByTransaction=new Map();
  transactionAgentInfo.rows.forEach(info=>{
   const key=String(info.transaction_id||"");if(!key)return;
   const previous=agentInfoByTransaction.get(key);
   if(!previous||String(info.updated_at||info.created_at||"")>String(previous.updated_at||previous.created_at||""))agentInfoByTransaction.set(key,info);
  });
+ const savedCommissionByTransaction=new Map();
+ commissions.rows.forEach(row=>{
+  const key=String(row.transaction_id||"");if(!key||!txById.has(key))return;
+  const previous=savedCommissionByTransaction.get(key);
+  const updated=String(row.updated_at||row.created_at||"");
+  if(!previous||updated>=previous.updated)savedCommissionByTransaction.set(key,{row,updated});
+ });
  const incomeByTransaction=new Map();
  txById.forEach((t,key)=>{
-  const status=String(t.status||"").toUpperCase().replace(/[^A-Z]/g,"");
+  const status=String(t.status||t.transaction_status||"").toUpperCase().replace(/[^A-Z]/g,"");
   if(excluded.has(status))return;
-  const savedShare=commissionByTransaction.get(key);
-  const agentInfo=agentInfoByTransaction.get(key);
-  const fallback=Number(agentInfo?.brokerage_share??t.brokerage_share??0);
-  const share=savedShare?savedShare.amount:(Number.isFinite(fallback)?Math.max(0,fallback):0);
+  const side=["SELLER","LANDLORD","LISTING"].includes(String(t.side||"").toUpperCase())?"LISTING":"BUYER";
+  // The Trade Record's own-side commission lines are the actual gross basis for "Net to Office".
+  const ownCommission=transactionCommissions.rows
+   .filter(row=>String(row.transaction_id||"")===key&&String(row.side||"").toUpperCase()===side)
+   .reduce((sum,row)=>sum+Math.max(0,Number(row.amount||0)),0);
+  const info=agentInfoByTransaction.get(key);
+  const saved=savedCommissionByTransaction.get(key)?.row;
+  const admin=Math.max(0,Number(info?.admin_fee||0));
+  const lead=info?.lead_fee_applies===false?0:Math.max(0,Number(info?.lead_fee||0));
+  const savedBrokerageShare=Math.max(0,Number(saved?.brokerage_share||0));
+  const agentGrossRaw=info?.agent_gross;
+  const agentGross=agentGrossRaw!=null&&agentGrossRaw!==""?Math.max(0,Number(agentGrossRaw)):
+   (info?.split_percent!=null&&ownCommission>0?Math.max(0,ownCommission*Number(info.split_percent)/100):
+    Math.max(0,ownCommission-savedBrokerageShare));
+  // Net to Office = own-side commission - agent's gross share + admin/lead fees.
+  // This reproduces the Trade Record breakdown (e.g. brokerage share + $300 admin fee).
+  const calculated=ownCommission>0?ownCommission-agentGross+admin+lead:savedBrokerageShare+admin+lead;
+  const share=Math.round(Math.max(0,calculated)*100)/100;
   if(share<=0)return;
-  incomeByTransaction.set(key,{transaction:t,share:Math.round(share*100)/100,date:txDate(t)});
+  incomeByTransaction.set(key,{transaction:t,share,date:txDate(t)});
  });
- // General income is independent of transaction income; deduplicate by receipt ID.
+ // General income is recorded as agent-charge payments. The payment table has no HST/status
+ // columns, so remove the HST using the linked charge's saved base and HST amounts.
+ const chargeById=new Map(generalChargeRows.rows.map(row=>[String(row.id),row]));
  const generalIncomeById=new Map();
  generalIncomeRows.rows.forEach(row=>{
-  const status=String(row.status||"").toUpperCase().replace(/[^A-Z]/g,"");
-  if(["VOID","VOIDED","REVERSED","CANCELLED","DELETED","UNPAID","OPEN","PENDING"].includes(status))return;
-  const amount=Number(row.amount??row.payment_amount??row.paid_amount??0);
-  if(!Number.isFinite(amount)||amount<=0)return;
-  const tax=Number(row.hst_amount??row.tax_amount??row.hst??0);
-  const date=String(row.payment_date||row.paid_date||row.received_date||row.created_at||"").slice(0,10);
   const id=String(row.id||"");if(!id||generalIncomeById.has(id))return;
-  generalIncomeById.set(id,{amount:Math.round(Math.max(0,amount-tax)*100)/100,date});
+  const amount=Math.max(0,Number(row.amount||0));
+  if(!Number.isFinite(amount)||amount<=0)return;
+  const charge=chargeById.get(String(row.charge_id||""));
+  const base=Number(charge?.base_amount??charge?.amount??0);
+  const tax=Math.max(0,Number(charge?.hst_amount||0));
+  const total=base+tax;
+  const pretax=total>0&&tax>0?amount*(base/total):amount;
+  const date=String(row.payment_date||row.created_at||"").slice(0,10);
+  generalIncomeById.set(id,{amount:Math.round(Math.max(0,pretax)*100)/100,date});
  });
  const inRange=(date,start,end)=>!!date&&!!start&&!!end&&date>=start&&date<=end;
  const tradeIncomeInRange=(start,end)=>[...incomeByTransaction.values()].reduce((sum,x)=>sum+(inRange(x.date,start,end)?x.share:0),0);
