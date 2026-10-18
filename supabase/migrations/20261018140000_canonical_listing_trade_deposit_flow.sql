@@ -124,3 +124,78 @@ begin
   end if;
 end;
 $migration$;
+
+-- Preserve the originating transaction on bank-side trust entries too. This makes
+-- matching and reconciliation traceable without fuzzy address/amount comparisons.
+alter table public.dv_accounting_bank_transactions
+  add column if not exists transaction_id uuid references public.dv_accounting_transactions(id);
+alter table public.dv_accounting_bank_transactions
+  add column if not exists trust_transaction_id uuid references public.dv_accounting_trust_transactions(id) on delete set null;
+
+create index if not exists dv_accounting_bank_transactions_trust_transaction_idx
+  on public.dv_accounting_bank_transactions(trust_transaction_id);
+create index if not exists dv_accounting_bank_transactions_transaction_idx
+  on public.dv_accounting_bank_transactions(transaction_id);
+
+-- Backfill historical bank entries only when the original receipt reference is an
+-- exact match, avoiding guesses based on property address or amount alone.
+update public.dv_accounting_bank_transactions bt
+set transaction_id = tt.transaction_id,
+    trust_transaction_id = tt.id
+from public.dv_accounting_trust_transactions tt
+where bt.trust_transaction_id is null
+  and bt.transaction_id is null
+  and bt.reference is not null
+  and bt.reference = tt.reference
+  and bt.bank_account_id = tt.bank_account_id
+  and bt.transaction_date = tt.ledger_date
+  and bt.amount = case when tt.direction = 'DEPOSIT' then tt.amount else -tt.amount end
+  and tt.status = 'POSTED';
+
+-- Keep every new bank-side entry tied to the trust posting that generated it.
+do $migration$
+declare
+  v_definition text;
+  v_updated text;
+  v_anchor text := 'insert into public.dv_accounting_bank_transactions(bank_account_id,transaction_date,description,amount,reconciled,reference)';
+  v_replacement text := 'insert into public.dv_accounting_bank_transactions(bank_account_id,transaction_date,description,amount,reconciled,reference,transaction_id,trust_transaction_id)';
+begin
+  select pg_get_functiondef(p.oid)
+    into v_definition
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.proname = 'dv_accounting_post_trust_transaction'
+    and pg_get_function_identity_arguments(p.oid) like 'p_company_id uuid, p_bank_account_id uuid, p_transaction_id uuid%';
+
+  if v_definition is null then
+    raise exception 'Could not find dv_accounting_post_trust_transaction for bank-entry linkage';
+  end if;
+
+  if position('reference,transaction_id,trust_transaction_id)' in v_definition) = 0 then
+    v_updated := replace(v_definition, v_anchor, v_replacement);
+    if v_updated = v_definition then
+      raise exception 'Could not patch trust posting function: bank transaction insert anchor was not found';
+    end if;
+    v_updated := replace(
+      v_updated,
+      ' values(p_bank_account_id,coalesce(p_ledger_date,current_date),p_description,',
+      ' values(p_bank_account_id,coalesce(p_ledger_date,current_date),p_description,'
+    );
+    v_updated := replace(
+      v_updated,
+      '   case when p_direction = ''DEPOSIT'' then p_amount else -p_amount end,false,p_reference);',
+      '   case when p_direction = ''DEPOSIT'' then p_amount else -p_amount end,false,p_reference,p_transaction_id,tt);'
+    );
+    v_updated := replace(
+      v_updated,
+      '   case when p_direction=''DEPOSIT'' then p_amount else -p_amount end,false,p_reference);',
+      '   case when p_direction=''DEPOSIT'' then p_amount else -p_amount end,false,p_reference,p_transaction_id,tt);'
+    );
+    if v_updated = v_definition or position('p_reference,p_transaction_id,tt);' in v_updated) = 0 then
+      raise exception 'Could not safely patch trust posting bank-entry values';
+    end if;
+    execute v_updated;
+  end if;
+end;
+$migration$;
