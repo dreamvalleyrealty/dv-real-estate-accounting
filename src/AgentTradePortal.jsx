@@ -421,31 +421,43 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  }
  async function uploadFile(){
    const filesToUpload=files.length?files:(file?[file]:[]);
-   if(!filesToUpload.length||!supabase)return;
+   if(!filesToUpload.length){setError("Choose at least one file before uploading.");return;}
+   if(!supabase){setError("The database connection is not ready. Refresh the page and try again.");return;}
    if(useCustomDocumentName&&!newDocLabel.trim()){setError("Enter a name for this document.");return;}
-   const draft=await ensureDraftForUpload();if(!draft)return;
-   setBusy(true);setError("");let uploaded=0;
-   for(const currentFile of filesToUpload){
-     const safe=currentFile.name.replace(/[^a-zA-Z0-9._-]/g,"_");
-     const path=String(user.id)+"/"+String(draft.id)+"/"+Date.now()+"-"+uploaded+"-"+safe;
-     const {error:upError}=await supabase.storage.from("dv-trade-documents").upload(path,currentFile,{upsert:false,contentType:currentFile.type||"application/octet-stream"});
-     if(upError){setError("Uploaded "+uploaded+" file(s); "+currentFile.name+" failed: "+upError.message);break}
-     const rejectedDoc=!adminMode?docs.find(d=>d.submission_id===draft.id&&d.document_type===docType&&d.match_status==="MISMATCH"):null;
-     let data=null,error=null;
-     if(rejectedDoc){
-       const {error:updateError}=await supabase.from("dv_accounting_agent_trade_documents").update({document_name:useCustomDocumentName?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id,match_status:"PENDING",match_notes:""}).eq("id",rejectedDoc.id);
-       error=updateError;
-       if(!error&&rejectedDoc.storage_path)await supabase.storage.from("dv-trade-documents").remove([rejectedDoc.storage_path]);
-     }else{
-       const result=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:docType,document_name:useCustomDocumentName?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id}]);
-       error=result.error;
+   setBusy(true);setError("");setMessage("");
+   let draft=null,uploaded=0;
+   try{
+     draft=await ensureDraftForUpload();
+     if(!draft)return;
+     for(const currentFile of filesToUpload){
+       const safe=currentFile.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+       const path=String(user.id)+"/"+String(draft.id)+"/"+Date.now()+"-"+uploaded+"-"+safe;
+       const {error:upError}=await supabase.storage.from("dv-trade-documents").upload(path,currentFile,{upsert:false,contentType:currentFile.type||"application/octet-stream"});
+       if(upError)throw new Error("Could not upload "+currentFile.name+": "+upError.message);
+       const rejectedDoc=!adminMode&&String(selected?.status||"").toUpperCase()!=="APPROVED"?docs.find(d=>d.submission_id===draft.id&&d.document_type===docType&&d.match_status==="MISMATCH"):null;
+       let error=null;
+       if(rejectedDoc){
+         const {error:updateError}=await supabase.from("dv_accounting_agent_trade_documents").update({document_name:useCustomDocumentName?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id,match_status:"PENDING",match_notes:""}).eq("id",rejectedDoc.id);
+         error=updateError;
+         if(error)await supabase.storage.from("dv-trade-documents").remove([path]);
+         else if(rejectedDoc.storage_path)await supabase.storage.from("dv-trade-documents").remove([rejectedDoc.storage_path]);
+       }else{
+         const result=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:draft.id,document_type:docType,document_name:useCustomDocumentName?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id}]);
+         error=result.error;
+         if(error)await supabase.storage.from("dv-trade-documents").remove([path]);
+       }
+       if(error)throw new Error("File uploaded but could not be registered for admin review: "+error.message);
+       uploaded++;
+       await loadDocs(draft.id);
      }
-     if(error){await supabase.storage.from("dv-trade-documents").remove([path]);setError("Uploaded "+uploaded+" file(s); "+currentFile.name+" could not be registered: "+error.message);break}
-     uploaded++;
-     await loadDocs(draft.id);
+     setFile(null);setFiles([]);setNewDocLabel("");
+     setMessage(uploaded===1?"Document uploaded and sent for admin review.":uploaded+" documents uploaded and sent for admin review.");
+   }catch(e){
+     setError(e?.message||"The files could not be uploaded. Please try again.");
+   }finally{
+     setBusy(false);
+     if(draft?.id)await loadDocs(draft.id);
    }
-   if(uploaded===filesToUpload.length){setFile(null);setFiles([]);setNewDocLabel("");setMessage(uploaded===1?"Document uploaded.":uploaded+" documents uploaded.");}
-   setBusy(false);if(draft.id)await loadDocs(draft.id);
  }
  async function analyzeBulkPdf(){
    if(!bulkFile||!/\.pdf$/i.test(bulkFile.name)){setError("Choose a PDF file to split.");return}
