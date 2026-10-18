@@ -2,13 +2,16 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 const packagePath = new URL("../package.json", import.meta.url);
 const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
-const parts = String(packageJson.version || "0.0.0").split(".");
-while (parts.length < 3) parts.push("0");
-const patch = Number.parseInt(parts[2], 10);
-if (!Number.isInteger(patch) || patch < 0) {
-  throw new Error(`Cannot automatically increment invalid app version: ${packageJson.version}`);
+const match = String(packageJson.version || "1.00").match(/^(\d+)\.(\d{1,2})$/);
+if (!match) {
+  throw new Error(`Expected app version in major.minor format (for example 1.01): ${packageJson.version}`);
 }
-parts[2] = String(patch + 1);
-packageJson.version = parts.join(".");
+let major = Number(match[1]);
+let minor = Number(match[2]) + 1;
+if (minor > 10) {
+  major += 1;
+  minor = 1;
+}
+packageJson.version = `${major}.${String(minor).padStart(2, "0")}`;
 writeFileSync(packagePath, JSON.stringify(packageJson, null, 2) + "\n");
-console.log(`App version for this build: ${packageJson.version}`);
+console.log(`App version for this build: v${packageJson.version}`);
