@@ -790,7 +790,8 @@ function Banking(){
  const isMirroredDeposit=(row,allRows,requireClient=true)=>row.direction==="DEPOSIT"&&isListingPlaceholder(row)&&allRows.some(other=>other.id!==row.id&&other.direction==="DEPOSIT"&&!isListingPlaceholder(other)&&other.trust_account_type===row.trust_account_type&&other.bank_account_id===row.bank_account_id&&Number(other.amount||0)===Number(row.amount||0)&&String(other.ledger_date||"").slice(0,10)===String(row.ledger_date||"").slice(0,10)&&(!requireClient||String(other.client_name||"").trim().toLowerCase()===String(row.client_name||"").trim().toLowerCase())&&sameListingMatter(row,other));
  const uniqueTrustRows=tt.rows.filter(row=>!isMirroredDeposit(row,tt.rows,true));
  const duplicateTrustRows=tt.rows.filter(row=>isMirroredDeposit(row,tt.rows,true));
- const uniqueBankRows=t.rows.filter(row=>!isMirroredDeposit(row,t.rows,false));
+ const isMirroredBankDeposit=(row,allRows)=>Number(row.amount)>0&&isListingPlaceholder(row)&&allRows.some(other=>other.id!==row.id&&Number(other.amount)===Number(row.amount)&&other.bank_account_id===row.bank_account_id&&String(other.transaction_date||"").slice(0,10)===String(row.transaction_date||"").slice(0,10)&&!isListingPlaceholder(other)&&sameListingMatter(row,other));
+ const uniqueBankRows=t.rows.filter(row=>!isMirroredBankDeposit(row,t.rows));
  const balance=id=>Number(a.rows.find(x=>x.id===id)?.opening_balance||0)+uniqueBankRows.filter(x=>x.bank_account_id===id).reduce((sum,x)=>sum+Number(x.amount||0),0);
  const accountBankEntries=uniqueBankRows.filter(x=>x.bank_account_id===activeBankAccountId).sort((x,y)=>String(y.ledger_date||"").localeCompare(String(x.ledger_date||"")));
  const accountTrustEntries=uniqueTrustRows.filter(x=>x.bank_account_id===activeBankAccountId).sort((x,y)=>String(y.ledger_date||"").localeCompare(String(x.ledger_date||"")));
