@@ -34,16 +34,16 @@ const labelStatus = s => ({DRAFT:"Draft",SUBMITTED:"Awaiting review",NEEDS_CHANG
 const money = v => new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(v||0));
 const displayDate = v => v ? new Date(v+"T12:00:00").toLocaleDateString("en-CA") : "—";
 function normalizePropertyAddress(value){
- let address=String(value||"").trim().replace(/\\s*,\\s*/g,", ").replace(/\\s+/g," ");
+ let address=String(value||"").trim().replace(/\s*,\s*/g,", ").replace(/\s+/g," ");
  // Correct legacy values where the house number was repeated in the saved address.
- address=address.replace(/^(\\d+[A-Za-z]?(?:[-/]\\d+[A-Za-z]?)?)(?:[\\s,]+\\1){1,}(?=[\\s,])/i,"$1");
+ address=address.replace(/^(\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?)(?:[\s,]+\1){1,}(?=[\s,])/i,"$1");
  return address;
 }
 function listingStreetParts(listing){
  const number=String(listing?.street_number||"").trim(),name=String(listing?.street_name||"").trim();
  if(number||name)return {street_number:number,street_name:normalizePropertyAddress(name)};
  const raw=normalizePropertyAddress(listing?.property_address);
- const matched=raw.match(/^(\\d+[A-Za-z]?(?:[-/]\\d+[A-Za-z]?)?)\\s+(.+)$/);
+ const matched=raw.match(/^(\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?)\s+(.+)$/);
  return matched?{street_number:matched[1],street_name:matched[2]}:{street_number:"",street_name:raw};
 }
 
