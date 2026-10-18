@@ -576,9 +576,20 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    setDocs(old=>old.map(d=>d.id===doc.id?data:d));setError("");setMessage("Note saved and visible to the agent.");
  }
  async function setDocMatch(doc,match_status,match_notes=doc.match_notes||""){
-   if(match_status==="MISMATCH"&&!String(match_notes||"").trim()){setError("Add a note explaining what the agent must fix before marking this document Not approved.");return}
-   const {data,error:e}=await supabase.from("dv_accounting_agent_trade_documents").update({match_status,match_notes:String(match_notes||"").trim()}).eq("id",doc.id).select().single();
-   if(e){setError(e.message);return}setDocs(old=>old.map(d=>d.id===doc.id?data:d));setError("");setMessage(match_status==="MISMATCH"?"Document marked Not approved; the agent can see the note and upload a corrected document.":"Document approved.");
+   if(!adminMode){setError("Only a trade administrator can review documents.");return}
+   if(!doc?.id||!supabase){setError("Document record unavailable. Refresh the trade and try again.");return}
+   const note=String(match_notes||"").trim();
+   if(match_status==="MISMATCH"&&!note){setError("Add a note explaining what the agent must fix before marking this document Not approved.");return}
+   setBusy(true);setError("");setMessage("");
+   try{
+     const {data,error:e}=await supabase.from("dv_accounting_agent_trade_documents").update({match_status,match_notes:note}).eq("id",doc.id).select().single();
+     if(e)throw e;
+     if(!data)throw new Error("No document was updated. Refresh and check administrator permissions.");
+     setDocs(current=>current.map(d=>d.id===doc.id?data:d));
+     setMessage(match_status==="MISMATCH"?"Document marked Not approved; the agent can see the note and upload a corrected document.":"Document approved.");
+     await Promise.all([loadDocs(selected?.id),load()]);
+   }catch(e){setError("Could not "+(match_status==="MISMATCH"?"reject":"approve")+" document: "+(e?.message||String(e)));}
+   finally{setBusy(false)}
  }
  async function returnTransfer(){
    if(!adminMode||!selected?.id||selected.status!=="APPROVED")return;if(/^(PAID|CLOSED)\|PAID$/.test(selectedTransactionStatus)){setError("This trade is closed and paid. Return Transfer & Unapprove is not allowed.");return;}
