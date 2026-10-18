@@ -1,6 +1,6 @@
 import{Fragment,useEffect,useMemo,useRef,useState}from"react";
 import{createPortal}from"react-dom";
-import{LayoutDashboard,ArrowLeftRight,Landmark,ReceiptText,Users,Clock3,Percent,BarChart3,ClipboardCheck,Settings,Menu,X,Plus,Search,RefreshCw,Save,LogOut,CheckCircle2,AlertCircle,FileText,Building2,Upload,ShieldCheck,FileSpreadsheet,Printer,Database,ChevronRight}from"lucide-react";
+import{LayoutDashboard,ArrowLeftRight,Landmark,ReceiptText,Users,Clock3,Percent,BarChart3,ClipboardCheck,Settings,Menu,X,Plus,Search,RefreshCw,Save,LogOut,CheckCircle2,AlertCircle,FileText,Building2,Upload,ShieldCheck,FileSpreadsheet,Printer,Database,ChevronRight,Trash2}from"lucide-react";
 import{supabase}from"./lib/supabase";
 import MoneyInput from "./MoneyInput";
 import * as XLSX from "xlsx";
