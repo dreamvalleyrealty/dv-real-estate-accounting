@@ -1,0 +1,20 @@
+import React,{useEffect,useState} from "react";
+import {supabase} from "./lib/supabase";
+import {FileText,Printer,RefreshCw,Plus,Lock,AlertTriangle} from "lucide-react";
+
+const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(n||0));
+export default function TaxSlips({user,role="STAFF"}){
+ const admin=["SUPERADMIN","ADMIN","BROKER_OF_RECORD"].includes(String(role).toUpperCase());
+ const [year,setYear]=useState(new Date().getFullYear()-1),[kind,setKind]=useState("T4A"),[rows,setRows]=useState([]),[busy,setBusy]=useState(false),[error,setError]=useState(""),[note,setNote]=useState("");
+ const load=async()=>{if(!supabase){setRows([]);return}setBusy(true);setError("");const{data,error}=await supabase.from("dv_accounting_tax_slips").select("*").eq("tax_year",Number(year)).eq("slip_type",kind).order("recipient_name");if(error){setError(error.message);setRows([])}else setRows(data||[]);setBusy(false)};
+ useEffect(()=>{load()},[year,kind]);
+ const addDraft=async()=>{if(!admin||!supabase)return;setBusy(true);setError("");const{error}=await supabase.from("dv_accounting_tax_years").upsert({tax_year:Number(year),status:"SETUP",updated_by:user?.id||null},{onConflict:"tax_year"});if(error)setError(error.message);else setNote("Tax year "+year+" setup is ready. Payroll/commission totals are not connected yet; no slip amounts have been calculated.");setBusy(false)};
+ const print=()=>window.print();
+ return <div className="page"><div className="pagehead"><div><h1>Tax Slips</h1><p className="muted">Annual T4 slips for employees and T4A slips for agents.</p></div><button className="secondary" onClick={load} disabled={busy}><RefreshCw size={15}/> Refresh</button></div>
+ <section className="panel"><div style={{display:"flex",gap:12,alignItems:"end",flexWrap:"wrap"}}><label>Tax year<select value={year} onChange={e=>setYear(Number(e.target.value))} style={{display:"block",padding:9,minWidth:130}}>{Array.from({length:8},(_,i)=>new Date().getFullYear()-i-1).map(y=><option key={y}>{y}</option>)}</select></label><label>Slip type<select value={kind} onChange={e=>setKind(e.target.value)} style={{display:"block",padding:9,minWidth:180}}><option value="T4A">T4A — Agents / contractors</option><option value="T4">T4 — Employees</option></select></label>{admin&&<button className="primary" onClick={addDraft} disabled={busy}><Plus size={15}/> Set up tax year</button>}<button className="secondary" onClick={print}><Printer size={15}/> Print list</button></div>
+ {error&&<p role="alert" style={{color:"#b91c1c",marginTop:12}}>{error}</p>}{note&&<p role="status" style={{marginTop:12}}>{note}</p>}
+ <div style={{display:"flex",gap:10,alignItems:"start",marginTop:18,padding:12,background:"#fff8e8",borderRadius:8}}><AlertTriangle size={18}/><div><strong>Not yet ready for CRA filing</strong><div className="muted">This first phase creates annual setup and controlled slip records. Payroll and agent payment totals will be connected in the next phase. Do not treat draft records or printouts as official CRA slips until the totals, required boxes, recipient identity, and CRA form layout have been validated.</div></div></div>
+ <div style={{overflowX:"auto",marginTop:16}}><table className="table"><thead><tr><th>Recipient</th><th>Slip</th><th>Status</th><th>Gross / reportable amount</th><th>Updated</th></tr></thead><tbody>{rows.length?rows.map(row=><tr key={row.id}><td>{row.recipient_name||"Unassigned"}</td><td>{row.slip_type}</td><td>{row.status||"DRAFT"}</td><td>{row.reportable_amount==null?"—":money(row.reportable_amount)}</td><td>{row.updated_at?new Date(row.updated_at).toLocaleDateString():"—"}</td></tr>):<tr><td colSpan="5" className="muted">{busy?"Loading tax slips…":"No slip records exist for this year and type yet."}</td></tr>}</tbody></table></div>
+ {admin&&<p className="muted" style={{marginTop:14}}><Lock size={14} style={{verticalAlign:"middle"}}/> Admin setup only. Release and recipient self-service printing will be enabled after access policies and payroll-data mapping are in place.</p>}
+ </section></div>
+}
