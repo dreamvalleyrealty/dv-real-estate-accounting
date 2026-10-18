@@ -287,7 +287,7 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
    if(depositError)throw depositError;
    if(!deposit)throw new Error("No listing deposit receipt is linked to this transaction.");
    const receiptNumber="DR-"+String(tx.transaction_number||"").replace(/[^A-Za-z0-9-]/g,"");
-   const {data:listing,error:listingError}=await supabase.from("dv_accounting_listings").select("*").eq("id",tx.listing_id).maybeSingle();
+   const {data:listing,error:listingError}=await supabase.from("dv_accounting_listing_submissions").select("*").eq("id",tx.listing_id).maybeSingle();
    if(listingError)throw listingError;
    const {data:banks}=await supabase.from("dv_accounting_bank_accounts").select("id,name").eq("account_type","REAL_ESTATE_TRUST");
    const bank=(banks||[]).find(item=>item.id===deposit.trust_bank_account_id);
