@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 const buildId = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-const buildVersion = packageJson.version;
+const buildVersion = `${packageJson.version}+${process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) || buildId}`;
 
 export default defineConfig({
   plugins: [react()],
