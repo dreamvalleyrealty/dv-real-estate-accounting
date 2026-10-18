@@ -278,24 +278,29 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
   setBusy(false);return false
  }
  async function printReceipt(){
-  const path=String(trust?.receipt_attachment_path||"").trim();
-  if(!path){alert("No original deposit receipt is attached to this deposit record.");return}
   const tab=window.open("","_blank");
   if(!tab){alert("Please allow pop-ups to view the original receipt.");return}
+  tab.document.write("<!doctype html><html><head><title>Original Deposit Receipt</title></head><body style='font-family:Arial,sans-serif;padding:24px'>Loading original deposit receipt…</body></html>");
   try{
-   const result=await supabase.storage.from("dv-trade-documents").createSignedUrl(path,300);
-   if(result.error||!result.data?.signedUrl)throw result.error||new Error("Secure link unavailable");
-   const image=tab.document.createElement("img");
-   image.src=result.data.signedUrl;image.alt="Original deposit receipt";
-   image.style.cssText="display:block;max-width:100%;height:auto;margin:60px auto 20px";
-   const bar=tab.document.createElement("div");
-   bar.style.cssText="position:fixed;top:0;left:0;right:0;padding:12px;text-align:right;background:white;border-bottom:1px solid #ddd";
-   const print=tab.document.createElement("button");print.textContent="Print / Save as PDF";print.onclick=()=>tab.print();
-   const close=tab.document.createElement("button");close.textContent="Close";close.style.marginLeft="8px";close.onclick=()=>tab.close();
-   bar.append(print,close);tab.document.body.append(bar,image);tab.document.title="Original Deposit Receipt";
-   tab.document.body.style.cssText="margin:0;background:#f1f5f9";
-   image.onerror=()=>alert("The original receipt could not be loaded.");
-  }catch(error){tab.close();alert("Could not open the original deposit receipt: "+(error?.message||"Storage error"))}
+   const {data:deposit,error:depositError}=await supabase.from("dv_accounting_transaction_trust").select("receipt_attachment_path,receipt_attachment_name,receipt_attachment_mime_type").eq("transaction_id",initial?.id||savedTransactionId).maybeSingle();
+   if(depositError)throw depositError;
+   const path=String(deposit?.receipt_attachment_path||"").trim();
+   if(!path)throw new Error("No receipt attachment path is saved on this transaction's deposit record.");
+   const {data,error}=await supabase.storage.from("dv-trade-documents").createSignedUrl(path,300);
+   if(error||!data?.signedUrl)throw error||new Error("Could not create a secure link for the original receipt.");
+   const mime=String(deposit.receipt_attachment_mime_type||"").toLowerCase();
+   if(mime==="application/pdf"||/\.pdf$/i.test(deposit.receipt_attachment_name||path)){
+    tab.location.href=data.signedUrl;
+    return;
+   }
+   tab.document.open();
+   tab.document.write("<!doctype html><html><head><meta charset='utf-8'><title>Original Deposit Receipt</title><style>body{font-family:Arial,sans-serif;margin:0;background:#f1f5f9}.toolbar{position:fixed;top:0;left:0;right:0;padding:12px;text-align:right;background:white;border-bottom:1px solid #ddd}.toolbar button{padding:9px 16px;margin-left:8px}.preview{padding:60px 16px 20px;text-align:center}.preview img{max-width:100%;height:auto}@media print{.toolbar{display:none}.preview{padding:0}}</style></head><body><div class='toolbar'><button onclick='window.print()'>Print / Save as PDF</button><button onclick='window.close()'>Close</button></div><div class='preview'><img id='original-receipt' alt='Original deposit receipt'></div></body></html>");
+   tab.document.close();
+   tab.document.getElementById("original-receipt").src=data.signedUrl;
+  }catch(error){
+   tab.close();
+   alert("Could not open the original deposit receipt: "+(error?.message||"Unknown error"));
+  }
  } const addressSummary=[form.street_number,form.street_name,form.unit_number?"Unit "+form.unit_number:"",form.city].filter(Boolean).join(" ");
  return <div className="tx-editor"><Tabs active={tab} setActive={setTab}/><form onSubmit={save}>
  {tab===7&&<div className="tx-section"><div className="tx-subhead"><div><h3>Transaction Files & Audit Archive</h3><p>Retain trade submissions, agreements, disclosure forms, identity/compliance documents, amendments, closing records and correspondence for later RECO audits or other lawful purposes. Files remain linked to this transaction after closing.</p></div></div>{!savedTransactionId||typeof savedTransactionId!=="string"?<div className="notice"><AlertCircle size={16}/> Save this transaction first. Then reopen it to upload and manage its secure archive.</div>:<><div className="notice"><AlertCircle size={16}/> Private document storage with short-lived signed links. Do not upload files unless authorized. Follow the brokerage’s approved retention and privacy policy; deleting a file is permanent.</div><div className="tx-grid"><Field label="Document category"><select value={archiveType} onChange={e=>setArchiveType(e.target.value)}><option value="APS">Agreement of Purchase and Sale</option><option value="AMENDMENT">Amendment / Waiver</option><option value="MLS">MLS / Listing</option><option value="DISCLOSURE">Disclosure / Representation</option><option value="ID">Identity / Compliance</option><option value="COMMISSION">Commission / Closing Statement</option><option value="TRUST">Trust Deposit / Release</option><option value="CORRESPONDENCE">Correspondence</option><option value="CLOSING">Closing / Lawyer Documents</option><option value="OTHER">Other Supporting Document</option></select></Field><Field label="Choose file(s)"><input type="file" multiple onChange={e=>setArchiveFiles(Array.from(e.target.files||[]))}/>{archiveFiles.length>0&&<small>{archiveFiles.length} file(s) selected: {archiveFiles.map(f=>f.name).join(", ")}</small>}</Field><Field label="Notes" wide><input value={archiveNotes} onChange={e=>setArchiveNotes(e.target.value)} placeholder="Optional description or audit note"/></Field></div><div className="tx-footer"><button type="button" className="primary" disabled={archiveBusy||!archiveFiles.length} onClick={uploadArchiveDocument}><Save size={15}/>{archiveBusy?"Uploading…":`Upload ${archiveFiles.length||""} to Secure Archive`}</button></div><div className="tx-card" style={{marginTop:16}}><div className="tx-subhead"><div><h3>Archived documents ({archiveDocs.length})</h3><p>Newest first · available after the trade closes</p></div></div><div className="tablewrap"><table><thead><tr><th>Document</th><th>Category</th><th>Uploaded</th><th>Size</th><th>Notes</th><th>Actions</th></tr></thead><tbody>{archiveDocs.map(doc=><tr key={doc.id}><td>{doc.document_name}</td><td>{doc.document_type}</td><td>{doc.created_at?new Date(doc.created_at).toLocaleString():"—"}</td><td>{doc.file_size?((Number(doc.file_size)/1024/1024).toFixed(2)+" MB"):"—"}</td><td>{doc.notes||"—"}</td><td><button type="button" className="secondary" onClick={()=>openArchiveDocument(doc)}>Open securely</button> {canDeleteDocuments&&<button type="button" className="textbutton danger" onClick={()=>deleteArchiveDocument(doc)}>Delete</button>}</td></tr>)}{!archiveDocs.length&&<tr><td colSpan="6">No archived files yet.</td></tr>}</tbody></table></div></div></>}</div>}
