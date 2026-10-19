@@ -1150,7 +1150,7 @@ function PaidCommissionCorrections({commissions=[],transactions=[],agents=[],can
 }
 
 
-function CommissionPaymentDialog({commission,transaction,agent,cheques,trustTransactions=[],sellerSettlement=null,charges=[],transactionAgents=[],existingCheque=null,onClose,onIssued}){
+function CommissionPaymentDialog({commission,transaction,agent,cheques,commissionHistory=[],trustTransactions=[],sellerSettlement=null,charges=[],transactionAgents=[],existingCheque=null,onClose,onIssued}){
  const[method,setMethod]=useState(existingCheque?.payment_method||"CHEQUE"),[reference,setReference]=useState(existingCheque?.payment_reference||existingCheque?.cheque_number||""),[payDate,setPayDate]=useState(existingCheque?.cheque_date||today()),[deductDeskFees,setDeductDeskFees]=useState(true),[busy,setBusy]=useState(false),[issued,setIssued]=useState(existingCheque),[editingIssued,setEditingIssued]=useState(false),[error,setError]=useState("");
  const moneyValue=n=>money(Number(n||0));
  const infoText=transaction?.transaction_number||"";
