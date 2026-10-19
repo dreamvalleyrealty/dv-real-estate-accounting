@@ -1536,10 +1536,11 @@ function Agents({user,mode="agents",permissions={},setActive,role}){
    const agentRows=a.rows||[];
    const payload=[],problems=[];
    raw.forEach((row,index)=>{
-    const agentLabel=String(pick(row,["agent name","agent","salesperson","sales representative","payee agent","agent full name","name"])).trim();
+    const agentLabel=String(pick(row,["agent name","agent name (or email / agent number)","agent name or email or agent number","agent","salesperson","sales representative","payee agent","agent full name","name"])).trim();
     const email=String(pick(row,["agent email","email"])).trim();
     const agentNumber=String(pick(row,["agent number","agent #","agent id","employee number"])).trim();
-    let matched=agentRows.find(x=>email&&norm(x.email)===norm(email))||agentRows.find(x=>agentNumber&&norm(x.agent_number)===norm(agentNumber))||agentRows.find(x=>agentLabel&&[x.name,[x.first_name,x.last_name].filter(Boolean).join(" "),x.legal_name].some(n=>norm(n)===norm(agentLabel)));
+    const agentIdentity=agentLabel||email||agentNumber;
+    let matched=agentRows.find(x=>(email||agentIdentity)&&norm(x.email)===norm(email||agentIdentity))||agentRows.find(x=>(agentNumber||agentIdentity)&&norm(x.agent_number)===norm(agentNumber||agentIdentity))||agentRows.find(x=>agentIdentity&&[x.name,[x.first_name,x.last_name].filter(Boolean).join(" "),x.legal_name].some(n=>norm(n)===norm(agentIdentity)));
     if(!matched){problems.push("Row "+(index+2)+": agent not matched ("+(agentLabel||email||agentNumber||"no agent name column")+")");return}
     const paymentDate=dateVal(pick(row,["payment date","cheque date","check date","date paid","date","date issued"]));
     if(!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)){problems.push("Row "+(index+2)+": invalid/missing payment date");return}
