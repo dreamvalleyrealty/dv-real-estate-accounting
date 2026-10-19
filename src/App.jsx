@@ -1198,15 +1198,17 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,commissio
     if(!partyResult.error){
       const partyLabel=p=>String(p.legal_name||p.company_name||[p.first_name,p.last_name].filter(Boolean).join(" ")||"").trim();
       const parties=partyResult.data||[];
-      const buyerTypes=new Set(["BUYER","TENANT","BUYER_CLIENT","BUYER/TENANT"]);
-      const sellerTypes=new Set(["SELLER","LANDLORD","SELLER_CLIENT","SELLER/LANDLORD"]);
-      const buyers=parties.filter(p=>buyerTypes.has(String(p.person_type||"").trim().toUpperCase())).map(partyLabel).filter(Boolean);
-      const sellers=parties.filter(p=>sellerTypes.has(String(p.person_type||"").trim().toUpperCase())).map(partyLabel).filter(Boolean);
+      const role=p=>String(p.person_type||"").trim().toUpperCase().replace(/[_-]+/g," ").replace(/\\s+/g," ");
+      const buyerTypes=new Set(["BUYER","TENANT","BUYER CLIENT","BUYER/TENANT","BUYER / TENANT","PURCHASER"]);
+      const sellerTypes=new Set(["SELLER","LANDLORD","SELLER CLIENT","SELLER/LANDLORD","SELLER / LANDLORD","VENDOR"]);
+      const buyers=parties.filter(p=>buyerTypes.has(role(p))).map(partyLabel).filter(Boolean);
+      const sellers=parties.filter(p=>sellerTypes.has(role(p))).map(partyLabel).filter(Boolean);
       if(buyers.length)buyer=[...new Set(buyers)].join(" / ");
       if(sellers.length)seller=[...new Set(sellers)].join(" / ");
     }
   }
-  if(buyer==="—")buyer=String(transaction?.buyer_name||transaction?.client_name||transaction?.buyer_client_name||"").trim()||"—";
+  // Legacy client_name can combine buyer and seller names; never print it as a buyer fallback.
+  if(buyer==="—")buyer=String(transaction?.buyer_name||transaction?.buyer_client_name||"").trim()||"—";
   if(seller==="—")seller=String(transaction?.seller_name||transaction?.seller||transaction?.seller_client_name||transaction?.landlord_name||transaction?.vendor_name||"").trim()||"—";
 
   const date=dateLabel(issued?.cheque_date||payDate);
