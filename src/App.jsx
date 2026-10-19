@@ -1183,7 +1183,7 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,commissio
   const chargeSum=(types)=>chequeCharges.filter(ch=>types.includes(String(ch.charge_type||"").toUpperCase())).reduce((sum,ch)=>sum+Number(ch.amount||0)+(ch.hst_applicable?Number(ch.hst_amount||0):0),0);
   const unappliedDeskFees=charges.filter(ch=>ch.agent_id===agent?.id&&String(ch.charge_type||"").toUpperCase()==="DESK_FEE"&&String(ch.status||"").toUpperCase()==="OPEN"&&!ch.applied_to_cheque_id&&true).reduce((sum,ch)=>sum+Number(ch.amount||0)+(ch.hst_applicable?Number(ch.hst_amount||0):0),0);
   const unappliedGeneralExpenses=charges.filter(ch=>ch.agent_id===agent?.id&&["GENERAL_EXPENSE","GENERAL_EXP","OTHER_FEE"].includes(String(ch.charge_type||"").toUpperCase())&&["OPEN","PARTIAL"].includes(String(ch.status||"").toUpperCase())&&!ch.applied_to_cheque_id&&true).reduce((sum,ch)=>sum+Math.max(0,Number(ch.amount||0))+(ch.hst_applicable?Number(ch.hst_amount||0):0),0);
-  const amount=Number(issued?.net_amount??displayedIssuedNet),methodLabel=(issued?.payment_method||method)==="EFT"?"PAID BY E.F.T.":"CHEQUE";
+  const amount=Number(issued?.net_amount??displayedIssuedNet),paymentMethod=String(issued?.payment_method||method||"").trim().toUpperCase(),methodLabel=paymentMethod==="EFT"?"PAID BY E.F.T.":"CHEQUE";
   const txAgent=transactionAgents.find(row=>row.transaction_id===commission?.transaction_id&&row.agent_id===commission?.agent_id);
   const adminFee=Math.max(0,chargeSum(["ADMIN_FEE"])||Number(commission?._admin_fee||0)),dealFee=Math.max(0,gross-Number(issued?.agent_share??commission?.agent_share??txAgent?.agent_payable??0)),otherFee=chargeSum(["DESK_FEE","GENERAL_EXPENSE","GENERAL_EXP","OTHER_FEE"]);
   const hstAmount=Number(issued?.agent_hst_amount??hst);
@@ -1216,14 +1216,14 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,commissio
   const licenseExpiry=agent?.reco_license_expiry?Math.ceil((new Date(agent.reco_license_expiry+"T12:00:00")-new Date(today()+"T12:00:00"))/86400000):null;
   const licenseNotice=licenseExpiry!==null&&licenseExpiry>=0&&licenseExpiry<=30?(licenseExpiry===0?"Your real estate license expires today":"Your real estate license renews in "+licenseExpiry+" day"+(licenseExpiry===1?"":"s")):"";
   const chequeFace= `<section class="chequeface">
-    <div class="chequeNo">Cheque No. ${method==="CHEQUE"?escapeHtml(reference):""}</div>
+    <div class="chequeNo">Cheque No. ${paymentMethod==="CHEQUE"?escapeHtml(reference):""}</div>
     <div class="company">Dream Valley Realty Inc.</div>
     <div class="dateLabel">DATE</div><div class="date">${escapeHtml(date)}</div>
     <div class="amountLabel">AMOUNT</div><div class="amount">${escapeHtml(amountText)}</div>
     <div class="payline"><b>PAY</b><span>${escapeHtml(amountInWords(amount))}</span></div>
     <div class="payee"><span>TO THE<br>ORDER<br>OF</span><div>${escapeHtml(payeeDisplay)}<br>${escapeHtml(payeeAddress)}</div></div>
     <div class="note"><b>NOTE:</b> ${escapeHtml(infoText)} ${escapeHtml(address)}</div>
-    ${method==="EFT"?'<div class="watermark">PAID BY E.F.T.</div>':""}
+    ${paymentMethod==="EFT"?'<div class="watermark">PAID BY E.F.T.</div>':""}
   </section>`;
   const stub=`<section class="stub">
     <div class="stubtop"><div class="stubagent"><div class="agentno">${escapeHtml(agent?.agent_number||"")}</div><div><b>${escapeHtml(payeeDisplay)}</b><br>${escapeHtml(payeeAddress)}</div></div><div class="stubmeta"><b>CHQ.#: ${escapeHtml(reference)}</b><br>Date: ${escapeHtml(date)}</div></div>
@@ -1240,7 +1240,7 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,commissio
     <div class="source">(From: TD Commission Trust)</div><div class="stubdot">.</div>
   </section>`;
   const w=window.open("","_blank","width=1050,height=850");if(!w){setError("Please allow pop-ups to print the payment stub.");return}
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${method==="EFT"?"EFT Payment Advice":"Commission Cheque & Stub"}</title><style>
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${paymentMethod==="EFT"?"EFT Payment Advice":"Commission Cheque & Stub"}</title><style>
   @page{size:letter portrait;margin:.25in}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:10px;margin:0}.chequeface{height:3.45in;position:relative;padding:8px 28px 10px;border-bottom:1px solid #bbb;overflow:hidden}.chequeNo{font-size:9px;margin-bottom:10px}.company{font-size:15px;font-weight:bold;margin:4px 0 40px}.dateLabel,.amountLabel{position:absolute;right:128px;font-weight:bold;font-size:10px}.dateLabel{top:43px}.date{position:absolute;right:26px;top:57px;font-size:12px}.amountLabel{top:94px}.amount{position:absolute;right:26px;top:108px;font-size:12px}.payline{display:flex;gap:12px;align-items:flex-start;margin-top:0;font-size:12px;position:relative;z-index:1}.payline span{flex:1;padding-right:190px}.payee{display:flex;gap:18px;margin-top:20px;line-height:1.35;position:relative;z-index:1}.payee>span{font-size:9px;min-width:34px}.payee>div{font-size:11px}.note{position:absolute;left:28px;bottom:38px;z-index:1}.note b{margin-right:15px}.watermark{position:absolute;left:17%;right:5%;top:1.35in;text-align:center;font-size:48px;font-weight:bold;letter-spacing:3px;color:rgba(0,0,0,.22);white-space:nowrap;z-index:0}.stub{height:2.72in;padding:5px 10px 2px;page-break-inside:avoid;overflow:hidden}.stubtop{display:flex;justify-content:space-between;align-items:flex-start;min-height:35px}.stubagent{display:flex;gap:38px;line-height:1.25;font-size:10px}.agentno{font-weight:bold;min-width:35px}.stubmeta{text-align:right;line-height:1.35;font-size:10px}table{width:100%;border-collapse:collapse;font-size:8.5px;line-height:1.15}th,td{padding:2.5px 4px;text-align:left;vertical-align:top;border-bottom:0}thead{border-top:1px solid #555;border-bottom:1px solid #555}th{font-weight:bold}td.num,th.num{text-align:right;white-space:nowrap}.license{margin:14px 0 0 73px;font-size:9px}.source{text-align:center;font-weight:bold;margin-top:10px}.stubdot{text-align:center;font-size:8px;margin-top:3px}@media print{.no-print{display:none}}</style></head><body>${chequeFace}${stub}${stub}<div class="no-print" style="padding:12px"><button onclick="window.print()">Print / Save as PDF</button></div></body></html>`);
   w.document.close();w.focus();
  }
