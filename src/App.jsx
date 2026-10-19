@@ -1185,7 +1185,7 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,commissio
   const adminFee=Math.max(0,chargeSum(["ADMIN_FEE"])||Number(commission?._admin_fee||0)),dealFee=Math.max(0,gross-Number(issued?.agent_share??commission?.agent_share??txAgent?.agent_payable??0)),otherFee=chargeSum(["DESK_FEE","GENERAL_EXPENSE","GENERAL_EXP","OTHER_FEE"]);
   const hstAmount=Number(issued?.agent_hst_amount??hst);
   const address=transaction?.property_address||"";
-  const payee=agent?.legal_name||agent?.corporation_name||agent?.name||[agent?.first_name,agent?.last_name].filter(Boolean).join(" ");
+  const agentDisplayName=[agent?.first_name,agent?.last_name].filter(Boolean).join(" ").trim()||agent?.name||agent?.legal_name||"Agent";const payee=agent?.incorporated?(agent?.corporation_name||agent?.legal_name||agentDisplayName):((agent?.legal_name&&agent.legal_name!==agentDisplayName)?agent.legal_name:agentDisplayName);const payeeDisplay=agent?.incorporated&&payee&&String(payee).trim()!==String(agentDisplayName).trim()?String(payee)+" c/o "+String(agentDisplayName):payee;
   const payeeAddress=[agent?.address,agent?.city,agent?.province||"ON",agent?.postal_code].filter(Boolean).join(" ");
   const buyer=transaction?.buyer_name||transaction?.client_name||"—";
   const seller=transaction?.seller_name||"—";
@@ -1199,12 +1199,12 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,commissio
     <div class="dateLabel">DATE</div><div class="date">${escapeHtml(date)}</div>
     <div class="amountLabel">AMOUNT</div><div class="amount">${escapeHtml(amountText)}</div>
     <div class="payline"><b>PAY</b><span>${escapeHtml(amountInWords(amount))}</span></div>
-    <div class="payee"><span>TO THE<br>ORDER<br>OF</span><div>${escapeHtml(payee)}<br>${escapeHtml(payeeAddress)}</div></div>
+    <div class="payee"><span>TO THE<br>ORDER<br>OF</span><div>${escapeHtml(payeeDisplay)}<br>${escapeHtml(payeeAddress)}</div></div>
     <div class="note"><b>NOTE:</b> ${escapeHtml(infoText)} ${escapeHtml(address)}</div>
     ${method==="EFT"?'<div class="watermark">PAID BY E.F.T.</div>':""}
   </section>`;
   const stub=`<section class="stub">
-    <div class="stubtop"><div class="stubagent"><div class="agentno">${escapeHtml(agent?.agent_number||"")}</div><div><b>${escapeHtml(payee)}</b><br>${escapeHtml(payeeAddress)}</div></div><div class="stubmeta"><b>CHQ.#: ${escapeHtml(reference)}</b><br>Date: ${escapeHtml(date)}</div></div>
+    <div class="stubtop"><div class="stubagent"><div class="agentno">${escapeHtml(agent?.agent_number||"")}</div><div><b>${escapeHtml(payeeDisplay)}</b><br>${escapeHtml(payeeAddress)}</div></div><div class="stubmeta"><b>CHQ.#: ${escapeHtml(reference)}</b><br>Date: ${escapeHtml(date)}</div></div>
     <table><thead><tr><th>Trade#</th><th>Property Address</th><th class="num">Gross</th><th>Cheque Summary</th><th class="num">Amount</th><th class="num">To-Date</th></tr></thead>
     <tbody>
       <tr><td>${escapeHtml(infoText)}</td><td>${escapeHtml(address)}</td><td class="num">${escapeHtml(moneyValue(gross))}</td><td>Gross Earnings</td><td class="num">${escapeHtml(moneyValue(gross))}</td><td class="num">${escapeHtml(moneyValue(toDateGross))}</td></tr>
