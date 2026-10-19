@@ -1176,7 +1176,7 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,commissio
  const escapeHtml=v=>String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
  const dateLabel=v=>{if(!v)return "";const d=new Date(v+"T12:00:00");return d.toLocaleDateString("en-CA",{year:"numeric",month:"long",day:"2-digit"})};
  const amountInWords=value=>{const n=Math.max(0,Number(value||0));const dollars=Math.floor(n+0.000001),cents=Math.round((n-dollars)*100);const ones=["Zero","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"],tens=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];const chunk=v=>{let out=[];if(v>=100){out.push(ones[Math.floor(v/100)]+" Hundred");v%=100}if(v>=20){out.push(tens[Math.floor(v/10)]+(v%10?"-"+ones[v%10]:""));}else if(v>0||!out.length)out.push(ones[v]);return out.join(" ")};const scales=["","Thousand","Million","Billion","Trillion"];let v=dollars,parts=[],i=0;while(v>0&&i<scales.length){const group=v%1000;if(group)parts.unshift(chunk(group)+(scales[i]?" "+scales[i]:""));v=Math.floor(v/1000);i++}return (parts.join(" ")||"Zero")+" and "+String(cents).padStart(2,"0")+"/100 Dollars";};
- function printStub(){
+ async function printStub(){
   const gross=Number(commission?.gross_commission||transaction?.gross_commission||0);
   const chequeDate=String(issued?.cheque_date||payDate).slice(0,10);
   const chequeCharges=charges.filter(ch=>(issued?.id&&ch.applied_to_cheque_id===issued.id)||(ch.commission_id===commission?.id&&String(ch.status||"").toUpperCase()==="APPLIED"));
@@ -1190,14 +1190,24 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,commissio
   const address=transaction?.property_address||"";
   const agentDisplayName=[agent?.first_name,agent?.last_name].filter(Boolean).join(" ").trim()||agent?.name||agent?.legal_name||"Agent";const payee=agent?.incorporated?(agent?.corporation_name||agent?.legal_name||agentDisplayName):((agent?.legal_name&&agent.legal_name!==agentDisplayName)?agent.legal_name:agentDisplayName);const payeeDisplay=agent?.incorporated&&payee&&String(payee).trim()!==String(agentDisplayName).trim()?String(payee)+" c/o "+String(agentDisplayName):payee;
   const payeeAddress=[agent?.address,agent?.city,agent?.province||"ON",agent?.postal_code].filter(Boolean).join(" ");
-  // Resolve seller from the available transaction fields; older records may use different field names.
-  const seller=String(transaction?.seller_name||transaction?.seller||transaction?.seller_client_name||transaction?.landlord_name||transaction?.vendor_name||"").trim()||"—";
-  // Buyer/client fields in older transactions sometimes contain both sides. Split and remove any exact seller match.
-  const rawBuyer=String(transaction?.buyer_name||transaction?.client_name||transaction?.buyer_client_name||"").trim();
-  const splitPartyNames=value=>String(value||"").split(/\s*(?:\/|;|\n|\r|\|)\s*/).map(n=>n.trim()).filter(Boolean);
-  const buyerNames=splitPartyNames(rawBuyer);
-  const sellerParts=splitPartyNames(seller==="—"?"":seller);
-  const buyer=sellerParts.length&&buyerNames.length?buyerNames.filter(n=>!sellerParts.some(s=>s.toLocaleLowerCase()===n.toLocaleLowerCase())).join(" / "):(rawBuyer||"—");
+  // Pull party names from the transaction's assigned people; transaction.client_name can
+  // contain a combined legacy string and must not be used as both buyer and seller.
+  let buyer="—",seller="—";
+  if(supabase&&transaction?.id){
+    const partyResult=await supabase.from("dv_accounting_transaction_people").select("person_type,first_name,last_name,legal_name,company_name").eq("transaction_id",transaction.id);
+    if(!partyResult.error){
+      const partyLabel=p=>String(p.legal_name||p.company_name||[p.first_name,p.last_name].filter(Boolean).join(" ")||"").trim();
+      const parties=partyResult.data||[];
+      const buyerTypes=new Set(["BUYER","TENANT","BUYER_CLIENT","BUYER/TENANT"]);
+      const sellerTypes=new Set(["SELLER","LANDLORD","SELLER_CLIENT","SELLER/LANDLORD"]);
+      const buyers=parties.filter(p=>buyerTypes.has(String(p.person_type||"").trim().toUpperCase())).map(partyLabel).filter(Boolean);
+      const sellers=parties.filter(p=>sellerTypes.has(String(p.person_type||"").trim().toUpperCase())).map(partyLabel).filter(Boolean);
+      if(buyers.length)buyer=[...new Set(buyers)].join(" / ");
+      if(sellers.length)seller=[...new Set(sellers)].join(" / ");
+    }
+  }
+  if(buyer==="—")buyer=String(transaction?.buyer_name||transaction?.client_name||transaction?.buyer_client_name||"").trim()||"—";
+  if(seller==="—")seller=String(transaction?.seller_name||transaction?.seller||transaction?.seller_client_name||transaction?.landlord_name||transaction?.vendor_name||"").trim()||"—";
 
   const date=dateLabel(issued?.cheque_date||payDate);
   const amountText="***"+Number(amount).toLocaleString("en-CA",{minimumFractionDigits:2,maximumFractionDigits:2});
