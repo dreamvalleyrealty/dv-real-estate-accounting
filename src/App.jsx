@@ -1190,8 +1190,12 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,commissio
   const address=transaction?.property_address||"";
   const agentDisplayName=[agent?.first_name,agent?.last_name].filter(Boolean).join(" ").trim()||agent?.name||agent?.legal_name||"Agent";const payee=agent?.incorporated?(agent?.corporation_name||agent?.legal_name||agentDisplayName):((agent?.legal_name&&agent.legal_name!==agentDisplayName)?agent.legal_name:agentDisplayName);const payeeDisplay=agent?.incorporated&&payee&&String(payee).trim()!==String(agentDisplayName).trim()?String(payee)+" c/o "+String(agentDisplayName):payee;
   const payeeAddress=[agent?.address,agent?.city,agent?.province||"ON",agent?.postal_code].filter(Boolean).join(" ");
-  const buyer=transaction?.buyer_name||transaction?.client_name||"—";
-  const seller=transaction?.seller_name||"—";
+  const seller=String(transaction?.seller_name||"").trim()||"—";
+  // Some legacy transactions have the seller appended to buyer_name; keep the two sides separate on the paystub.
+  const rawBuyer=String(transaction?.buyer_name||transaction?.client_name||"").trim();
+  const buyerNames=rawBuyer?rawBuyer.split(/\s*(?:\/|;|\n|\r|\|)\s*/).map(n=>n.trim()).filter(Boolean):[];
+  const buyer=seller!=="—"&&buyerNames.length?buyerNames.filter(n=>n.toLocaleLowerCase()!==seller.toLocaleLowerCase()).join(" / "):(rawBuyer||"—");
+
   const date=dateLabel(issued?.cheque_date||payDate);
   const amountText="***"+Number(amount).toLocaleString("en-CA",{minimumFractionDigits:2,maximumFractionDigits:2});
   const licenseExpiry=agent?.reco_license_expiry?Math.ceil((new Date(agent.reco_license_expiry+"T12:00:00")-new Date(today()+"T12:00:00"))/86400000):null;
