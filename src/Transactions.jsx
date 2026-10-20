@@ -448,7 +448,29 @@ async function openEmailCompose(kind){
  const signatureHtml=/<[a-z][\s\S]*>/i.test(selectedSignature)?selectedSignature:'<div style="line-height:1.2;margin:0;padding:0">'+String(selectedSignature||"").split(String.fromCharCode(92)+"n").join("\n").split(/\r?\n/).map(line=>'<div style="margin:0;padding:0">'+line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"</div>").join("")+"</div>";
  setEmailMessage("");
  const bodyText=String(selectedBody||"").replace(/<br\s*\/?\s*>/gi,"\n").replace(/<\/(p|div|li|h[1-6])\s*>/gi,"\n").replace(/<li[^>]*>/gi,"• ").replace(/<[^>]+>/g,"").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&lt;/gi,"<").replace(/&gt;/gi,">").replace(/&quot;/gi,'"').replace(/&#39;/g,"'").replace(/\n{3,}/g,"\n\n").trim();
- setEmailCompose({kind,transactionId:tx.id,to:String(data.recipientEmail||"").trim(),cc:"",subject:selectedSubject,body:bodyText,bodyEdited:false,bodyTextOriginal:bodyText,bodyHtmlOriginal:bodyHtml,signature:signatureHtml});
+ setEmailCompose({kind,transactionId:tx.id,to:String(data.recipientEmail||"").trim(),cc:"",subject:selectedSubject,body:bodyText,bodyEdited:false,bodyTextOriginal:bodyText,bodyHtmlOriginal:bodyHtml,signature:signatureHtml,templateKey:templateKey,templateValues:values,defaultSubject,defaultBody,defaultSignature,companyId:companyId});
+}
+async function chooseEmailTemplate(templateKey){
+ if(!emailCompose||!supabase)return;
+ setEmailMessage("");
+ try{
+  const {data:rows,error}=await supabase.from("dv_accounting_settings").select("value,company_id,updated_at").eq("key","EMAIL_TEMPLATES").order("updated_at",{ascending:false}).limit(100);
+  if(error)throw error;
+  const matchRows=rows||[];
+  const selected=matchRows.find(row=>String(row.company_id)===String(emailCompose.companyId)&&((row.value?.templates||row.value||{})[templateKey]))||matchRows.find(row=>(row.value?.templates||row.value||{})[templateKey]);
+  const root=selected?.value?.templates||selected?.value||{};
+  const template=root[templateKey];
+  if(!template||template.enabled===false){setEmailMessage("This template is not saved or is disabled. Enable it in Settings → Email Templates.");return}
+  const values=emailCompose.templateValues||{};
+  const replace=value=>String(value??"").replace(/\{\{\s*([a-z_]+)\s*\}\}/gi,(m,key)=>values[key.toLowerCase()]??m);
+  const subject=replace(template.subject||emailCompose.defaultSubject||"");
+  const body=replace(template.body||emailCompose.defaultBody||"");
+  const signature=replace(template.signature||emailCompose.defaultSignature||"");
+  const bodyHtml=/<[a-z][\s\S]*>/i.test(body)?body:String(body).split(String.fromCharCode(92)+"n").join("\n").split(/\r?\n/).map(line=>line.trim()?"<p>"+line+"</p>":"<p><br></p>").join("");
+  const bodyText=String(body).replace(/<br\s*\/?\s*>/gi,"\n").replace(/<\/(p|div|li|h[1-6])\s*>/gi,"\n").replace(/<li[^>]*>/gi,"• ").replace(/<[^>]+>/g,"").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&lt;/gi,"<").replace(/&gt;/gi,">").trim();
+  const signatureHtml=/<[a-z][\s\S]*>/i.test(signature)?signature:'<div style="line-height:1.2;margin:0;padding:0">'+String(signature).split(String.fromCharCode(92)+"n").join("\n").split(/\r?\n/).map(line=>'<div style="margin:0;padding:0">'+line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"</div>").join("")+"</div>";
+  setEmailCompose(v=>({...v,templateKey,subject,body:bodyText,bodyEdited:false,bodyTextOriginal:bodyText,bodyHtmlOriginal:bodyHtml,signature:signatureHtml}));
+ }catch(e){setEmailMessage("Could not load selected template: "+(e?.message||"Unknown error"))}
 }
 async function sendPreparedEmail(){
  if(!supabase||!emailCompose)return;
