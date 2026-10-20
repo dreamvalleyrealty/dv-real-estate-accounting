@@ -854,8 +854,6 @@ body{overflow-x:clip}
   }
   .content .grid4>*,.content .grid3>*,.content .grid2>*,.content .two>*,.content .formgrid>*,.content .tx-grid>*{min-width:0!important;max-width:100%}
   .content [style*="grid-template-columns"]{grid-template-columns:minmax(0,1fr)!important}
-  .content [style*="min-width:"]{min-width:0!important}
-  .content [style*="width:"]{max-width:100%!important}
   .content .pagehead{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:10px!important}
   .content .pagehead>button,.content .pagehead>.primary,.content .pagehead>.secondary{align-self:flex-start;max-width:100%}
   .content .toolbar,.content .transaction-toolbar,.content .listing-search-toolbar,.content .trade-submission-search{display:flex!important;flex-wrap:wrap!important;width:100%;max-width:100%;min-width:0}
@@ -881,7 +879,7 @@ body{overflow-x:clip}
 @media(max-width:520px){
   .top{height:auto!important;min-height:60px!important;padding:8px!important;flex-wrap:wrap!important}
   .top .hamb{flex:0 0 40px!important}
-  .top .logout{font-size:0!important;min-width:38px!important;justify-content:center!important;padding:8px!important}
+  .top .logout{font-size:11px!important;min-width:38px!important;justify-content:center!important;padding:8px!important}
   .top .logout svg{width:18px!important;height:18px!important}
   .top>div:first-of-type{flex:1 1 calc(100% - 60px)!important}
   .content{padding:12px 9px max(22px,env(safe-area-inset-bottom))!important}
@@ -893,4 +891,84 @@ body{overflow-x:clip}
   .transaction-list-panel .tablewrap{max-width:calc(100vw - 22px)!important}
   .cheque-position-head,.cheque-position-row{grid-template-columns:minmax(0,1fr) 58px 58px!important}
   .agent-edit-tabs{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+
+
+/* iPhone overflow containment v1.16: constrain page-level layout while keeping wide data tables swipe-scrollable. */
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+}
+body, #root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+@supports not (overflow: clip) {
+  html, body, #root { overflow-x: hidden; }
+}
+@media (max-width: 760px) {
+  .app, main, .content, .top, .pagehead, .toolbar, .panel, .card,
+  .modal, .tx-modal, .modalhead, .modal form, .tx-editor,
+  .tablewrap, .table-wrap, .table-scroll, .table-responsive {
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+  }
+  .content { padding-left: max(10px, env(safe-area-inset-left)) !important; padding-right: max(10px, env(safe-area-inset-right)) !important; }
+  .content > *, .content section, .content article, .content form,
+  .content .panel > *, .content .card > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .content [style*="grid-template-columns"] {
+    min-width: 0 !important;
+  }
+  .content :is(input, select, textarea, button) {
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+  /* Make tables scroll within their own region instead of widening the whole screen. */
+  .content :is(.tablewrap, .table-wrap, .table-scroll, .table-responsive) {
+    overflow-x: auto !important;
+    overflow-y: visible;
+    max-width: 100% !important;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+  .content table {
+    display: table;
+    width: max-content !important;
+    max-width: none !important;
+  }
+  .content :not(.tablewrap):not(.table-wrap):not(.table-scroll):not(.table-responsive) > table {
+    max-width: 100%;
+  }
+  .content .pagehead > *, .content .toolbar > *, .content .modalactions > *,
+  .content .modal-actions > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .overlay {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    padding-left: max(8px, env(safe-area-inset-left)) !important;
+    padding-right: max(8px, env(safe-area-inset-right)) !important;
+  }
+  .modal, .tx-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .top { padding-left: max(8px, env(safe-area-inset-left)) !important; padding-right: max(8px, env(safe-area-inset-right)) !important; }
+  .top .logout { flex-shrink: 0; }
+  .content p, .content h1, .content h2, .content h3, .content label,
+  .content td, .content th { overflow-wrap: anywhere; }
+}
+@media (max-width: 390px) {
+  .content { padding-left: 8px !important; padding-right: 8px !important; }
+  .content .panel, .content .card { padding: 10px !important; }
+  .top { gap: 5px !important; }
+  .top .logout { padding: 7px 6px !important; }
 }
