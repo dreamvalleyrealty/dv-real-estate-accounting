@@ -438,14 +438,14 @@ async function openEmailCompose(kind){
  let template=null;
  try{const {data:setting}=await supabase.from("dv_accounting_settings").select("value").eq("key","EMAIL_TEMPLATES").limit(1).maybeSingle();template=setting?.value?.templates?.[kind]||null}catch(err){console.warn("Could not load email template settings:",err)}
  const values={greeting,property_address:property,closing_date:closingDate,trade_number:tradeNumber,agent_names:otherAgent||"[Enter other brokerage agent name]",agent_name:otherAgent||"",employee_name:"",pay_period:"",month:"",year:String(new Date().getFullYear())};
- const replaceTokens=value=>String(value??"").replace(/\\{\\{\\s*([a-z_]+)\\s*\\}\\}/gi,(match,key)=>values[key.toLowerCase()]??match);
+ const replaceTokens=value=>String(value??"").replace(/\{\{\s*([a-z_]+)\s*\}\}/gi,(match,key)=>values[key.toLowerCase()]??match);
  const defaultSignature=isInvoice?"Tamanna Khan\\nDeal Administrator\\nDream Valley Realty Inc.\\nPhone: 416-951-9929, Ext 1002\\nEmail: admin@dvrealty.ca\\n885 Progress Ave., Suite 109\\nToronto, ON M1H 3G3\\nwww.dreamvalleyrealty.ca":"Dream Valley Realty Inc.\\nadmin@dvrealty.ca";
  const selectedSubject=template?.enabled!==false&&template?.subject?replaceTokens(template.subject):defaultSubject;
  const selectedBody=template?.enabled!==false&&template?.body?replaceTokens(template.body):defaultBody;
  const selectedSignature=template?.enabled!==false&&template?.signature?replaceTokens(template.signature):defaultSignature;
- const toHtml=value=>String(value||"").split(String.fromCharCode(92)+"n").join("\\n").split(/\\r?\\n/).map(line=>line.trim()?'<p>'+line+'</p>':'<p><br></p>').join("");
- const bodyHtml=/<[a-z][\\s\\S]*>/i.test(selectedBody)?selectedBody:toHtml(selectedBody);
- const signatureHtml=/<[a-z][\\s\\S]*>/i.test(selectedSignature)?selectedSignature:toHtml(selectedSignature);
+ const toHtml=value=>String(value||"").split(String.fromCharCode(92)+"n").join("\n").split(/\r?\n/).map(line=>line.trim()?"<p>"+line+"</p>":"<p><br></p>").join("");
+ const bodyHtml=/<[a-z][\s\S]*>/i.test(selectedBody)?selectedBody:toHtml(selectedBody);
+ const signatureHtml=/<[a-z][\s\S]*>/i.test(selectedSignature)?selectedSignature:toHtml(selectedSignature);
  setEmailMessage("");
  setEmailCompose({kind,transactionId:tx.id,to:String(data.recipientEmail||"").trim(),cc:"",subject:selectedSubject,body:bodyHtml,signature:signatureHtml});
 }
