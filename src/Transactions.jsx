@@ -433,13 +433,16 @@ async function openEmailCompose(kind){
  const property=String(data.property||tx.property_address||[tx.street_number,tx.street_name,tx.unit_number?("# "+tx.unit_number):"",tx.city,tx.province,tx.postal_code].filter(Boolean).join(" ")).replace(/\\s+/g," ").trim();
  const closingDate=String(data.closeDate||longDate(tx.close_date)||"").trim();
  let otherAgent="";
- if(isInvoice){
-  try{
-   const {data:outside}=await supabase.from("dv_accounting_transaction_outside_brokers").select("*").eq("transaction_id",tx.id);
-   const row=(outside||[]).find(b=>String(b.agent_name||"").trim())||(outside||[])[0];
-   otherAgent=String(row?.agent_name||"").trim();
-  }catch(err){console.warn("Could not load co-op agent name:",err)}
- }
+ let otherAgents=[];
+ try{
+  const {data:outside,error:outsideError}=await supabase.from("dv_accounting_transaction_outside_brokers").select("*").eq("transaction_id",tx.id);
+  if(outsideError)throw outsideError;
+  const candidates=[...(Array.isArray(tx.other_side_agents)?tx.other_side_agents:[]),...(outside||[]).map(b=>({name:b.agent_name||"",brokerage:b.company_name||b.brokerage_name||"",email:b.agent_email||""}))];
+  otherAgents=[...new Set(candidates.map(a=>String(a?.name||a?.agent_name||"").trim()).filter(Boolean))];
+  if(!otherAgents.length){const row=(outside||[]).find(b=>String(b.agent_name||"").trim());if(row?.agent_name)otherAgents=[String(row.agent_name).trim()];}
+  otherAgent=otherAgents.length===1?otherAgents[0]:otherAgents.length>1?otherAgents.slice(0,-1).join(", ")+" and "+otherAgents[otherAgents.length-1]:"";
+ }catch(err){console.warn("Could not load co-op agent names:",err)}
+
  const tradeNumber=String(data.tradeNo||tx.transaction_number||"TR#");
  const defaultSubject=isInvoice?"CO-OP Commission Statement (Invoice) - "+property+", Closing on "+closingDate+" ("+tradeNumber+")":"Seller Commission Statement "+tradeNumber;
  const defaultBody=isInvoice?greeting+",\\n\\nPlease find attached the commission statement for "+property+", scheduled to close on "+closingDate+".\\n\\nOther Brokerage's Agent for this transaction: "+(otherAgent||"[Enter other brokerage agent name]")+".\\n\\nKindly confirm receipt of this email at your earliest convenience.\\n\\nThank you.\\n\\nRegards,":greeting+",\\n\\nPlease find attached the seller commission statement for the referenced transaction.\\n\\nKindly confirm receipt of this email at your earliest convenience.\\n\\nThank you.\\n\\nRegards,";
