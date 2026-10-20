@@ -688,7 +688,37 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    if(status==="APPROVED"){
      const {data,error:e}=await supabase.rpc("dv_accounting_approve_agent_trade_submission",{p_submission_id:selected.id});
      if(e){setError(e.message);setBusy(false);return}
-     if(data){const otherSideAgents=(selected.payload?.other_side_agents||[]).filter(a=>String(a.name||"").trim()||String(a.phone||"").trim()||String(a.email||"").trim()||String(a.brokerage||"").trim());const{error:otherAgentsError}=await supabase.from("dv_accounting_transactions").update({other_side_agents:otherSideAgents}).eq("id",data);if(otherAgentsError){setError("Trade approved, but other-side agents could not be synchronized to the transaction: "+otherAgentsError.message);setBusy(false);return}}if(data&&selected.payload?.listing_id){const listingFirmDate=selected.payload?.firm_date||null;const {error:linkError}=await supabase.from("dv_accounting_transactions").update({listing_id:selected.payload.listing_id,firm_date:listingFirmDate}).eq("id",data);if(linkError){setError("Trade approved, but the linked listing could not be connected to the accounting transaction: "+linkError.message);setBusy(false);return}if(listingFirmDate){const {error:listingStatusError}=await supabase.from("dv_accounting_listing_submissions").update({status:"SOLD",updated_at:new Date().toISOString()}).eq("id",selected.payload.listing_id);if(listingStatusError){setError("Trade approved and linked, but the listing could not be marked Sold: "+listingStatusError.message);setBusy(false);return}}}
+     if(data){
+       const p=selected.payload||{};
+       const otherSideAgents=(p.other_side_agents||[]).filter(a=>String(a.name||"").trim()||String(a.phone||"").trim()||String(a.email||"").trim()||String(a.brokerage||"").trim());
+       const{error:otherAgentsError}=await supabase.from("dv_accounting_transactions").update({other_side_agents:otherSideAgents}).eq("id",data);
+       if(otherAgentsError){setError("Trade approved, but other-side agents could not be synchronized to the transaction: "+otherAgentsError.message);setBusy(false);return}
+       // Copy the cooperating brokerage into the transaction's dedicated Outside Brokers table.
+       const side=String(p.side||"BUYER").toUpperCase();
+       const listingSide=["SELLER","LANDLORD","LISTING"].includes(side);
+       const brokerage=listingSide?{
+         company_name:p.buyer_brokerage_name, address:p.buyer_brokerage_address, phone:p.buyer_brokerage_phone, fax:p.buyer_brokerage_fax, agent_name:p.buyer_agent_name, agent_email:p.buyer_agent_email
+       }:{
+         company_name:p.listing_brokerage_name, address:p.listing_brokerage_address, phone:p.listing_brokerage_phone, fax:p.listing_brokerage_fax, agent_name:p.listing_agent_name, agent_email:p.listing_agent_email
+       };
+       if(String(brokerage.company_name||"").trim()&&String(brokerage.company_name).trim().toLowerCase()!=="dream valley realty inc., brokerage"){
+         const{data:existingBrokers,error:brokerReadError}=await supabase.from("dv_accounting_transaction_outside_brokers").select("id").eq("transaction_id",data);
+         if(brokerReadError){setError("Trade approved, but Outside Brokers could not be checked: "+brokerReadError.message);setBusy(false);return}
+         if(!(existingBrokers||[]).length){
+           const{error:brokerInsertError}=await supabase.from("dv_accounting_transaction_outside_brokers").insert([{transaction_id:data,company_name:String(brokerage.company_name).trim(),address:brokerage.address||"",phone:brokerage.phone||"",fax:brokerage.fax||"",agent_name:brokerage.agent_name||"",agent_email:brokerage.agent_email||""}]);
+           if(brokerInsertError){setError("Trade approved, but the cooperating brokerage could not be copied into Outside Brokers: "+brokerInsertError.message);setBusy(false);return}
+         }
+       }
+       // Seed the Trust tab from the submitted deposit terms. Deposits recorded as held by
+       // the cooperating brokerage are marked received by that brokerage, not by our trust account.
+       const depositAmount=Number(p.deposit_amount??p.deposit??p.trust_deposit_amount??0);
+       if(depositAmount>0){
+         const receivedByOther=String(p.we_hold_deposit||"").toUpperCase()!=="YES";
+         const depositRow={transaction_id:data,we_hold_deposit:receivedByOther?"NO":"YES",held_by:receivedByOther?(String(brokerage.company_name||"").trim()||"Other brokerage"):"DREAM VALLEY REALTY INC., BROKERAGE",received:"YES",deposit_date:p.deposit_date||p.deposit_received_date||null,received_from:p.deposit_received_from||p.deposit_from||p.buyer_name||p.seller_name||"",amount:depositAmount,trust_bank_account_id:p.trust_bank_account_id||null,earns_interest:String(p.deposit_earns_interest||"NO").toUpperCase()==="YES"?"YES":"NO",payment_type:p.deposit_payment_type||"CHEQUE",reference_number:p.deposit_reference||p.deposit_cheque_number||""};
+         const{error:trustError}=await supabase.from("dv_accounting_transaction_trust").upsert(depositRow,{onConflict:"transaction_id"});
+         if(trustError){setError("Trade approved, but the Trust deposit details could not be copied: "+trustError.message);setBusy(false);return}
+       }
+     }if(data&&selected.payload?.listing_id){const listingFirmDate=selected.payload?.firm_date||null;const {error:linkError}=await supabase.from("dv_accounting_transactions").update({listing_id:selected.payload.listing_id,firm_date:listingFirmDate}).eq("id",data);if(linkError){setError("Trade approved, but the linked listing could not be connected to the accounting transaction: "+linkError.message);setBusy(false);return}if(listingFirmDate){const {error:listingStatusError}=await supabase.from("dv_accounting_listing_submissions").update({status:"SOLD",updated_at:new Date().toISOString()}).eq("id",selected.payload.listing_id);if(listingStatusError){setError("Trade approved and linked, but the listing could not be marked Sold: "+listingStatusError.message);setBusy(false);return}}}
      setMessage("Approved. A draft transaction has been created for the billing and payout workflow.");
    }else{
      const {error:e}=await supabase.rpc("dv_accounting_review_agent_trade_submission",{p_submission_id:selected.id,p_status:status,p_notes:reviewNotes});
