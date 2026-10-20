@@ -5889,3 +5889,17 @@ $$;
 revoke all on function public.dv_accounting_review_agent_trade_submission(uuid,text,text) from public, anon;
 grant execute on function public.dv_accounting_review_agent_trade_submission(uuid,text,text) to authenticated;
 
+
+
+-- 0069: fix missing listing_id field in trade submission review workflow
+ALTER TABLE public.dv_accounting_agent_trade_submissions
+  ADD COLUMN IF NOT EXISTS listing_id uuid;
+
+UPDATE public.dv_accounting_agent_trade_submissions
+SET listing_id = NULLIF(payload->>'listing_id', '')::uuid
+WHERE listing_id IS NULL
+  AND COALESCE(payload->>'listing_id', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+
+CREATE INDEX IF NOT EXISTS dv_accounting_agent_trade_submissions_listing_id_idx
+  ON public.dv_accounting_agent_trade_submissions (listing_id)
+  WHERE listing_id IS NOT NULL;
