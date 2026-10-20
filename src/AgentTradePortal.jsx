@@ -112,7 +112,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
        for(const d of pendingDocsResult.data||[]){
          const reviewStatus=String(d.match_status||"PENDING").toUpperCase();
          if(["PENDING",""].includes(reviewStatus))pendingDocsBySubmission[d.submission_id]=(pendingDocsBySubmission[d.submission_id]||0)+1;
-         if(["MISMATCH","REJECTED","NOT_APPROVED"].includes(reviewStatus))rejectedDocsBySubmission[d.submission_id]=(rejectedDocsBySubmission[d.submission_id]||0)+1;
+         if(["MISMATCH","REJECTED","NOT_APPROVED","NOT APPROVED"].includes(reviewStatus)||(["PENDING",""].includes(reviewStatus)&&String(d.match_notes||"").trim()))rejectedDocsBySubmission[d.submission_id]=(rejectedDocsBySubmission[d.submission_id]||0)+1;
        }
      }
    }
@@ -454,7 +454,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
          const {error:updateError}=await supabase.from("dv_accounting_agent_trade_documents").update({
            document_name:useCustomDocumentName?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),
            storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id,
-           match_status:"PENDING",match_notes:null
+           match_status:"PENDING"
          }).eq("id",pendingDoc.id);
          insertError=updateError;
          if(!insertError&&pendingDoc.storage_path)await supabase.storage.from("dv-trade-documents").remove([pendingDoc.storage_path]);
