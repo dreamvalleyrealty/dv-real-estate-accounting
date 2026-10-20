@@ -89,7 +89,12 @@ async function downloadSinglePagePdf(html,filename,selector,kind){
   for(let i=0;i<20;i++){const mid=(low+high)/2;setSize(mid);const h=Math.max(el.scrollHeight,el.getBoundingClientRect().height);if(h<=targetHeight){best=mid;low=mid}else{high=mid}}
   setSize(best);
   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-  const canvas=await html2canvas(el,{scale:2,backgroundColor:"#ffffff",useCORS:true,allowTaint:false,logging:false,windowWidth:816,windowHeight:Math.max(1200,el.scrollHeight+80),scrollX:0,scrollY:0});
+  const mobileViewport=typeof window!=="undefined"&&window.matchMedia("(max-width: 760px)").matches;
+  // iOS Safari has a much smaller canvas memory budget than desktop browsers.
+  // Use a lower render scale on phones so scheduling does not silently stall or crash.
+  const pdfRenderScale=mobileViewport?1:2;
+  const pdfRenderHeight=Math.min(Math.max(1200,el.scrollHeight+80),mobileViewport?9000:16000);
+  const canvas=await html2canvas(el,{scale:pdfRenderScale,backgroundColor:"#ffffff",useCORS:true,allowTaint:false,logging:false,windowWidth:816,windowHeight:pdfRenderHeight,scrollX:0,scrollY:0});
   if(!canvas.width||!canvas.height)throw new Error("The PDF renderer returned an empty page.");
   const pdf=new jsPDF({orientation:"portrait",unit:"pt",format:"letter",compress:true});
   const margin=12,pageW=pdf.internal.pageSize.getWidth(),pageH=pdf.internal.pageSize.getHeight();
