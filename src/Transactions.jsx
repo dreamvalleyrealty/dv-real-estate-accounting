@@ -457,7 +457,7 @@ async function sendPreparedEmail(){
   const attachmentName=(isInvoice?"Commission-Invoice-":"Seller-Commission-Statement-")+String(isInvoice?(invoiceData?.invoiceNo||emailCompose.transactionId):(statementData?.tradeNo||emailCompose.transactionId)).replace(/[^a-z0-9_-]/gi,"-")+".pdf";
   const safeBody=String(emailCompose.body||"").split(/\r?\n/).map(line=>"<p>"+line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"</p>").join("");
   const {data,error}=await supabase.functions.invoke("zoho-mail-send",{body:{transactionId:emailCompose.transactionId,documentType:emailCompose.kind,to:String(emailCompose.to||"").trim(),cc:String(emailCompose.cc||"").trim(),subject:String(emailCompose.subject||"").trim(),htmlBody:safeBody,attachmentName,attachmentBase64}});
-  if(error)throw new Error(error.message||"The email service could not be reached.");
+  if(error){let detail=error.message||"The email service could not be reached.";try{const payload=await error.context?.clone?.().json();if(payload?.error)detail=payload.error}catch{}throw new Error(detail)}
   if(data?.error)throw new Error(data.error);
   setEmailMessage("Email accepted by Zoho. A send record was saved. Delivery is not guaranteed until confirmed by the recipient/mail system.");const {data:historyRows}=await supabase.from("dv_accounting_email_log").select("id,document_type,recipient_email,subject,attachment_name,status,error_message,sent_at,created_at").eq("transaction_id",emailCompose.transactionId).order("created_at",{ascending:false}).limit(10);setEmailHistory(historyRows||[]);
   setEmailBusy(false);
