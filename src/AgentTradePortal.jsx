@@ -111,7 +111,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      if(!pendingDocsResult.error){
        for(const d of pendingDocsResult.data||[]){
          const reviewStatus=String(d.match_status||"PENDING").toUpperCase();
-         if(!["MATCH","APPROVED"].includes(reviewStatus))pendingDocsBySubmission[d.submission_id]=(pendingDocsBySubmission[d.submission_id]||0)+1;
+         if(["PENDING",""].includes(reviewStatus))pendingDocsBySubmission[d.submission_id]=(pendingDocsBySubmission[d.submission_id]||0)+1;
          if(["MISMATCH","REJECTED","NOT_APPROVED"].includes(reviewStatus))rejectedDocsBySubmission[d.submission_id]=(rejectedDocsBySubmission[d.submission_id]||0)+1;
        }
      }
@@ -583,11 +583,11 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      newPath=String(user.id)+"/"+String(doc.submission_id)+"/"+Date.now()+"-replacement-"+safe;
      const {error:uploadError}=await supabase.storage.from("dv-trade-documents").upload(newPath,currentFile,{upsert:false,contentType:currentFile.type||"application/octet-stream"});
      if(uploadError)throw new Error("Could not upload corrected file: "+uploadError.message);
-     const {data,error:updateError}=await supabase.from("dv_accounting_agent_trade_documents").update({storage_path:newPath,document_name:doc.document_type==="OTHER"?(doc.document_name||currentFile.name):(docTypes.find(([type])=>type===doc.document_type)?.[1]||doc.document_name||currentFile.name),mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id,match_status:"PENDING",match_notes:null}).eq("id",doc.id).eq("submission_id",selected.id).select().single();
+     const {data,error:updateError}=await supabase.from("dv_accounting_agent_trade_documents").update({storage_path:newPath,document_name:doc.document_type==="OTHER"?(doc.document_name||currentFile.name):(docTypes.find(([type])=>type===doc.document_type)?.[1]||doc.document_name||currentFile.name),mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id,match_status:"PENDING",match_notes:doc.match_notes||null}).eq("id",doc.id).eq("submission_id",selected.id).select().single();
      if(updateError||!data)throw new Error("Corrected file uploaded but could not be sent for review: "+(updateError?.message||"document record not updated"));
      if(doc.storage_path)await supabase.storage.from("dv-trade-documents").remove([doc.storage_path]);
      setDocs(old=>old.map(item=>item.id===doc.id?data:item));
-     setMessage("Corrected file replaced successfully and sent to the admin for review.");
+     setMessage("Corrected file replaced. After replacing every requested document, submit the trade back to the admin for review.");
      if(inlinePreviewDoc?.id===doc.id){setInlinePreviewDoc(data);await openInlineDoc(data);}
      await loadDocs(selected.id);
    }catch(e){if(newPath)await supabase.storage.from("dv-trade-documents").remove([newPath]);setError(e?.message||"Could not replace the rejected document.");}
