@@ -459,7 +459,7 @@ async function sendPreparedEmail(){
   const {data,error}=await supabase.functions.invoke("zoho-mail-send",{body:{transactionId:emailCompose.transactionId,documentType:emailCompose.kind,to:String(emailCompose.to||"").trim(),cc:String(emailCompose.cc||"").trim(),subject:String(emailCompose.subject||"").trim(),htmlBody:safeBody,attachmentName,attachmentBase64}});
   if(error)throw new Error(error.message||"The email service could not be reached.");
   if(data?.error)throw new Error(data.error);
-  setEmailMessage("Email accepted by Zoho. A send record was saved. Delivery is not guaranteed until confirmed by the recipient/mail system.");
+  setEmailMessage("Email accepted by Zoho. A send record was saved. Delivery is not guaranteed until confirmed by the recipient/mail system.");const {data:historyRows}=await supabase.from("dv_accounting_email_log").select("id,document_type,recipient_email,subject,attachment_name,status,error_message,sent_at,created_at").eq("transaction_id",emailCompose.transactionId).order("created_at",{ascending:false}).limit(10);setEmailHistory(historyRows||[]);
   setEmailBusy(false);
   return;
  }catch(e){setEmailMessage("Could not send email: "+(e?.message||String(e)))}finally{if(frame)frame.remove();setEmailBusy(false)}
