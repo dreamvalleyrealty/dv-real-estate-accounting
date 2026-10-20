@@ -419,7 +419,8 @@ function printInvoice(mode="print"){if(!invoiceData)return;if(mode==="pdf"){down
 async function openEmailCompose(kind){
  const tx=kind==="COMMISSION_INVOICE"?invoiceTarget:statementTarget;
  const data=kind==="COMMISSION_INVOICE"?invoiceData:statementData;
- if(!tx||!data)return;
+ if(!tx||!data){setEmailMessage("Could not open the email composer because the document data is not ready. Close this preview and reopen the invoice or seller statement, then try Email PDF again.");return;}
+ setEmailMessage("");
  const isInvoice=kind==="COMMISSION_INVOICE";
  const hour=new Date().getHours(),greeting=hour<12?"Good morning":hour<17?"Good afternoon":"Good evening";
  const property=String(data.property||tx.property_address||[tx.street_number,tx.street_name,tx.unit_number?("# "+tx.unit_number):"",tx.city,tx.province,tx.postal_code].filter(Boolean).join(" ")).replace(/\\s+/g," ").trim();
