@@ -614,6 +614,28 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    }catch(e){setError("Could not "+(match_status==="MISMATCH"?"reject":"approve")+" document: "+(e?.message||String(e)));}
    finally{setBusy(false)}
  }
+ async function sendDocumentsBackToAgent(){
+   if(!adminMode||!selected?.id||!supabase)return;
+   const approved=d=>["MATCH","APPROVED"].includes(String(d.match_status||"").toUpperCase());
+   const rejected=d=>["MISMATCH","REJECTED","NOT_APPROVED","NOT APPROVED"].includes(String(d.match_status||"").toUpperCase());
+   const unreviewed=docs.filter(d=>!approved(d)&&!rejected(d));
+   const rejectedDocs=docs.filter(rejected);
+   if(!docs.length){setError("Upload documents before sending a trade back to the agent.");return;}
+   if(unreviewed.length){setError("Review every uploaded document first. "+unreviewed.length+" document(s) still need an approve or not-approved decision.");return;}
+   if(!rejectedDocs.length){setError("No documents were marked Not approved. Approve the trade or mark the documents that need correction.");return;}
+   const missingReasons=rejectedDocs.filter(d=>!String(d.match_notes||"").trim());
+   if(missingReasons.length){setError("Add a correction reason for every not-approved document before sending it to the agent.");return;}
+   const notes=rejectedDocs.map(d=>(d.document_name||d.document_type||"Document")+": "+String(d.match_notes||"").trim()).join("\\n");
+   if(!window.confirm("Send "+rejectedDocs.length+" document(s) back to the agent for correction? The agent will see each reason and must replace every rejected file before resubmitting."))return;
+   setBusy(true);setError("");setMessage("");
+   try{
+     const {error:e}=await supabase.rpc("dv_accounting_review_agent_trade_submission",{p_submission_id:selected.id,p_status:"NEEDS_CHANGES",p_notes:notes});
+     if(e)throw e;
+     setMessage("Documents sent to the agent with individual correction reasons.");
+     setSelected(null);setDocs([]);await load();
+   }catch(e){setError("Could not send documents to the agent: "+(e?.message||String(e)));}
+   finally{setBusy(false);}
+ }
  async function returnTransfer(){
    if(!adminMode||!selected?.id||selected.status!=="APPROVED")return;if(/^(PAID|CLOSED)\|PAID$/.test(selectedTransactionStatus)){setError("This trade is closed and paid. Return Transfer & Unapprove is not allowed.");return;}
    const confirmed=window.confirm(
