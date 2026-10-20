@@ -422,7 +422,7 @@ function openEmailCompose(kind){
  if(!tx||!data)return;
  const isInvoice=kind==="COMMISSION_INVOICE";
  setEmailMessage("");
- setEmailCompose({kind,transactionId:tx.id,to:String(data.recipientEmail||"").trim(),cc:"",subject:isInvoice?"Commission Invoice "+(data.invoiceNo||data.tradeNo||""):"Seller Commission Statement "+(data.tradeNo||""),body:isInvoice?"Hello,\\n\\nPlease find attached the commission invoice for the referenced transaction.\\n\\nThank you,\\nDream Valley Realty Inc.":"Hello,\\n\\nPlease find attached the seller commission statement for the referenced transaction.\\n\\nThank you,\\nDream Valley Realty Inc."});
+ setEmailCompose({kind,transactionId:tx.id,to:String(data.recipientEmail||"").trim(),cc:"",subject:isInvoice?"Commission Invoice "+(data.invoiceNo||data.tradeNo||""):"Seller Commission Statement "+(data.tradeNo||""),body:isInvoice?"Hello,\n\nPlease find attached the commission invoice for the referenced transaction.\n\nThank you,\nDream Valley Realty Inc.":"Hello,\n\nPlease find attached the seller commission statement for the referenced transaction.\n\nThank you,\nDream Valley Realty Inc."});
 }
 async function sendPreparedEmail(){
  if(!supabase||!emailCompose)return;
@@ -455,7 +455,7 @@ async function sendPreparedEmail(){
   const attachmentBase64=dataUri.split(",")[1];
   if(!attachmentBase64)throw new Error("Could not encode the PDF attachment.");
   const attachmentName=(isInvoice?"Commission-Invoice-":"Seller-Commission-Statement-")+String(isInvoice?(invoiceData?.invoiceNo||emailCompose.transactionId):(statementData?.tradeNo||emailCompose.transactionId)).replace(/[^a-z0-9_-]/gi,"-")+".pdf";
-  const safeBody=String(emailCompose.body||"").split(/\\r?\\n/).map(line=>"<p>"+line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"</p>").join("");
+  const safeBody=String(emailCompose.body||"").split(/\r?\n/).map(line=>"<p>"+line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"</p>").join("");
   const {data,error}=await supabase.functions.invoke("zoho-mail-send",{body:{transactionId:emailCompose.transactionId,documentType:emailCompose.kind,to:String(emailCompose.to||"").trim(),cc:String(emailCompose.cc||"").trim(),subject:String(emailCompose.subject||"").trim(),htmlBody:safeBody,attachmentName,attachmentBase64}});
   if(error)throw new Error(error.message||"The email service could not be reached.");
   if(data?.error)throw new Error(data.error);
