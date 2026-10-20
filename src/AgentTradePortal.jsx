@@ -609,7 +609,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      if(e)throw e;
      if(!data)throw new Error("No document was updated. Refresh and check administrator permissions.");
      setDocs(current=>current.map(d=>d.id===doc.id?data:d));
-     setMessage(match_status==="MISMATCH"?"Document marked Not approved; the agent can see the note and upload a corrected document.":"Document approved.");
+     setMessage(match_status==="MISMATCH"?"Document marked Not approved. After reviewing every uploaded file, use Send to Agent for Update to release the correction request.":"Document approved. Review the remaining uploaded files before sending any correction request.");
      await Promise.all([loadDocs(selected?.id),load()]);
    }catch(e){setError("Could not "+(match_status==="MISMATCH"?"reject":"approve")+" document: "+(e?.message||String(e)));}
    finally{setBusy(false)}
