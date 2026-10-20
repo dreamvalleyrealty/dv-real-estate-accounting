@@ -432,10 +432,22 @@ async function openEmailCompose(kind){
    otherAgent=String(row?.agent_name||"").trim();
   }catch(err){console.warn("Could not load co-op agent name:",err)}
  }
- const subject=isInvoice?"CO-OP Commission Statement (Invoice) - "+property+", Closing on "+closingDate+" ("+(data.tradeNo||tx.transaction_number||"TR#")+")":"Seller Commission Statement "+(data.tradeNo||"");
- const body=isInvoice?greeting+",\\n\\nPlease find attached the commission statement for "+property+", scheduled to close on "+closingDate+".\\n\\nOther Brokerage's Agent for this transaction: "+(otherAgent||"[Enter other brokerage agent name]")+".\\n\\nKindly confirm receipt of this email at your earliest convenience.\\n\\nThank you.\\n\\nRegards,":greeting+",\\n\\nPlease find attached the seller commission statement for the referenced transaction.\\n\\nKindly confirm receipt of this email at your earliest convenience.\\n\\nThank you.\\n\\nRegards,";
+ const tradeNumber=String(data.tradeNo||tx.transaction_number||"TR#");
+ const defaultSubject=isInvoice?"CO-OP Commission Statement (Invoice) - "+property+", Closing on "+closingDate+" ("+tradeNumber+")":"Seller Commission Statement "+tradeNumber;
+ const defaultBody=isInvoice?greeting+",\\n\\nPlease find attached the commission statement for "+property+", scheduled to close on "+closingDate+".\\n\\nOther Brokerage's Agent for this transaction: "+(otherAgent||"[Enter other brokerage agent name]")+".\\n\\nKindly confirm receipt of this email at your earliest convenience.\\n\\nThank you.\\n\\nRegards,":greeting+",\\n\\nPlease find attached the seller commission statement for the referenced transaction.\\n\\nKindly confirm receipt of this email at your earliest convenience.\\n\\nThank you.\\n\\nRegards,";
+ let template=null;
+ try{const {data:setting}=await supabase.from("dv_accounting_settings").select("value").eq("key","EMAIL_TEMPLATES").limit(1).maybeSingle();template=setting?.value?.templates?.[kind]||null}catch(err){console.warn("Could not load email template settings:",err)}
+ const values={greeting,property_address:property,closing_date:closingDate,trade_number:tradeNumber,agent_names:otherAgent||"[Enter other brokerage agent name]",agent_name:otherAgent||"",employee_name:"",pay_period:"",month:"",year:String(new Date().getFullYear())};
+ const replaceTokens=value=>String(value??"").replace(/\\{\\{\\s*([a-z_]+)\\s*\\}\\}/gi,(match,key)=>values[key.toLowerCase()]??match);
+ const defaultSignature=isInvoice?"Tamanna Khan\\nDeal Administrator\\nDream Valley Realty Inc.\\nPhone: 416-951-9929, Ext 1002\\nEmail: admin@dvrealty.ca\\n885 Progress Ave., Suite 109\\nToronto, ON M1H 3G3\\nwww.dreamvalleyrealty.ca":"Dream Valley Realty Inc.\\nadmin@dvrealty.ca";
+ const selectedSubject=template?.enabled!==false&&template?.subject?replaceTokens(template.subject):defaultSubject;
+ const selectedBody=template?.enabled!==false&&template?.body?replaceTokens(template.body):defaultBody;
+ const selectedSignature=template?.enabled!==false&&template?.signature?replaceTokens(template.signature):defaultSignature;
+ const toHtml=value=>String(value||"").split(String.fromCharCode(92)+"n").join("\\n").split(/\\r?\\n/).map(line=>line.trim()?'<p>'+line+'</p>':'<p><br></p>').join("");
+ const bodyHtml=/<[a-z][\\s\\S]*>/i.test(selectedBody)?selectedBody:toHtml(selectedBody);
+ const signatureHtml=/<[a-z][\\s\\S]*>/i.test(selectedSignature)?selectedSignature:toHtml(selectedSignature);
  setEmailMessage("");
- setEmailCompose({kind,transactionId:tx.id,to:String(data.recipientEmail||"").trim(),cc:"",subject,body});
+ setEmailCompose({kind,transactionId:tx.id,to:String(data.recipientEmail||"").trim(),cc:"",subject:selectedSubject,body:bodyHtml,signature:signatureHtml});
 }
 async function sendPreparedEmail(){
  if(!supabase||!emailCompose)return;
