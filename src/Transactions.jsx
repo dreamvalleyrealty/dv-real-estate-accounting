@@ -445,7 +445,7 @@ async function openEmailCompose(kind){
  const selectedSignature=template?.enabled!==false&&template?.signature?replaceTokens(template.signature):defaultSignature;
  const toHtml=value=>String(value||"").split(String.fromCharCode(92)+"n").join("\n").split(/\r?\n/).map(line=>line.trim()?"<p>"+line+"</p>":"<p><br></p>").join("");
  const bodyHtml=/<[a-z][\s\S]*>/i.test(selectedBody)?selectedBody:toHtml(selectedBody);
- const signatureHtml=/<[a-z][\s\S]*>/i.test(selectedSignature)?selectedSignature:toHtml(selectedSignature);
+ const signatureHtml=/<[a-z][\s\S]*>/i.test(selectedSignature)?selectedSignature:'<div style="line-height:1.2;margin:0;padding:0">'+String(selectedSignature||"").split(String.fromCharCode(92)+"n").join("\n").split(/\r?\n/).map(line=>'<div style="margin:0;padding:0">'+line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+"</div>").join("")+"</div>";
  setEmailMessage("");
  const bodyText=String(selectedBody||"").replace(/<br\s*\/?\s*>/gi,"\n").replace(/<\/(p|div|li|h[1-6])\s*>/gi,"\n").replace(/<li[^>]*>/gi,"• ").replace(/<[^>]+>/g,"").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&lt;/gi,"<").replace(/&gt;/gi,">").replace(/&quot;/gi,'"').replace(/&#39;/g,"'").replace(/\n{3,}/g,"\n\n").trim();
  setEmailCompose({kind,transactionId:tx.id,to:String(data.recipientEmail||"").trim(),cc:"",subject:selectedSubject,body:bodyText,bodyTextOriginal:bodyText,bodyHtmlOriginal:bodyHtml,signature:signatureHtml});
@@ -483,7 +483,7 @@ async function sendPreparedEmail(){
   const attachmentName=(isInvoice?"Commission-Invoice-":"Seller-Commission-Statement-")+String(isInvoice?(invoiceData?.invoiceNo||emailCompose.transactionId):(statementData?.tradeNo||emailCompose.transactionId)).replace(/[^a-z0-9_-]/gi,"-")+".pdf";
   const escapeHtml=value=>String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   const bodyContent=emailCompose.body===emailCompose.bodyTextOriginal&&emailCompose.bodyHtmlOriginal?emailCompose.bodyHtmlOriginal:String(emailCompose.body||"").split(/\r?\n/).map(line=>line.trim()?"<p>"+escapeHtml(line)+"</p>":"<p><br></p>").join("");
-  const safeBody='<div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.45;color:#111;background:#fff">'+bodyContent+(emailCompose.signature?'<div style="margin-top:24px">'+String(emailCompose.signature)+'</div>':'')+'</div>';
+  const safeBody='<div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.45;color:#111;background:#fff">' + bodyContent + (emailCompose.signature?'<div style="margin-top:12px;line-height:1.2;margin-bottom:0">' + String(emailCompose.signature) + '</div>':'') + '</div>';
   const {data,error}=await supabase.functions.invoke("zoho-mail-send",{body:{transactionId:emailCompose.transactionId,documentType:emailCompose.kind,to:String(emailCompose.to||"").trim(),cc:String(emailCompose.cc||"").trim(),subject:String(emailCompose.subject||"").trim(),htmlBody:safeBody,attachmentName,attachmentBase64}});
   if(error){let detail=error.message||"The email service could not be reached.";try{const payload=await error.context?.clone?.().json();if(payload?.error)detail=payload.error}catch{}throw new Error(detail)}
   if(data?.error)throw new Error(data.error);
