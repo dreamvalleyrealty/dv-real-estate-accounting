@@ -702,3 +702,128 @@ main:has(.content.trade-submissions-fullwidth){width:calc(100% - 276px);max-widt
  .transaction-list-table{min-width:1280px}
  .transaction-list-table thead th,.transaction-list-table tbody td{padding:7px 6px!important}
 }
+
+
+/* App-wide mobile-first usability pass v1.14.
+   Keep all workspaces usable on phones without changing desktop behavior. */
+html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; scroll-padding-top:76px; }
+body{ overflow-x:hidden; }
+#root,.app,main,.content{min-width:0;max-width:100%}
+main{min-width:0}
+.content>*{min-width:0;max-width:100%}
+button,a,[role="button"],input[type="checkbox"],input[type="radio"]{touch-action:manipulation}
+button,.primary,.secondary,.logout,.nav,.iconbtn{ -webkit-tap-highlight-color:transparent; }
+input,select,textarea{min-width:0;max-width:100%;font-size:16px}
+textarea{width:100%;resize:vertical}
+img,video,canvas,iframe{max-width:100%}
+.tablewrap,.table-wrap,.table-scroll,.table-responsive{width:100%;max-width:100%;overflow-x:auto!important;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+table{max-width:none}
+.pagehead,.toolbar,.transaction-toolbar,.listing-search-toolbar,.trade-submission-search,.modalactions,.modal-actions,.paneltitle{min-width:0;flex-wrap:wrap}
+.pagehead>* ,.toolbar>* ,.modalactions>*{min-width:0;max-width:100%}
+.grid4,.grid3,.grid2,.two,.reportgrid,.settingsgrid,.shortcutgrid,.formgrid,.tx-grid,.tx-people-fields,.cheque-format-top,.cheque-format-body{min-width:0}
+.grid4>*,.grid3>*,.grid2>*,.two>*,.reportgrid>*,.settingsgrid>*,.shortcutgrid>*,.formgrid>*,.tx-grid>*{min-width:0}
+.card,.panel,.tablewrap,.modal,.modalhead,.modal form,.modalbody,.tx-editor,.content section,.content article{min-width:0}
+@media(max-width:900px){
+  .content{padding:22px 18px 36px}
+  .top{padding-inline:18px}
+  .grid4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid3,.reportgrid,.settingsgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .two{grid-template-columns:minmax(0,1fr)}
+  .formgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pagehead{gap:12px;flex-wrap:wrap}
+  .pagehead h1{font-size:clamp(21px,3vw,27px)}
+  .modal{max-height:calc(100dvh - 24px);overflow-y:auto}
+  .overlay{align-items:start;overflow-y:auto;overscroll-behavior:contain;padding:12px}
+  .modalhead{position:sticky;top:0;z-index:8}
+  .modal form{padding:16px}
+}
+@media(max-width:760px){
+  html{scroll-padding-top:64px}
+  main{margin-left:0!important;width:100%!important}
+  .sidebar{max-width:min(84vw,320px);width:min(84vw,320px);padding-bottom:env(safe-area-inset-bottom);transform:translateX(-105%)}
+  .sidebar.open{transform:translateX(0)}
+  .sidebar.open:after{left:min(84vw,320px)}
+  .brand{padding:14px 15px;min-height:76px;height:auto}
+  .brand strong{white-space:normal;line-height:1.35}
+  .sidebar nav{padding:10px}
+  .nav{min-height:44px;font-size:13px;padding:11px 12px}
+  .top{height:64px;min-height:64px;padding:0 14px;gap:10px}
+  .top strong{font-size:13px}
+  .top span{font-size:10px}
+  .hamb{width:42px;height:42px;display:grid;place-items:center;flex:0 0 42px}
+  .content{padding:18px 14px calc(30px + env(safe-area-inset-bottom))}
+  .pagehead{align-items:stretch;flex-direction:column;margin-bottom:18px}
+  .pagehead>button,.pagehead>.primary,.pagehead>.secondary{align-self:flex-start}
+  .toolbar{flex-wrap:wrap}
+  .toolbar .search{flex:1 1 100%;max-width:none}
+  .search{max-width:100%}
+  .modal{width:100%;max-width:100%;border-radius:14px}
+  .overlay{padding:8px;place-items:start center}
+  .modalhead{padding:14px 15px}
+  .modalhead h2{font-size:15px}
+  .modal form{padding:13px}
+  .modalactions{display:flex;flex-wrap:wrap;gap:8px}
+  .modalactions>button{flex:1 1 130px;justify-content:center}
+  .primary,.secondary,.logout{min-height:42px}
+  .iconbtn{min-width:40px;min-height:40px;display:grid;place-items:center}
+  .formgrid{grid-template-columns:minmax(0,1fr)}
+  .reportgrid,.settingsgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tablewrap{border-radius:10px}
+  .tablewrap table{min-width:760px}
+  .transaction-list-panel .tablewrap{max-width:calc(100vw - 36px)}
+  .transaction-list-table{min-width:1030px}
+  .transaction-row-actions button{min-height:32px!important}
+  .tx-modal{width:100%;max-width:100%;max-height:calc(100dvh - 16px)!important}
+  .tx-modal>.tx-editor{max-height:calc(100dvh - 84px);overflow-y:auto;overscroll-behavior:contain}
+  .tx-modal>.modalhead{padding:12px 14px}
+  .agent-edit-tabs button{flex:1 1 100px;min-height:40px}
+  .cheque-format-top{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cheque-format-body{grid-template-columns:minmax(0,1fr)}
+  .cheque-format-actions{border-left:0;border-top:1px solid #e0e5eb;padding:12px 0 0}
+  .agent-document-sidebar{max-height:32dvh}
+}
+@media(max-width:520px){
+  .content{padding:15px 11px calc(26px + env(safe-area-inset-bottom))}
+  .top{padding:0 10px}
+  .top strong{font-size:12px}
+  .top span{max-width:45vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .logout{padding:7px 9px;font-size:11px}
+  .grid4,.grid3,.reportgrid,.settingsgrid,.shortcutgrid,.review,.wizard,.steps{grid-template-columns:minmax(0,1fr)}
+  .grid2{grid-template-columns:minmax(0,1fr)!important}
+  .card,.panel{padding:14px}
+  .metric{font-size:22px;overflow-wrap:anywhere}
+  .pagehead h1{font-size:22px;line-height:1.2}
+  .pagehead p{font-size:12px;line-height:1.45}
+  .actions{grid-template-columns:minmax(0,1fr)}
+  .shortcutgrid button{min-height:46px}
+  .toolbar>button,.pagehead button{max-width:100%;white-space:normal}
+  .formgrid{grid-template-columns:minmax(0,1fr)}
+  .modal form{padding:11px}
+  .modalactions{position:sticky;bottom:0;background:#fff;padding:10px 0 max(8px,env(safe-area-inset-bottom));z-index:7}
+  .modalactions>button{flex:1 1 100%;width:100%}
+  .modal .tx-grid,.tx-grid{grid-template-columns:minmax(0,1fr)!important}
+  .steps{gap:6px}
+  .tablewrap table{min-width:700px}
+  .transaction-list-panel .tablewrap{max-width:calc(100vw - 26px)}
+  .cheque-format-top{grid-template-columns:minmax(0,1fr)}
+  .cheque-position-head,.cheque-position-row{grid-template-columns:minmax(0,1fr) 64px 64px;gap:5px}
+  .cheque-position-row>label{text-align:left;font-size:11px}
+  .login{padding:12px}
+  .loginbox{padding:24px 17px;border-radius:16px}
+  .loginbox h1{font-size:20px}
+  .notice{align-items:flex-start}
+}
+@media(max-width:360px){
+  .content{padding-inline:8px}
+  .top{gap:5px}
+  .top span{display:none}
+  .brand{gap:8px}
+  .brand img{width:38px;height:42px}
+  .transaction-list-panel .tablewrap{max-width:calc(100vw - 20px)}
+  .modalhead{padding:11px}
+  .modalhead h2{font-size:14px}
+}
+@media(hover:none){
+  .primary:hover,.actions button:hover,.report:hover,.setting:hover{transform:none;box-shadow:none}
+}
