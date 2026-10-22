@@ -275,19 +275,44 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
    let resolvedCompanyId=bank.company_id||companyId||"";
    if(!resolvedCompanyId){const {data:company,error:companyError}=await supabase.from("dv_accounting_companies").select("id").limit(1).maybeSingle();if(companyError)throw companyError;resolvedCompanyId=company?.id||""}
    if(!resolvedCompanyId)throw new Error("Create a company in Settings before recording a trust deposit.");
-   const {data:existingRows,error:existingError}=await supabase.from("dv_accounting_transactions").select("*").eq("listing_id",selected.id).order("created_at",{ascending:false}).limit(1);
+   const {data:existingRows,error:existingError}=await supabase.from("dv_accounting_transactions").select("*").eq("listing_id",selected.id).order("created_at",{ascending:false});
    if(existingError)throw new Error("RLS diagnostic: reading existing listing transactions failed. "+existingError.message);
    let transaction=(existingRows||[]).find(x=>!["DFT","RETURNED"].includes(String(x.status||"").toUpperCase()));
+   const street=splitStreetAddress(selected.property_address,selected.street_number,selected.street_name);
+   const normalizeAddress=value=>String(value||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+   const listingAddressKey=normalizeAddress(selected.property_address||[street.street_number,street.street_name].filter(Boolean).join(" "));
+   const listingAgentId=selected.agent_id||assignedAgentId||null;
+   // If the trade exists but its listing_id was never saved, match a unique, complete draft trade
+   // for the same agent, address and asking price before creating a second transaction.
+   if(listingAddressKey&&listingAgentId){
+    const {data:candidates,error:candidateError}=await supabase.from("dv_accounting_transactions").select("*").eq("agent_id",listingAgentId).eq("status","DRAFT").is("listing_id",null).order("created_at",{ascending:false}).limit(100);
+    if(candidateError)throw new Error("Could not check for an existing trade for this listing. "+candidateError.message);
+    const matchingCandidates=(candidates||[]).filter(x=>{
+     const addressKey=normalizeAddress(x.property_address);
+     const sameAddress=addressKey.startsWith(listingAddressKey)||listingAddressKey.startsWith(addressKey);
+     const samePrice=Number(selected.asking_price||0)<=0||Number(x.sale_price||0)===Number(selected.asking_price||0);
+     const looksLikeRealTrade=Boolean(String(x.mls_number||"").trim())||Number(x.gross_commission||0)>0;
+     return sameAddress&&samePrice&&looksLikeRealTrade;
+    });
+    if(matchingCandidates.length===1){
+     const candidate=matchingCandidates[0];
+     const currentLooksLikeStub=transaction&&!String(transaction.mls_number||"").trim()&&Number(transaction.gross_commission||0)===0;
+     if(!transaction||currentLooksLikeStub){transaction={...candidate,_recoveredFromListingMatch:true};}
+    }else if(matchingCandidates.length>1&&!transaction){
+     throw new Error("More than one existing draft trade matches this listing. No new transaction was created. Ask the administrator to link the correct trade first.");
+    }
+   }
    if(transaction&&["FINALIZED","CLOSED","PAID"].includes(String(transaction.status||"").toUpperCase()))throw new Error("The linked transaction is locked. Contact an administrator to record a deposit against a finalized or closed transaction.");
    if(!transaction){
-    const street=splitStreetAddress(selected.property_address,selected.street_number,selected.street_name);
     const {data:allocatedTradeNumber,error:tradeNumberError}=await supabase.rpc("dv_accounting_next_trade_number");if(tradeNumberError)throw new Error("Could not reserve the trade number for this listing deposit: "+tradeNumberError.message);const tradeNo=String(allocatedTradeNumber||"").trim();if(!/^TR\d{6}\d+$/.test(tradeNo))throw new Error("The trade-number service returned an invalid number. No deposit was recorded; please retry.");
     const txPayload={company_id:resolvedCompanyId,transaction_number:tradeNo,transaction_date:depositForm.date,entry_date:depositForm.date,property_address:[street.street_number,street.street_name].filter(Boolean).join(" ")||(selected.property_address||"Address pending"),client_name:depositForm.received_from.trim(),side:String(selected.listing_type||"SALE").toUpperCase()==="LEASE"?"LANDLORD":"SELLER",transaction_type:String(selected.listing_type||"SALE").toUpperCase()==="LEASE"?"LEASE":"BUY_SELL",market_segment:selected.property_type||"RESIDENTIAL",sale_price:Number(selected.asking_price||0),gross_commission:0,hst_amount:0,agent_commission:0,deposit_amount:amount,trust_account_type:"REAL_ESTATE_TRUST",trust_bank_account_id:bank.id,status:"DRAFT",listing_id:selected.id,is_own_listing:true,street_number:street.street_number||null,street_name:street.street_name||null,unit_number:selected.unit_number||null,city:selected.city||null,province:selected.province||"ON",postal_code:selected.postal_code||null,agent_id:selected.agent_id||assignedAgentId||null};
     const {data:created,error:createError}=await supabase.from("dv_accounting_transactions").insert([txPayload]).select("*").single();
     if(createError)throw new Error("RLS diagnostic: insert into dv_accounting_transactions failed. Super Admin should bypass permission checks; check active Supabase session/role resolution and table policies. Details: "+createError.message);
     transaction=created;
    }else{
-    const {error:updateError}=await supabase.from("dv_accounting_transactions").update({company_id:transaction.company_id||resolvedCompanyId,deposit_amount:amount,trust_account_type:"REAL_ESTATE_TRUST",trust_bank_account_id:bank.id,client_name:transaction.client_name||depositForm.received_from.trim()}).eq("id",transaction.id);
+    const transactionPatch={company_id:transaction.company_id||resolvedCompanyId,deposit_amount:amount,trust_account_type:"REAL_ESTATE_TRUST",trust_bank_account_id:bank.id,client_name:transaction.client_name||depositForm.received_from.trim()};
+    if(transaction._recoveredFromListingMatch)transactionPatch.listing_id=selected.id;
+    const {error:updateError}=await supabase.from("dv_accounting_transactions").update(transactionPatch).eq("id",transaction.id);
     if(updateError)throw new Error("Could not update the linked transaction: "+updateError.message);
    }
    const receiptReference=depositForm.reference_number.trim();
