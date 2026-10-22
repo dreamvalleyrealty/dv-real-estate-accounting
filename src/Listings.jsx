@@ -285,14 +285,15 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
    // If the trade exists but its listing_id was never saved, match a unique, complete draft trade
    // for the same agent, address and asking price before creating a second transaction.
    if(listingAddressKey&&listingAgentId){
-    const {data:candidates,error:candidateError}=await supabase.from("dv_accounting_transactions").select("*").eq("agent_id",listingAgentId).eq("status","DRAFT").is("listing_id",null).order("created_at",{ascending:false}).limit(100);
+    const {data:candidates,error:candidateError}=await supabase.from("dv_accounting_transactions").select("*").eq("agent_id",listingAgentId).eq("status","DRAFT").order("created_at",{ascending:false}).limit(100);
     if(candidateError)throw new Error("Could not check for an existing trade for this listing. "+candidateError.message);
     const matchingCandidates=(candidates||[]).filter(x=>{
      const addressKey=normalizeAddress(x.property_address);
      const sameAddress=addressKey.startsWith(listingAddressKey)||listingAddressKey.startsWith(addressKey);
      const samePrice=Number(selected.asking_price||0)<=0||Number(x.sale_price||0)===Number(selected.asking_price||0);
      const looksLikeRealTrade=Boolean(String(x.mls_number||"").trim())||Number(x.gross_commission||0)>0;
-     return sameAddress&&samePrice&&looksLikeRealTrade;
+     const listingLinkAvailable=!x.listing_id||x.listing_id===selected.id;
+     return listingLinkAvailable&&sameAddress&&samePrice&&looksLikeRealTrade;
     });
     if(matchingCandidates.length===1){
      const candidate=matchingCandidates[0];
