@@ -190,7 +190,29 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
    // load the issued listing receipt too. The transaction's blank trust row is not
    // authoritative over an existing listing receipt.
    const sourceListingId=p.listing_id||initial.listing_id;
-   if(sourceListingId){const{data:listingTransactions}=await supabase.from("dv_accounting_transactions").select("id,transaction_number,deposit_amount").eq("listing_id",sourceListingId).like("transaction_number","LST-%").order("created_at",{ascending:false}).limit(1);const listingTx=listingTransactions?.[0];if(listingTx){const{data:listingTrust}=await supabase.from("dv_accounting_transaction_trust").select("*").eq("transaction_id",listingTx.id).maybeSingle();if(!cancelled&&listingTrust&&String(listingTrust.received||"").toUpperCase()==="YES"){setTrust(t=>({...blankTrust(),...t,...listingTrust,transaction_id:undefined,amount:String(listingTrust.amount||listingTx.deposit_amount||t.amount||""),received:"YES",deposit_date:listingTrust.deposit_date||t.deposit_date||"",received_from:listingTrust.received_from||t.received_from||"",held_by:listingTrust.held_by||t.held_by||"",trust_bank_account_id:listingTrust.trust_bank_account_id||t.trust_bank_account_id||"",reference_number:listingTrust.reference_number||t.reference_number||"",payment_type:listingTrust.payment_type||t.payment_type||"CHEQUE",we_hold_deposit:listingTrust.we_hold_deposit||t.we_hold_deposit||"YES"}))}}}
+   if(sourceListingId){
+    setListingDepositHistoryLoading(true);
+    const {data:listingTransactions,error:listingTxError}=await supabase.from("dv_accounting_transactions").select("id,transaction_number,deposit_amount,created_at,property_address").eq("listing_id",sourceListingId).like("transaction_number","LST-%").order("created_at",{ascending:false});
+    if(listingTxError)throw listingTxError;
+    const listingIds=(listingTransactions||[]).map(x=>x.id).filter(Boolean);
+    if(listingIds.length){
+     const {data:listingTrustRows,error:listingTrustError}=await supabase.from("dv_accounting_transaction_trust").select("*").in("transaction_id",listingIds);
+     if(listingTrustError)throw listingTrustError;
+     const trustById=new Map((listingTrustRows||[]).map(x=>[x.transaction_id,x]));
+     const history=(listingTransactions||[]).map(listingTx=>{
+      const listingTrust=trustById.get(listingTx.id);
+      if(!listingTrust||String(listingTrust.received||"").toUpperCase()!=="YES"||Number(listingTrust.amount||listingTx.deposit_amount||0)<=0)return null;
+      return {...listingTrust,transaction_id:listingTx.id,transaction_number:listingTx.transaction_number,amount:Number(listingTrust.amount||listingTx.deposit_amount||0),deposit_date:listingTrust.deposit_date||listingTrust.created_at?.slice(0,10)||listingTx.created_at?.slice(0,10)||"",received_from:listingTrust.received_from||"—",reference_number:listingTrust.reference_number||"—"};
+     }).filter(Boolean);
+     if(!cancelled)setListingDepositHistory(history);
+     const listingTx=listingTransactions[0];
+     const listingTrust=listingTx?trustById.get(listingTx.id):null;
+     if(!cancelled&&listingTrust&&String(listingTrust.received||"").toUpperCase()==="YES"){
+      setTrust(t=>({...blankTrust(),...t,...listingTrust,transaction_id:undefined,amount:String(listingTrust.amount||listingTx.deposit_amount||t.amount||""),received:"YES",deposit_date:listingTrust.deposit_date||t.deposit_date||"",received_from:listingTrust.received_from||t.received_from||"",held_by:listingTrust.held_by||t.held_by||"",trust_bank_account_id:listingTrust.trust_bank_account_id||t.trust_bank_account_id||"",reference_number:listingTrust.reference_number||t.reference_number||"",payment_type:listingTrust.payment_type||t.payment_type||"CHEQUE",we_hold_deposit:listingTrust.we_hold_deposit||t.we_hold_deposit||"YES"}));
+     }
+    }else if(!cancelled)setListingDepositHistory([]);
+    if(!cancelled)setListingDepositHistoryLoading(false);
+   }else if(!cancelled){setListingDepositHistory([]);setListingDepositHistoryLoading(false);}
    const basis=String(p.commission_basis||"PERCENT").toUpperCase();
    const listingRate=Number(p.listing_commission_percent||0),listingAmount=Number(p.listing_commission_amount||0);
    const coopRate=Number(p.coop_commission_percent||0),coopAmount=Number(p.coop_commission_amount||0);
