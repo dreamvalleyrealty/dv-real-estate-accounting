@@ -829,7 +829,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
   </div>}
   {!agentReviewDocuments.length&&!requestedMissingLabels.length&&<div className="agent-trade-alert">The administrator has requested a review. Check the review notes on this trade, then upload or replace the requested documents.</div>}
   <div className="agent-trade-buttons" style={{marginTop:12}}><button type="button" className="secondary" onClick={()=>setActiveTab("DOCUMENTS")}>View all trade documents</button><button type="button" className="primary" disabled={busy} onClick={async()=>{await loadDocs(selected?.id);await load();}}>Refresh status</button></div>
-</section>
+</section>}
 {activeTab==="LAWYER_MISSING"&&<section className="agent-trade-upload-panel">
   <h3 style={{marginTop:0,color:"#b42318"}}><AlertCircle size={17} style={{verticalAlign:"middle",marginRight:6}}/>Lawyer Information Missing</h3>
   <p className="agent-trade-muted">Complete the missing lawyer details below. Select Edit Lawyer Information to open the lawyer form.</p>
