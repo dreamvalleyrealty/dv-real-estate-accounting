@@ -272,7 +272,8 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
  const agentName=agent?[agent.first_name,agent.last_name].filter(Boolean).join(" "):"";
  const agentHst=agent?.hst_number||agent?.prec_hst_number||agent?.precHstNumber||agent?.hst||"";
  const tradeAgentLabel=agentName?(agent.agent_number?agent.agent_number+" - ":"")+agentName:"";
- const trustActivity=Number(trust.amount||0)>0
+ const depositHeldByUs=String(trust.we_hold_deposit||"").trim().toUpperCase()==="YES";
+ const trustActivity=depositHeldByUs&&trust.received==="YES"&&Number(trust.amount||0)>0
    ? "<tr><td>"+esc(fmtDate(trust.deposit_date))+"</td><td>"+esc(trust.reference_number||"No Deposit")+"</td><td>"+cash(trust.amount)+"</td></tr><tr><td colspan='2' class='balance'>Balance</td><td>"+cash(trust.amount)+"</td></tr>"
    : "<tr><td>"+esc(fmtLongDate(form.offer_date))+"</td><td>No Deposit</td><td>$0.00</td></tr><tr><td colspan='2' class='balance'>Balance</td><td>$0.00</td></tr>";
  const commissionTrust=totalCommission>0
