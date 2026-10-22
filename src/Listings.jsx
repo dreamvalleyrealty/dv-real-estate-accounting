@@ -317,21 +317,25 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
    const [{data:trustRows,error:trustError},{data:bankRows,error:bankError},{data:ledgerRows,error:ledgerError}]=await Promise.all([
     supabase.from("dv_accounting_transaction_trust").select("*").in("transaction_id",ids),
     supabase.from("dv_accounting_bank_accounts").select("id,name,account_number_last4").eq("account_type","REAL_ESTATE_TRUST"),
-    supabase.from("dv_accounting_trust_transactions").select("transaction_id,status,direction,trust_account_type").in("transaction_id",ids).eq("direction","DEPOSIT").eq("trust_account_type","REAL_ESTATE_TRUST").eq("status","POSTED")
+    supabase.from("dv_accounting_trust_transactions").select("*").in("transaction_id",ids).eq("direction","DEPOSIT").eq("trust_account_type","REAL_ESTATE_TRUST").eq("status","POSTED").order("ledger_date",{ascending:false}).order("created_at",{ascending:false})
    ]);
    if(trustError)throw trustError;if(bankError)throw bankError;if(ledgerError)throw ledgerError;
+   const txById=new Map(transactions.map(t=>[t.id,t]));
    const trustByTransaction=new Map((trustRows||[]).map(t=>[t.transaction_id,t]));
    const bankById=new Map((bankRows||[]).map(b=>[b.id,b]));
-   const postedByTransaction=new Set((ledgerRows||[]).map(row=>row.transaction_id));
-   const history=transactions.map(tx=>{
-    const trust=trustByTransaction.get(tx.id);
-    if(!trust||String(trust.received||"").toUpperCase()!=="YES")return null;
-    const bank=bankById.get(trust.trust_bank_account_id||tx.trust_bank_account_id);
-    return {...trust,id:trust.id,transaction_id:tx.id,transaction_number:tx.transaction_number||"—",property_address:[tx.property_address,tx.unit_number?"Unit "+tx.unit_number:"",tx.city,tx.province,tx.postal_code].filter(Boolean).join(", "),amount:trust.amount??tx.deposit_amount??0,bank_name:bank?.name||"—",receipt_number:"DR-"+String(tx.transaction_number||tx.id).replace(/[^A-Za-z0-9-]/g,""),posted:postedByTransaction.has(tx.id)};
+   // Build history from each posted ledger receipt, not one trust-details row per transaction.
+   // A single property/trade may have several legitimate deposits.
+   const history=(ledgerRows||[]).map(ledger=>{
+    const tx=txById.get(ledger.transaction_id);if(!tx)return null;
+    const trust=trustByTransaction.get(tx.id)||{};
+    const bank=bankById.get(ledger.bank_account_id||trust.trust_bank_account_id||tx.trust_bank_account_id);
+    const ledgerDate=String(ledger.ledger_date||ledger.created_at||"").slice(0,10);
+    const amount=Number(ledger.amount||0);
+    const receiptMeta=(trustRows||[]).find(row=>row.transaction_id===tx.id&&Number(row.amount||0)===amount&&String(row.deposit_date||row.created_at||"").slice(0,10)===ledgerDate&&String(row.received_from||"").trim().toLowerCase()===String(ledger.client_name||"").trim().toLowerCase())||trust;
+    return {...receiptMeta,id:ledger.id,ledger_transaction_id:tx.id,transaction_id:tx.id,transaction_number:tx.transaction_number||"—",property_address:[tx.property_address,tx.unit_number?"Unit "+tx.unit_number:"",tx.city,tx.province,tx.postal_code].filter(Boolean).join(", "),received_from:ledger.client_name||receiptMeta.received_from||"—",deposit_date:ledgerDate,created_at:ledger.created_at||receiptMeta.created_at,amount,reference_number:ledger.reference||receiptMeta.reference_number||"",payment_type:receiptMeta.payment_type||"—",trust_bank_account_id:ledger.bank_account_id||receiptMeta.trust_bank_account_id||tx.trust_bank_account_id,bank_name:bank?.name||"—",receipt_number:"DR-"+String(tx.transaction_number||tx.id).replace(/[^A-Za-z0-9-]/g,"")+( (ledgerRows||[]).filter(other=>other.transaction_id===tx.id).length>1?"-"+String(ledger.id).slice(0,6).toUpperCase():""),receipt_attachment_path:receiptMeta.receipt_attachment_path||null,receipt_attachment_name:receiptMeta.receipt_attachment_name||null,receipt_attachment_mime_type:receiptMeta.receipt_attachment_mime_type||null,posted:true};
    }).filter(Boolean);
-   // Listing deposit receipts can be mirrored onto the later trade transaction.
-   // When both rows describe the same deposit, show the actual trade receipt and hide the LST placeholder.
-   const signature=item=>[Number(item.amount||0).toFixed(2),String(item.deposit_date||item.created_at||"").slice(0,10),String(item.received_from||"").trim().toLowerCase()].join("|");
+   // Listing placeholder deposits may be mirrored to a later trade. Keep the trade receipt if both match.
+   const signature=item=>[Number(item.amount||0).toFixed(2),String(item.deposit_date||item.created_at||"").slice(0,10),String(item.received_from||"").trim().toLowerCase(),String(item.reference_number||"").trim().toLowerCase()].join("|");
    const tradeDepositSignatures=new Set(history.filter(item=>!String(item.transaction_number||"").startsWith("LST-")).map(signature));
    setDepositHistory(history.filter(item=>!String(item.transaction_number||"").startsWith("LST-")||!tradeDepositSignatures.has(signature(item))));
   }catch(err){setDepositHistoryError(err?.message||"Could not load deposit history.");setDepositHistory([])}
