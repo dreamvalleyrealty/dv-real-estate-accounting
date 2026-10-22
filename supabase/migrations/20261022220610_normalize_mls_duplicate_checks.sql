@@ -34,7 +34,6 @@ begin
     select exists(
       select 1 from public.dv_accounting_transactions t
       where t.id is distinct from NEW.id and nullif(upper(btrim(t.mls_number)), '') = v_mls
-        and t.listing_id is distinct from NEW.listing_id
       union all
       select 1 from public.dv_accounting_listing_submissions l
       where nullif(upper(btrim(l.mls_number)), '') = v_mls and l.id is distinct from NEW.listing_id
