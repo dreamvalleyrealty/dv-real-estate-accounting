@@ -768,7 +768,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
     const {data:docRows,error:docError}=await supabase.from("dv_accounting_agent_trade_documents").select("storage_path").eq("submission_id",selected.id);
     if(docError){setError("Could not load the trade documents: "+docError.message);setBusy(false);return;}
     const paths=(docRows||[]).map(d=>d.storage_path).filter(Boolean);
-    const {error:deleteError}=await supabase.rpc("dv_accounting_delete_trade_record",{p_transaction_id:null,p_submission_id:selected.id});
+    const {error:deleteError}=await supabase.rpc("dv_accounting_agent_delete_trade_submission",{p_submission_id:selected.id});
     if(deleteError){setError(deleteError.message);setBusy(false);return;}
     let storageWarning="";
     if(paths.length){const {error:storageError}=await supabase.storage.from("dv-trade-documents").remove([...new Set(paths)]);if(storageError)storageWarning=" The submission was deleted, but some stored document files could not be removed.";}
