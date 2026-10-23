@@ -709,6 +709,19 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    if(!selected?.id)return;
    if(status==="APPROVED"&&(!adminMode||!selected?.id)){setError("Only an administrator can approve a saved trade submission.");return}
    if(status==="APPROVED"&&!["SUBMITTED","NEEDS_CHANGES"].includes(selected.status)){setError("Only submitted or change-requested trade submissions can be approved.");return}
+   let cooperatingBillingEmail="";
+   if(status==="APPROVED"){
+     const p=selected.payload||{};
+     const side=String(p.side||"BUYER").toUpperCase();
+     const listingSide=["SELLER","LANDLORD","LISTING"].includes(side);
+     const cooperatingName=String(listingSide?p.buyer_brokerage_name:p.listing_brokerage_name||"").trim();
+     if(cooperatingName&&cooperatingName.toLowerCase()!=="dream valley realty inc., brokerage"){
+       const supplied=window.prompt("Enter the cooperating brokerage billing email. This is required before transferring the trade to Transactions:");
+       if(supplied===null){setError("Approval cancelled. The cooperating brokerage billing email is required.");return;}
+       cooperatingBillingEmail=String(supplied).trim();
+       if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(cooperatingBillingEmail)){setError("Enter a valid cooperating brokerage billing email before approving this trade.");return;}
+     }
+   }
    const selectedMissingDocs=missingRequiredDocs.map(type=>({CONDITION_NOTICE_FULFILLMENT:"Notice of Fulfillment of Condition",CONDITION_WAIVER:"Waiver of Condition",CONDITION_AMENDMENT:"Amendment"}[type]||docTypes.find(([key])=>key===type)?.[1]||type));const notesParts=[];if(selectedMissingDocs.length)notesParts.push("Missing required documents:\\n"+selectedMissingDocs.map(label=>"- "+label).join("\\n"));if(reviewNotes.trim())notesParts.push("Additional notes:\\n"+reviewNotes.trim());const effectiveReviewNotes=notesParts.join("\\n\\n");if(status==="NEEDS_CHANGES"&&!selectedMissingDocs.length){setError("Select at least one missing required document.");return}
    setBusy(true);setError("");
    if(status==="APPROVED"){
@@ -731,7 +744,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
          const{data:existingBrokers,error:brokerReadError}=await supabase.from("dv_accounting_transaction_outside_brokers").select("id").eq("transaction_id",data);
          if(brokerReadError){setError("Trade approved, but Outside Brokers could not be checked: "+brokerReadError.message);setBusy(false);return}
          if(!(existingBrokers||[]).length){
-           const{error:brokerInsertError}=await supabase.from("dv_accounting_transaction_outside_brokers").insert([{transaction_id:data,company_name:String(brokerage.company_name).trim(),address:brokerage.address||"",phone:brokerage.phone||"",fax:brokerage.fax||"",agent_name:brokerage.agent_name||"",agent_email:brokerage.agent_email||""}]);
+           const{error:brokerInsertError}=await supabase.from("dv_accounting_transaction_outside_brokers").insert([{transaction_id:data,company_name:String(brokerage.company_name).trim(),address:brokerage.address||"",phone:brokerage.phone||"",fax:brokerage.fax||"",agent_name:brokerage.agent_name||"",agent_email:brokerage.agent_email||"",billing_email:cooperatingBillingEmail}]);
            if(brokerInsertError){setError("Trade approved, but the cooperating brokerage could not be copied into Outside Brokers: "+brokerInsertError.message);setBusy(false);return}
          }
        }
