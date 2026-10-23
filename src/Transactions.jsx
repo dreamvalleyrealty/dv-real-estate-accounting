@@ -109,6 +109,15 @@ const blankBroker=()=>({brokerage_id:"",company_name:"",phone:"",fax:"",agent_na
 const blankCondition=()=>({item_type:"CONDITION",due_for:"BOTH",description:"",due_date:"",met_date:"",notes:""});
 const blankCommission=side=>({side,calculation_type:"PERCENT",rate:"",amount:"",hst_rate:"13",settlement_direction:side==="LISTING"?"RECEIVABLE":"PAYABLE",brokerage_id:"",notes:""});
 const blankTrust=()=>({we_hold_deposit:"NO",held_by:"",received:"NO",deposit_date:"",received_from:"",amount:"",trust_bank_account_id:"",earns_interest:"NO",payment_type:"CHEQUE",reference_number:""});
+function mergeDepositHistoryRows(existing=[],incoming=[]){
+ const rows=[...(existing||[]),...(incoming||[])];
+ const seen=new Set();
+ return rows.filter(row=>{
+  const key=[String(row.reference_number||row.reference||"").trim().toUpperCase(),String(row.deposit_date||row.ledger_date||row.created_at||"").slice(0,10),Number(row.amount||0).toFixed(2)].join("|");
+  if(seen.has(key))return false;
+  seen.add(key);return true;
+ }).sort((a,b)=>String(b.deposit_date||b.ledger_date||"").localeCompare(String(a.deposit_date||a.ledger_date||"")));
+}
 function ModalLike({title,onClose,children}){return <div className="overlay"><div className="modal tx-contact-modal"><div className="modalhead"><h2>{title}</h2><button type="button" className="iconbtn" onClick={onClose}>×</button></div>{children}</div></div>}
 function Field({label,children,wide=false}){return <label className={wide?"tx-field tx-wide":"tx-field"}><span>{label}</span>{children}</label>}
 function Province({value,onChange}){return <select value={value||"ON"} onChange={onChange}>{PROVINCES.map(p=><option key={p[0]} value={p[0]}>{p[1]}</option>)}</select>}
@@ -183,7 +192,7 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
    directHistory=(allTrustRows||[]).map(row=>({...row,transaction_id:initial.id,transaction_number:initial.transaction_number||"—",deposit_date:row.ledger_date||row.created_at?.slice(0,10)||"",received_from:row.client_name||"—",reference_number:row.reference||"—",amount:Number(row.amount||0),_source:"TRADE"}));
    // Show posted deposits on this trade immediately. A separate listing-history lookup
    // must never hide valid trade receipts if that lookup is unavailable or fails.
-   if(!cancelled)setListingDepositHistory(directHistory);
+   if(!cancelled)setListingDepositHistory(current=>mergeDepositHistoryRows(current,directHistory));
   }catch(err){console.error("Could not load posted trade deposits:",err);if(!cancelled){setListingDepositHistory([]);setListingDepositHistoryError(err?.message||"Unable to load posted deposit receipts.");setListingDepositHistoryLoading(false)}return}
   const listingId=initial.listing_id||form.listing_id;
   if(!listingId){if(!cancelled){setListingDepositHistory(directHistory);setListingDepositHistoryLoading(false)}return}
@@ -199,7 +208,7 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
     listingHistory=(listingTransactions||[]).map(tx=>{const row=byId.get(tx.id);if(!row||String(row.received||"").toUpperCase()!=="YES"||Number(row.amount||tx.deposit_amount||0)<=0)return null;return {...row,transaction_id:tx.id,transaction_number:tx.transaction_number,amount:Number(row.amount||tx.deposit_amount||0),deposit_date:row.deposit_date||row.created_at?.slice(0,10)||tx.created_at?.slice(0,10)||"",received_from:row.received_from||"—",reference_number:row.reference_number||"—",_source:"LISTING"}}).filter(Boolean);
    }
    const seen=new Set();const combined=[...directHistory,...listingHistory].filter(row=>{const key=[row.deposit_date,Number(row.amount||0).toFixed(2),String(row.reference_number||"").trim().toUpperCase()].join("|");if(seen.has(key))return false;seen.add(key);return true;});
-   if(!cancelled)setListingDepositHistory(combined);
+   if(!cancelled)setListingDepositHistory(current=>mergeDepositHistoryRows(current,combined));
   }catch(err){console.warn("Could not load linked listing deposit history; showing trade receipts only:",err);if(!cancelled)setListingDepositHistory(directHistory)}
   finally{if(!cancelled)setListingDepositHistoryLoading(false)}
 })();setListingDepositHistoryLoading(true);return()=>{cancelled=true}},[initial?.id,initial?.transaction_number,initial?.listing_id,form.listing_id]);
@@ -231,15 +240,15 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
       if(!listingTrust||String(listingTrust.received||"").toUpperCase()!=="YES"||Number(listingTrust.amount||listingTx.deposit_amount||0)<=0)return null;
       return {...listingTrust,transaction_id:listingTx.id,transaction_number:listingTx.transaction_number,amount:Number(listingTrust.amount||listingTx.deposit_amount||0),deposit_date:listingTrust.deposit_date||listingTrust.created_at?.slice(0,10)||listingTx.created_at?.slice(0,10)||"",received_from:listingTrust.received_from||"—",reference_number:listingTrust.reference_number||"—"};
      }).filter(Boolean);
-     if(!cancelled)setListingDepositHistory(history);
+     if(!cancelled)setListingDepositHistory(current=>mergeDepositHistoryRows(current,history));
      const listingTx=listingTransactions[0];
      const listingTrust=listingTx?trustById.get(listingTx.id):null;
      if(!cancelled&&listingTrust&&String(listingTrust.received||"").toUpperCase()==="YES"){
       setTrust(t=>({...blankTrust(),...t,...listingTrust,transaction_id:undefined,amount:String(listingTrust.amount||listingTx.deposit_amount||t.amount||""),received:"YES",deposit_date:listingTrust.deposit_date||t.deposit_date||"",received_from:listingTrust.received_from||t.received_from||"",held_by:listingTrust.held_by||t.held_by||"",trust_bank_account_id:listingTrust.trust_bank_account_id||t.trust_bank_account_id||"",reference_number:listingTrust.reference_number||t.reference_number||"",payment_type:listingTrust.payment_type||t.payment_type||"CHEQUE",we_hold_deposit:listingTrust.we_hold_deposit||t.we_hold_deposit||"YES"}));
      }
-    }else if(!cancelled)setListingDepositHistory([]);
+    }else if(!cancelled)setListingDepositHistory(current=>current);
     if(!cancelled)setListingDepositHistoryLoading(false);
-   }else if(!cancelled){setListingDepositHistory([]);setListingDepositHistoryLoading(false);}
+   }else if(!cancelled){setListingDepositHistory(current=>current);setListingDepositHistoryLoading(false);}
    const basis=String(p.commission_basis||"PERCENT").toUpperCase();
    const listingRate=Number(p.listing_commission_percent||0),listingAmount=Number(p.listing_commission_amount||0);
    const coopRate=Number(p.coop_commission_percent||0),coopAmount=Number(p.coop_commission_amount||0);
