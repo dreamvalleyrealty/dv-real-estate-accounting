@@ -1010,3 +1010,25 @@ body, #root {
  .transaction-list-table td:nth-child(8) select{font-size:12px!important;min-height:36px!important}
  .transaction-actions-menu{position:fixed;right:12px;top:auto;bottom:12px;max-width:calc(100vw - 24px);max-height:70vh;overflow:auto}
 }
+
+
+/* Explicitly toggled transaction actions menu (not native details/summary). */
+.transaction-actions-dropdown{position:relative;display:inline-block;overflow:visible!important;z-index:5}
+.transaction-actions-trigger{
+ display:inline-flex!important;align-items:center;justify-content:center;gap:5px;
+ min-height:34px!important;padding:7px 10px!important;border:1px solid #d0dbea!important;
+ border-radius:6px!important;background:#fff!important;color:#344054!important;
+ font-size:12px!important;font-weight:650!important;line-height:1.2!important;white-space:nowrap!important;
+ cursor:pointer;
+}
+.transaction-actions-trigger[aria-expanded="true"]{border-color:#9e8556!important;background:#fbf8f2!important}
+.transaction-actions-menu{
+ position:fixed!important;right:24px!important;bottom:24px!important;top:auto!important;z-index:2147483000!important;
+ width:max-content;min-width:250px;max-width:min(440px,calc(100vw - 32px));
+ max-height:min(72vh,620px);overflow-y:auto;overscroll-behavior:contain;
+ padding:12px;background:#fff;border:1px solid #d0dbea;border-radius:10px;
+ box-shadow:0 18px 48px rgba(16,24,40,.32);white-space:normal;
+}
+.transaction-actions-menu>div{display:flex;flex-wrap:wrap;gap:6px}
+.transaction-actions-menu button{white-space:normal;max-width:100%}
+@media(max-width:900px){.transaction-actions-menu{right:12px!important;bottom:12px!important;max-width:calc(100vw - 24px);max-height:70vh}}
