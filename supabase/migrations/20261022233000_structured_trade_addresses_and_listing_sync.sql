@@ -57,6 +57,7 @@ $$;
 do $$
 declare
   v_prefix text;
+  i integer;
   v_trade record;
   v_parsed jsonb;
   v_payload jsonb;
