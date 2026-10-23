@@ -187,8 +187,21 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
  })();return()=>{cancelled=true}},[initial?.id]);
  useEffect(()=>{if(!initial?.id||!supabase)return;let cancelled=false;(async()=>{let directHistory=[];try{
    setListingDepositHistoryError("");
-   const {data:allTrustRows,error:postedError}=await supabase.rpc("dv_accounting_get_posted_deposits",{p_transaction_id:initial.id});
-   if(postedError)throw postedError;
+   let allTrustRows=[];
+   let rpcError=null;
+   const rpcResult=await supabase.rpc("dv_accounting_get_posted_deposits",{p_transaction_id:initial.id});
+   rpcError=rpcResult.error||null;
+   allTrustRows=Array.isArray(rpcResult.data)?rpcResult.data:[];
+   // Fallback to a direct read if the RPC returns no rows or is not executable in this session.
+   // Filter client-side so minor case/spacing differences in ledger status do not hide receipts.
+   if(!allTrustRows.length){
+    const {data:directRows,error:directError}=await supabase.from("dv_accounting_trust_transactions").select("*").eq("transaction_id",initial.id);
+    if(directError){
+     if(rpcError)throw new Error("Deposit history RPC failed: "+rpcError.message+"; direct ledger read failed: "+directError.message);
+     throw directError;
+    }
+    allTrustRows=(directRows||[]).filter(row=>String(row.direction||"").trim().toUpperCase()==="DEPOSIT"&&String(row.status||"").trim().toUpperCase()==="POSTED"&&Number(row.amount||0)>0);
+   }
    directHistory=(allTrustRows||[]).map(row=>({...row,transaction_id:initial.id,transaction_number:initial.transaction_number||"—",deposit_date:row.ledger_date||row.created_at?.slice(0,10)||"",received_from:row.client_name||"—",reference_number:row.reference||"—",amount:Number(row.amount||0),_source:"TRADE"}));
    // Show posted deposits on this trade immediately. A separate listing-history lookup
    // must never hide valid trade receipts if that lookup is unavailable or fails.
