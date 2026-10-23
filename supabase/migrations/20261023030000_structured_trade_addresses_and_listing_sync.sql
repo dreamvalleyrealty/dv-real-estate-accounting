@@ -95,7 +95,6 @@ set
   unit_number = coalesce(nullif(l.unit_number, ''), t.unit_number),
   city = coalesce(nullif(l.city, ''), t.city),
   province = coalesce(nullif(l.province, ''), t.province, 'ON'),
-  postal_code = coalesce(nullif(l.postal_code, ''), t.postal_code),
-  mls_number = coalesce(nullif(l.mls_number, ''), t.mls_number)
+  postal_code = coalesce(nullif(l.postal_code, ''), t.postal_code)
 from public.dv_accounting_listing_submissions l
 where t.listing_id = l.id;
