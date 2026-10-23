@@ -183,9 +183,9 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
    // Show posted deposits on this trade immediately. A separate listing-history lookup
    // must never hide valid trade receipts if that lookup is unavailable or fails.
    if(!cancelled)setListingDepositHistory(directHistory);
-  }catch(err){console.error("Could not load posted trade deposits:",err);if(!cancelled)setListingDepositHistory([]);return}
+  }catch(err){console.error("Could not load posted trade deposits:",err);if(!cancelled){setListingDepositHistory([]);setListingDepositHistoryLoading(false)}return}
   const listingId=initial.listing_id||form.listing_id;
-  if(!listingId){if(!cancelled)setListingDepositHistory(directHistory);return}
+  if(!listingId){if(!cancelled){setListingDepositHistory(directHistory);setListingDepositHistoryLoading(false)}return}
   try{
    const {data:listingTransactions,error:txError}=await supabase.from("dv_accounting_transactions").select("id,transaction_number,deposit_amount,created_at").eq("listing_id",listingId).like("transaction_number","LST-%").order("created_at",{ascending:false});
    if(txError)throw txError;
