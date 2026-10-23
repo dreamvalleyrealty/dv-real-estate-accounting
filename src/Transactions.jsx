@@ -177,13 +177,14 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
   if(ai.data)setAgentInfo({agent_id:ai.data.agent_id||"",other_outstanding_fees:String(ai.data.other_outstanding_fees||0),notes:ai.data.notes||""});setAdditionalAgents((ta.data||[]).filter(x=>!x.primary_agent).map(x=>({agent_id:x.agent_id||"",percent:String(x.commission_base&&Number(initial.gross_commission)>0?Number(x.commission_base)/Number(initial.gross_commission)*100:0),side:x.side||initial.side||"BUYER"})));setOtherSideAgents(Array.isArray(initial.other_side_agents)?initial.other_side_agents:[]);
  })();return()=>{cancelled=true}},[initial?.id]);
  useEffect(()=>{if(!initial?.id||!supabase)return;let cancelled=false;(async()=>{let directHistory=[];try{
-   const {data:allTrustRows,error:postedError}=await supabase.from("dv_accounting_trust_transactions").select("*").eq("transaction_id",initial.id).order("ledger_date",{ascending:false});
+   setListingDepositHistoryError("");
+   const {data:allTrustRows,error:postedError}=await supabase.rpc("dv_accounting_get_posted_deposits",{p_transaction_id:initial.id});
    if(postedError)throw postedError;
-   directHistory=(allTrustRows||[]).filter(row=>String(row.direction||"").toUpperCase()==="DEPOSIT"&&String(row.status||"").toUpperCase()==="POSTED"&&Number(row.amount||0)>0).map(row=>({...row,transaction_id:initial.id,transaction_number:initial.transaction_number||"—",deposit_date:row.ledger_date||row.created_at?.slice(0,10)||"",received_from:row.client_name||"—",reference_number:row.reference||"—",amount:Number(row.amount||0),_source:"TRADE"}));
+   directHistory=(allTrustRows||[]).map(row=>({...row,transaction_id:initial.id,transaction_number:initial.transaction_number||"—",deposit_date:row.ledger_date||row.created_at?.slice(0,10)||"",received_from:row.client_name||"—",reference_number:row.reference||"—",amount:Number(row.amount||0),_source:"TRADE"}));
    // Show posted deposits on this trade immediately. A separate listing-history lookup
    // must never hide valid trade receipts if that lookup is unavailable or fails.
    if(!cancelled)setListingDepositHistory(directHistory);
-  }catch(err){console.error("Could not load posted trade deposits:",err);if(!cancelled){setListingDepositHistory([]);setListingDepositHistoryLoading(false)}return}
+  }catch(err){console.error("Could not load posted trade deposits:",err);if(!cancelled){setListingDepositHistory([]);setListingDepositHistoryError(err?.message||"Unable to load posted deposit receipts.");setListingDepositHistoryLoading(false)}return}
   const listingId=initial.listing_id||form.listing_id;
   if(!listingId){if(!cancelled){setListingDepositHistory(directHistory);setListingDepositHistoryLoading(false)}return}
   try{
