@@ -3,9 +3,10 @@ import react from "@vitejs/plugin-react";
 import { readFileSync } from "node:fs";
 
 const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-const buildStamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 12);
-const deploymentId = process.env.GITHUB_RUN_NUMBER || process.env.CI_PIPELINE_ID || process.env.BUILD_NUMBER || buildStamp;
-const buildVersion = `${packageJson.version}.${deploymentId}`;
+// Generate a readable build label on every build/deployment instead of appending
+// a long, compact timestamp to the semantic version.
+const buildStamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+const buildVersion = `${packageJson.version} (Build ${buildStamp} UTC)`;
 
 export default defineConfig({
   plugins: [react()],
