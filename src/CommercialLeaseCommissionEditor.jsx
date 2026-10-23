@@ -63,11 +63,6 @@ export default function CommercialLeaseCommissionEditor({value,onChange,readOnly
     </div>{!readOnly&&data.commissionSchedule.length>1&&<button type="button" onClick={()=>removeRow("commissionSchedule",i)} style={{justifySelf:"start"}}>Remove commission period</button>}
    </div>)}
   </div>
-  <div style={{display:"grid",gap:7,borderTop:"1px solid #e2e8f0",paddingTop:10}}>
-   <b>Agreement and approval</b>
-   {field("Signed agreement document ID / reference",inp(data.signedAgreementDocumentId,v=>set("signedAgreementDocumentId",v)))}
-   <label style={{display:"flex",gap:8,alignItems:"center",fontSize:13}}><input type="checkbox" checked={!!data.commissionAuthorityConfirmed} onChange={e=>set("commissionAuthorityConfirmed",e.target.checked)} disabled={readOnly}/> Administrator confirmed the signed agreement is the controlling commission authority</label>
-  </div>
   <div style={{border:"1px solid "+(result.valid?"#86efac":"#fca5a5"),background:result.valid?"#f0fdf4":"#fff7f7",borderRadius:6,padding:10,display:"grid",gap:6}}>
    <b>{result.valid?"Calculation preview":"Validation required"}</b>
    {result.errors.map((x,i)=><div key={"e"+i} style={{fontSize:12,color:"#b91c1c"}}>• {x}</div>)}
