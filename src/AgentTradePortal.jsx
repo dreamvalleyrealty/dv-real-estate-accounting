@@ -96,7 +96,7 @@ function statusPill(status){return <span className="pill" style={{background:sta
 
 export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAdmin=false,canViewDocuments=false,canDeleteDocuments=false}) {
  const [submissions,setSubmissions]=useState([]),[docs,setDocs]=useState([]),[agents,setAgents]=useState([]);
- const [selected,setSelected]=useState(null),[selectedTransactionStatus,setSelectedTransactionStatus]=useState(""),[form,setForm]=useState({...blank}),[file,setFile]=useState(null),[files,setFiles]=useState([]),[docType,setDocType]=useState("APS"),[extractBusy,setExtractBusy]=useState(false),[extractedPreview,setExtractedPreview]=useState(null);
+ const [selected,setSelected]=useState(null),[selectedTradeIds,setSelectedTradeIds]=useState([]),[selectedTransactionStatus,setSelectedTransactionStatus]=useState(""),[form,setForm]=useState({...blank}),[file,setFile]=useState(null),[files,setFiles]=useState([]),[docType,setDocType]=useState("APS"),[extractBusy,setExtractBusy]=useState(false),[extractedPreview,setExtractedPreview]=useState(null);
  const [bulkFile,setBulkFile]=useState(null),[bulkGroups,setBulkGroups]=useState([]),[bulkBusy,setBulkBusy]=useState(false),[bulkOriginal,setBulkOriginal]=useState(true),[bulkPageCount,setBulkPageCount]=useState(0);
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[reviewNotes,setReviewNotes]=useState(""),[missingRequiredDocs,setMissingRequiredDocs]=useState([]);
  const draftWriteLock=useRef(false);
