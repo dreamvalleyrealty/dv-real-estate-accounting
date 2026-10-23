@@ -204,6 +204,7 @@ export function calculateCommercialLeaseCommission(input = {}) {
     }
   }
 
+  const leaseTermValue = roundMoney([...rentByYear.values()].reduce((sum, rent) => sum + rent.grossRent, 0));
   const lines = [];
   for (const row of input.commissionSchedule) {
     for (let year = Number(row.startPeriod); year <= Number(row.endPeriod); year++) {
@@ -257,5 +258,5 @@ export function calculateCommercialLeaseCommission(input = {}) {
   const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.commissionBeforeHst, 0));
   const hst = roundMoney(lines.reduce((sum, line) => sum + line.hst, 0));
   const total = roundMoney(lines.reduce((sum, line) => sum + line.totalCommission, 0));
-  return { valid: true, errors: [], warnings: validation.warnings, requiresAdminReview: validation.requiresAdminReview, lines, subtotal, hst, total };
+  return { valid: true, errors: [], warnings: validation.warnings, requiresAdminReview: validation.requiresAdminReview, lines, subtotal, hst, total, leaseTermValue };
 }
