@@ -34,7 +34,35 @@ const normalizeRepresentationSide = (side,transactionType) => {
 const labelStatus = s => ({DRAFT:"Draft",SUBMITTED:"Awaiting review",NEEDS_CHANGES:"Changes requested",APPROVED:"Approved / transferred",PAID:"CLOSED AND PAID"}[s]||s||"Draft");
 const money = v => new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(v||0));
 const displayDate = v => v ? new Date(v+"T12:00:00").toLocaleDateString("en-CA") : "—";
-function splitStructuredAddress(value){const raw=String(value||"").trim();if(!raw)return {address:"",unit:"",city:"",province:"ON",postal_code:""};const parts=raw.split(/\\s*,\\s*/).filter(Boolean);let address=parts[0]||raw,unit="",city="",province="ON",postal_code="";for(const part of parts.slice(1)){if(/^unit\\s*#?\\s*/i.test(part)){unit=part.replace(/^unit\\s*#?\\s*/i,"").trim();continue}if(/^[A-Z]\\d[A-Z]\\s*\\d[A-Z]\\d$/i.test(part)){postal_code=part.toUpperCase();continue}if(/^(ON|Ontario|AB|BC|QC|MB|SK|NS|NB|NL|PE|YT|NT|NU)$/i.test(part)){province=part;continue}if(!city)city=part;else if(!postal_code)postal_code=part}const inlineUnit=address.match(/\\b(?:unit|suite|ste\\.?|#)\\s*([\\w-]+)/i);if(inlineUnit){unit=unit||inlineUnit[1];address=address.replace(inlineUnit[0],"").trim()}return {address:address.replace(/\\s+/g," ").trim(),unit,city,province,postal_code};}\nfunction normalizeTradeAddressFields(values={}){const v={...values};for(const prefix of ["seller_lawyer","buyer_lawyer","listing_brokerage","buyer_brokerage"]){const parsed=splitStructuredAddress(v[prefix+"_address"]);if(!v[prefix+"_unit"])v[prefix+"_unit"]=parsed.unit;if(!v[prefix+"_city"])v[prefix+"_city"]=parsed.city;if(!v[prefix+"_postal_code"])v[prefix+"_postal_code"]=parsed.postal_code;if(parsed.city||parsed.unit||parsed.postal_code)v[prefix+"_address"]=parsed.address;}return v;}\nfunction normalizePropertyAddress(value){
+function splitStructuredAddress(value){
+ const raw=String(value||"").trim();
+ if(!raw)return {address:"",unit:"",city:"",province:"ON",postal_code:""};
+ const parts=raw.split(/\s*,\s*/).filter(Boolean);
+ let address=parts[0]||raw,unit="",city="",province="ON",postal_code="";
+ for(const part of parts.slice(1)){
+  if(/^(?:unit|suite|ste\.?|#)\s*/i.test(part)){unit=part.replace(/^(?:unit|suite|ste\.?|#)\s*/i,"").trim();continue}
+  const postalMatch=part.match(/([A-Z]\d[A-Z]\s*\d[A-Z]\d)$/i);
+  if(postalMatch){postal_code=postalMatch[1].toUpperCase().replace(/\s+/g," ");const prefix=part.slice(0,postalMatch.index).trim();const prov=prefix.match(/^(ON|Ontario|AB|Alberta|BC|British Columbia|QC|Quebec|MB|Manitoba|SK|Saskatchewan|NS|Nova Scotia|NB|New Brunswick|NL|Newfoundland and Labrador|PE|Prince Edward Island|YT|Yukon|NT|Northwest Territories|NU|Nunavut)$/i);if(prov)province=prov[1];else if(prefix&&!city)city=prefix;continue}
+  if(/^(ON|Ontario|AB|Alberta|BC|British Columbia|QC|Quebec|MB|Manitoba|SK|Saskatchewan|NS|Nova Scotia|NB|New Brunswick|NL|Newfoundland and Labrador|PE|Prince Edward Island|YT|Yukon|NT|Northwest Territories|NU|Nunavut)$/i.test(part)){province=part;continue}
+  if(!city)city=part;
+ }
+ const inlineUnit=address.match(/\b(?:unit|suite|ste\.?|#)\s*([\w-]+)/i);
+ if(inlineUnit){unit=unit||inlineUnit[1];address=address.replace(inlineUnit[0],"").trim()}
+ return {address:address.replace(/\s+/g," ").trim(),unit,city,province,postal_code};
+}
+function normalizeTradeAddressFields(values={}){
+ const v={...values};
+ for(const prefix of ["seller_lawyer","buyer_lawyer","listing_brokerage","buyer_brokerage"]){
+  const parsed=splitStructuredAddress(v[prefix+"_address"]);
+  if(!v[prefix+"_unit"])v[prefix+"_unit"]=parsed.unit;
+  if(!v[prefix+"_city"])v[prefix+"_city"]=parsed.city;
+  if(!v[prefix+"_postal_code"])v[prefix+"_postal_code"]=parsed.postal_code;
+  if(!v[prefix+"_province"])v[prefix+"_province"]=parsed.province;
+  if(parsed.city||parsed.unit||parsed.postal_code)v[prefix+"_address"]=parsed.address;
+ }
+ return v;
+}
+function normalizePropertyAddress(value){
  let address=String(value||"").trim().replace(/\s*,\s*/g,", ").replace(/\s+/g," ");
  // Correct legacy values where the house number was repeated in the saved address.
  address=address.replace(/^(\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?)(?:[\s,]+\1){1,}(?=[\s,])/i,"$1");
