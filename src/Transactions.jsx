@@ -191,8 +191,9 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
    if(initial.transaction_number){const {data:canonicalTx,error:canonicalTxError}=await supabase.from("dv_accounting_transactions").select("id,transaction_number,listing_id").eq("transaction_number",initial.transaction_number).maybeSingle();if(canonicalTxError)throw canonicalTxError;if(canonicalTx?.id)transactionId=canonicalTx.id;}
    let allTrustRows=[];
    let rpcError=null;
-   const rpcResult=await supabase.rpc("dv_accounting_get_posted_deposits",{p_transaction_id:transactionId});
+   let rpcResult=initial.transaction_number?await supabase.rpc("dv_accounting_get_posted_deposits_by_number",{p_transaction_number:initial.transaction_number}):await supabase.rpc("dv_accounting_get_posted_deposits",{p_transaction_id:transactionId});
    rpcError=rpcResult.error||null;
+   if(rpcError){const fallbackRpc=await supabase.rpc("dv_accounting_get_posted_deposits",{p_transaction_id:transactionId});if(!fallbackRpc.error){rpcResult=fallbackRpc;rpcError=null}else rpcError=new Error((rpcError.message||String(rpcError))+"; fallback RPC failed: "+fallbackRpc.error.message);}
    allTrustRows=Array.isArray(rpcResult.data)?rpcResult.data:[];
    // Fallback to a direct read if the RPC returns no rows or is not executable in this session.
    // Filter client-side so minor case/spacing differences in ledger status do not hide receipts.
