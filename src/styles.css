@@ -972,3 +972,40 @@ body, #root {
   .top { gap: 5px !important; }
   .top .logout { padding: 7px 6px !important; }
 }
+
+
+/* Transaction list: keep status labels readable and action menus above adjacent rows. */
+.transaction-list-table td:nth-child(8) select{
+  width:100%!important;
+  max-width:none!important;
+  min-width:0;
+  height:34px!important;
+  min-height:34px!important;
+  padding:6px 22px 6px 8px!important;
+  font-size:12px!important;
+  line-height:1.2;
+  white-space:nowrap;
+}
+.transaction-list-table td:last-child{position:relative;overflow:visible!important}
+.transaction-actions-dropdown{position:relative;display:inline-block;z-index:2}
+.transaction-actions-dropdown[open]{z-index:1000}
+.transaction-actions-dropdown>summary{
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;
+  min-height:32px;padding:6px 9px;border:1px solid #d0dbea;border-radius:6px;
+  background:#fff;color:#344054;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer;
+  list-style:none;
+}
+.transaction-actions-dropdown>summary::-webkit-details-marker{display:none}
+.transaction-actions-dropdown[open]>summary{border-color:#9e8556;background:#fbf8f2}
+.transaction-actions-menu{
+  position:absolute;right:0;top:calc(100% + 5px);z-index:2000;
+  width:max-content;min-width:220px;max-width:min(360px,80vw);
+  padding:10px;background:#fff;border:1px solid #d0dbea;border-radius:9px;
+  box-shadow:0 12px 30px rgba(16,24,40,.2);white-space:normal;
+}
+.transaction-actions-menu>div{display:flex;flex-wrap:wrap;gap:6px}
+.transaction-actions-menu button{white-space:normal;max-width:100%}
+@media(max-width:900px){
+ .transaction-list-table td:nth-child(8) select{font-size:12px!important;min-height:36px!important}
+ .transaction-actions-menu{position:fixed;right:12px;top:auto;bottom:12px;max-width:calc(100vw - 24px);max-height:70vh;overflow:auto}
+}
