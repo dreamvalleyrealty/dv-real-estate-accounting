@@ -743,7 +743,11 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      const side=String(p.side||"BUYER").toUpperCase();
      const listingSide=["SELLER","LANDLORD","LISTING"].includes(side);
      const cooperatingName=String((listingSide?p.buyer_brokerage_name:p.listing_brokerage_name)||"").trim();
-     if(cooperatingName&&cooperatingName.toLowerCase()!=="dream valley realty inc., brokerage"){
+     if(!cooperatingName){
+       setError("Enter the cooperating brokerage name and address details before approving this trade.");
+       return;
+     }
+     if(cooperatingName.toLowerCase()!=="dream valley realty inc., brokerage"){
        const supplied=window.prompt("Enter the cooperating brokerage billing email. This is required before transferring the trade to Transactions:");
        if(supplied===null){setError("Approval cancelled. The cooperating brokerage billing email is required.");return;}
        cooperatingBillingEmail=String(supplied).trim();
