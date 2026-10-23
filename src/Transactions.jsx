@@ -176,26 +176,32 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
   if(cm.data?.length)setCommissions(cm.data.map(x=>({...blankCommission(x.side),...x,rate:String(x.rate??""),amount:String(x.amount??""),hst_rate:String(x.hst_rate??13),brokerage_id:x.brokerage_id||""})));
   if(ai.data)setAgentInfo({agent_id:ai.data.agent_id||"",other_outstanding_fees:String(ai.data.other_outstanding_fees||0),notes:ai.data.notes||""});setAdditionalAgents((ta.data||[]).filter(x=>!x.primary_agent).map(x=>({agent_id:x.agent_id||"",percent:String(x.commission_base&&Number(initial.gross_commission)>0?Number(x.commission_base)/Number(initial.gross_commission)*100:0),side:x.side||initial.side||"BUYER"})));setOtherSideAgents(Array.isArray(initial.other_side_agents)?initial.other_side_agents:[]);
  })();return()=>{cancelled=true}},[initial?.id]);
- useEffect(()=>{if(!initial?.id||!supabase)return;let cancelled=false;(async()=>{try{
+ useEffect(()=>{if(!initial?.id||!supabase)return;let cancelled=false;(async()=>{let directHistory=[];try{
    const {data:allTrustRows,error:postedError}=await supabase.from("dv_accounting_trust_transactions").select("*").eq("transaction_id",initial.id).order("ledger_date",{ascending:false});
    if(postedError)throw postedError;
-   const directHistory=(allTrustRows||[]).filter(row=>String(row.direction||"").toUpperCase()==="DEPOSIT"&&String(row.status||"").toUpperCase()==="POSTED"&&Number(row.amount||0)>0).map(row=>({...row,transaction_id:initial.id,transaction_number:initial.transaction_number||"—",deposit_date:row.ledger_date||row.created_at?.slice(0,10)||"",received_from:row.client_name||"—",reference_number:row.reference||"—",amount:Number(row.amount||0),_source:"TRADE"}));
-   const listingId=initial.listing_id||form.listing_id;
+   directHistory=(allTrustRows||[]).filter(row=>String(row.direction||"").toUpperCase()==="DEPOSIT"&&String(row.status||"").toUpperCase()==="POSTED"&&Number(row.amount||0)>0).map(row=>({...row,transaction_id:initial.id,transaction_number:initial.transaction_number||"—",deposit_date:row.ledger_date||row.created_at?.slice(0,10)||"",received_from:row.client_name||"—",reference_number:row.reference||"—",amount:Number(row.amount||0),_source:"TRADE"}));
+   // Show posted deposits on this trade immediately. A separate listing-history lookup
+   // must never hide valid trade receipts if that lookup is unavailable or fails.
+   if(!cancelled)setListingDepositHistory(directHistory);
+  }catch(err){console.error("Could not load posted trade deposits:",err);if(!cancelled)setListingDepositHistory([]);return}
+  const listingId=initial.listing_id||form.listing_id;
+  if(!listingId){if(!cancelled)setListingDepositHistory(directHistory);return}
+  try{
+   const {data:listingTransactions,error:txError}=await supabase.from("dv_accounting_transactions").select("id,transaction_number,deposit_amount,created_at").eq("listing_id",listingId).like("transaction_number","LST-%").order("created_at",{ascending:false});
+   if(txError)throw txError;
+   const ids=(listingTransactions||[]).map(x=>x.id).filter(Boolean);
    let listingHistory=[];
-   if(listingId){
-    const {data:listingTransactions,error:txError}=await supabase.from("dv_accounting_transactions").select("id,transaction_number,deposit_amount,created_at").eq("listing_id",listingId).like("transaction_number","LST-%").order("created_at",{ascending:false});
-    if(txError)throw txError;
-    const ids=(listingTransactions||[]).map(x=>x.id).filter(Boolean);
-    if(ids.length){
-     const {data:trustRows,error:trustError}=await supabase.from("dv_accounting_transaction_trust").select("*").in("transaction_id",ids);
-     if(trustError)throw trustError;
-     const byId=new Map((trustRows||[]).map(x=>[x.transaction_id,x]));
-     listingHistory=(listingTransactions||[]).map(tx=>{const row=byId.get(tx.id);if(!row||String(row.received||"").toUpperCase()!=="YES"||Number(row.amount||tx.deposit_amount||0)<=0)return null;return {...row,transaction_id:tx.id,transaction_number:tx.transaction_number,amount:Number(row.amount||tx.deposit_amount||0),deposit_date:row.deposit_date||row.created_at?.slice(0,10)||tx.created_at?.slice(0,10)||"",received_from:row.received_from||"—",reference_number:row.reference_number||"—",_source:"LISTING"}}).filter(Boolean);
-    }
+   if(ids.length){
+    const {data:trustRows,error:trustError}=await supabase.from("dv_accounting_transaction_trust").select("*").in("transaction_id",ids);
+    if(trustError)throw trustError;
+    const byId=new Map((trustRows||[]).map(x=>[x.transaction_id,x]));
+    listingHistory=(listingTransactions||[]).map(tx=>{const row=byId.get(tx.id);if(!row||String(row.received||"").toUpperCase()!=="YES"||Number(row.amount||tx.deposit_amount||0)<=0)return null;return {...row,transaction_id:tx.id,transaction_number:tx.transaction_number,amount:Number(row.amount||tx.deposit_amount||0),deposit_date:row.deposit_date||row.created_at?.slice(0,10)||tx.created_at?.slice(0,10)||"",received_from:row.received_from||"—",reference_number:row.reference_number||"—",_source:"LISTING"}}).filter(Boolean);
    }
    const seen=new Set();const combined=[...directHistory,...listingHistory].filter(row=>{const key=[row.deposit_date,Number(row.amount||0).toFixed(2),String(row.reference_number||"").trim().toUpperCase()].join("|");if(seen.has(key))return false;seen.add(key);return true;});
    if(!cancelled)setListingDepositHistory(combined);
-  }catch(err){console.error("Could not load deposit history:",err);if(!cancelled){setListingDepositHistory([]);setListingDepositHistoryError(err?.message||"Unable to load posted trust deposits.")}}finally{if(!cancelled)setListingDepositHistoryLoading(false)}})();setListingDepositHistoryError("");setListingDepositHistoryLoading(true);return()=>{cancelled=true}},[initial?.id,initial?.transaction_number,initial?.listing_id,form.listing_id]);
+  }catch(err){console.warn("Could not load linked listing deposit history; showing trade receipts only:",err);if(!cancelled)setListingDepositHistory(directHistory)}
+  finally{if(!cancelled)setListingDepositHistoryLoading(false)}
+})();setListingDepositHistoryLoading(true);return()=>{cancelled=true}},[initial?.id,initial?.transaction_number,initial?.listing_id,form.listing_id]);
  useEffect(()=>{if(!initial?.id||!supabase)return;let cancelled=false;(async()=>{try{if(initial.listing_id){const{data:listingTransactions}=await supabase.from("dv_accounting_transactions").select("id,transaction_number,deposit_amount").eq("listing_id",initial.listing_id).like("transaction_number","LST-%").order("created_at",{ascending:false}).limit(1);const listingTx=listingTransactions?.[0];if(listingTx){const{data:listingTrust}=await supabase.from("dv_accounting_transaction_trust").select("*").eq("transaction_id",listingTx.id).maybeSingle();if(!cancelled&&listingTrust&&String(listingTrust.received||"").toUpperCase()==="YES"){setTrust(t=>({...t,...listingTrust,transaction_id:undefined,amount:String(listingTrust.amount||listingTx.deposit_amount||t.amount||""),received:"YES",deposit_date:listingTrust.deposit_date||t.deposit_date||"",received_from:listingTrust.received_from||t.received_from||"",held_by:listingTrust.held_by||t.held_by||"",trust_bank_account_id:listingTrust.trust_bank_account_id||t.trust_bank_account_id||"",reference_number:listingTrust.reference_number||t.reference_number||"",payment_type:listingTrust.payment_type||t.payment_type||"CHEQUE",we_hold_deposit:listingTrust.we_hold_deposit||t.we_hold_deposit||"YES"}))}}}const{data:trade,error}=await supabase.from("dv_accounting_agent_trade_submissions").select("payload").eq("transaction_id",initial.id).order("updated_at",{ascending:false}).limit(1).maybeSingle();if(cancelled||error||!trade?.payload)return;const p=trade.payload||{};
    // A trade submission linked to one of our listings is authoritative for the listing relationship.
    // Keep the transaction editor in sync instead of showing "Our Listing? = No".
