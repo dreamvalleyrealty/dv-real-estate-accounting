@@ -747,7 +747,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
        const supplied=window.prompt("Enter the cooperating brokerage billing email. This is required before transferring the trade to Transactions:");
        if(supplied===null){setError("Approval cancelled. The cooperating brokerage billing email is required.");return;}
        cooperatingBillingEmail=String(supplied).trim();
-       if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(cooperatingBillingEmail)){setError("Enter a valid cooperating brokerage billing email before approving this trade.");return;}
+       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cooperatingBillingEmail)){setError("Enter a valid cooperating brokerage billing email before approving this trade.");return;}
      }
    }
    const selectedMissingDocs=missingRequiredDocs.map(type=>({CONDITION_NOTICE_FULFILLMENT:"Notice of Fulfillment of Condition",CONDITION_WAIVER:"Waiver of Condition",CONDITION_AMENDMENT:"Amendment"}[type]||docTypes.find(([key])=>key===type)?.[1]||type));const notesParts=[];if(selectedMissingDocs.length)notesParts.push("Missing required documents:\\n"+selectedMissingDocs.map(label=>"- "+label).join("\\n"));if(reviewNotes.trim())notesParts.push("Additional notes:\\n"+reviewNotes.trim());const effectiveReviewNotes=notesParts.join("\\n\\n");if(status==="NEEDS_CHANGES"&&!selectedMissingDocs.length){setError("Select at least one missing required document.");return}
