@@ -727,7 +727,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const unreviewed=docs.filter(d=>!approved(d)&&!rejected(d));
    const rejectedDocs=docs.filter(rejected);
    if(!docs.length){setError("Upload documents before sending a trade back to the agent.");return;}
-   if(unreviewed.length){setError("Review every uploaded document first. "+unreviewed.length+" document(s) still need an approve or not-approved decision.");return;}
+   if(unreviewed.length&&!missingRequiredDocs.length&&!selectedRequiredDocumentIssues.length&&!String(reviewNotes||"").trim()){setError("Review every uploaded document first, or select the missing required documents / enter a clear correction request for the agent.");return;}
    if(!rejectedDocs.length&&!missingRequiredDocs.length&&!selectedRequiredDocumentIssues.length&&!String(reviewNotes||"").trim()){setError("Select missing required documents, mark a document Not approved with a correction note, or enter a clear correction request for the agent.");return;}
    const missingReasons=rejectedDocs.filter(d=>!String(d.match_notes||"").trim());
    if(missingReasons.length){setError("Add a correction reason for every not-approved document before sending it to the agent.");return;}
