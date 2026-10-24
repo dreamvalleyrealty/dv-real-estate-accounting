@@ -294,8 +294,8 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const agentPhone=clean(payload[prefix==="listing_brokerage"?"listing_agent_phone":"buyer_agent_phone"]);
    if(agentName){
     const agentParts=splitName(agentName);
-    const{data:oldAgent,error:agentFindError}=await supabase.from("dv_accounting_external_brokerage_agents").select("id").eq("brokerage_id",brokerageId).ilike("agent_name",agentName).limit(1).maybeSingle();if(agentFindError)throw agentFindError;
-    const agentRow={brokerage_id:brokerageId,agent_name:agentName,agent_email:agentEmail||null,updated_at:new Date().toISOString()};
+    const{data:oldAgent,error:agentFindError}=await supabase.from("dv_accounting_external_brokerage_agents").select("*").eq("brokerage_id",brokerageId).ilike("agent_name",agentName).limit(1).maybeSingle();if(agentFindError)throw agentFindError;
+    const agentRow={brokerage_id:brokerageId,agent_name:agentName,agent_email:agentEmail||oldAgent?.agent_email||null,agent_phone:agentPhone||oldAgent?.agent_phone||null,updated_at:new Date().toISOString()};
     if(oldAgent?.id){const{error}=await supabase.from("dv_accounting_external_brokerage_agents").update(agentRow).eq("id",oldAgent.id);if(error)throw error}
     else{const{error}=await supabase.from("dv_accounting_external_brokerage_agents").insert([agentRow]);if(error)throw error}
     const{data:oldAgentContact,error:agentContactFindError}=await supabase.from("dv_accounting_contacts").select("*").eq("contact_type","AGENT").ilike("first_name",agentParts.first_name).ilike("last_name",agentParts.last_name).ilike("company_name",name).limit(1).maybeSingle();if(agentContactFindError)throw agentContactFindError;
