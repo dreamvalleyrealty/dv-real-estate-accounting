@@ -316,7 +316,8 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
 
  async function printTradeRecord(){
  try{
- if(supabase){const ids=[...new Set((Array.isArray(brokers)?brokers:[]).map(b=>b.brokerage_id).filter(Boolean))];if(ids.length){const result=await supabase.from("dv_accounting_external_brokerages").select("*").in("id",ids);if(!result.error&&Array.isArray(result.data)){setBrokerages(prev=>[...(Array.isArray(prev)?prev:[]),...result.data])}}}
+ let brokerageDirectoryRows=Array.isArray(brokerages)?[...brokerages]:[];
+ if(supabase){const ids=[...new Set((Array.isArray(brokers)?brokers:[]).map(b=>b.brokerage_id).filter(Boolean))];if(ids.length){const result=await supabase.from("dv_accounting_external_brokerages").select("*").in("id",ids);if(!result.error&&Array.isArray(result.data))brokerageDirectoryRows=[...brokerageDirectoryRows,...result.data]}}
 
  let recordConditions=conditions;
  if(initial?.id&&supabase){const{data:dbConditions}=await supabase.from("dv_accounting_transaction_conditions").select("*").eq("transaction_id",initial.id);if(dbConditions?.length){recordConditions=dbConditions;}else{const{data:submission}=await supabase.from("dv_accounting_agent_trade_submissions").select("payload").eq("transaction_id",initial.id).order("updated_at",{ascending:false}).limit(1).maybeSingle();const savedConditions=Array.isArray(submission?.payload?.conditions)?submission.payload.conditions:[];if(savedConditions.length)recordConditions=savedConditions.map(x=>({...blankCondition(),condition_type:x.condition_id||"CONDITION",item_type:"CONDITION",due_for:x.due_for||"BOTH",description:x.label||x.description||"",due_date:x.due_date||"",met_date:x.met_date||"",status:x.met?"MET":"OPEN"})).filter(x=>x.description);}}
@@ -339,7 +340,7 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
    const rawPersonType=String(p.person_type||"");const recordPersonType=leaseTrade?rawPersonType.replace(/BUYER/gi,"TENANT").replace(/SELLER/gi,"LANDLORD").replace(/BUYING/gi,"TENANT").replace(/SELLING/gi,"LANDLORD"):rawPersonType;return "<tr><td>"+esc(recordPersonType.replaceAll("_"," "))+"</td><td>"+esc(name)+"</td><td>"+esc(p.phone)+"</td><td>"+esc(address)+"</td><td>"+esc(p.email)+"</td><td>"+esc(p.fax)+"</td></tr>";
  }).join("")||"<tr><td colspan='6' class='emptycell'>No contacts recorded</td></tr>";
  const brokerRows=brokers.filter(b=>b.company_name||b.agent_name).map(b=>{
-   const master=(Array.isArray(brokerages)?brokerages:[]).find(x=>(b.brokerage_id&&x.id===b.brokerage_id)||String(x.company_name||x.brokerage_name||"").trim().toLowerCase()===String(b.company_name||"").trim().toLowerCase())||{};
+   const master=brokerageDirectoryRows.find(x=>(b.brokerage_id&&x.id===b.brokerage_id)||String(x.company_name||x.brokerage_name||"").trim().toLowerCase()===String(b.company_name||"").trim().toLowerCase())||{};
    const street=[b.address||master.address,b.unit||master.unit].filter(Boolean).join(", ");
    const locality=[b.city||master.city,b.province||master.province,b.postal_code||master.postal_code].filter(Boolean).join(" ");
    const address=[street,locality].filter(Boolean).join(", ");
