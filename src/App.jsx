@@ -316,12 +316,14 @@ if(!lawyers&&String(p.contact_type||"").toUpperCase()==="BROKERAGE"&&p.company_n
   if(be)throw be;
   if(brokerages?.length){for(const b of brokerages){const {error}=await supabase.from("dv_accounting_external_brokerages").update(brokeragePatch).eq("id",b.id);if(error)throw error}}
   else{const {error}=await supabase.from("dv_accounting_external_brokerages").insert([brokeragePatch]);if(error)throw error}
-  const {data:subs,error:se}=await supabase.from("dv_accounting_agent_trade_submissions").select("id,payload,transaction_id");
+  const {data:subs,error:se}=await supabase.from("dv_accounting_agent_trade_submissions").select("id,payload,transaction_id,trade_number");
   if(se)throw se;
+  const normName=v=>String(v||"").trim().toLowerCase().replace(/[^a-z0-9]/g,"");
   for(const row of subs||[]){
    const old=row.payload||{},next={...old};let changed=false;
    for(const prefix of ["listing_brokerage","buyer_brokerage"]){
-    if(String(old[prefix+"_name"]||"").trim().toLowerCase()!==name.toLowerCase())continue;
+    const brokerageKeys=[prefix+"_name",prefix+"_brokerage_name",prefix+"_company_name"];
+    if(!brokerageKeys.some(k=>normName(old[k])===normName(name)))continue;
     for(const field of ["address","unit","city","province","postal_code","phone","fax","billing_email"]){
      const key=prefix+"_"+field,value=field==="billing_email"?p.email:p[field];
      if(value!==undefined&&value!==null&&String(value).trim()!==""&&next[key]!==value){next[key]=value;changed=true}
@@ -329,11 +331,18 @@ if(!lawyers&&String(p.contact_type||"").toUpperCase()==="BROKERAGE"&&p.company_n
    }
    if(changed){const {error}=await supabase.from("dv_accounting_agent_trade_submissions").update({payload:next,updated_at:new Date().toISOString()}).eq("id",row.id);if(error)throw error}
    if(row.transaction_id){
-    const {data:outside,error:oe}=await supabase.from("dv_accounting_transaction_outside_brokers").select("id,company_name,brokerage_name").eq("transaction_id",row.transaction_id);
+    const {data:outside,error:oe}=await supabase.from("dv_accounting_transaction_outside_brokers").select("id,company_name,brokerage_name,transaction_id").eq("transaction_id",row.transaction_id);
     if(oe)throw oe;
     for(const ob of outside||[]){
-     if(String(ob.company_name||ob.brokerage_name||"").trim().toLowerCase()!==name.toLowerCase())continue;
+     if(![ob.company_name,ob.brokerage_name].some(v=>normName(v)===normName(name)))continue;
      const {error}=await supabase.from("dv_accounting_transaction_outside_brokers").update({address:p.address||"",unit:p.unit||"",city:p.city||"",province:p.province||"ON",postal_code:p.postal_code||"",phone:p.phone||"",fax:p.fax||"",billing_email:p.email||""}).eq("id",ob.id);
+     if(error)throw error;
+    }
+    const {data:people,error:pe}=await supabase.from("dv_accounting_transaction_people").select("id,company_name,person_type").eq("transaction_id",row.transaction_id);
+    if(pe)throw pe;
+    for(const person of people||[]){
+     if(!normName(person.company_name).includes(normName(name))&&!normName(name).includes(normName(person.company_name)))continue;
+     const {error}=await supabase.from("dv_accounting_transaction_people").update({company_name:name,email:p.email||null,phone:p.phone||null,fax:p.fax||null,address:p.address||null,unit:p.unit||null,city:p.city||null,province:p.province||"ON",postal_code:p.postal_code||null}).eq("id",person.id);
      if(error)throw error;
     }
    }
