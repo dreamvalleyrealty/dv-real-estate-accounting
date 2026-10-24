@@ -316,6 +316,8 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
 
  async function printTradeRecord(){
  try{
+ if(supabase){const ids=[...new Set((Array.isArray(brokers)?brokers:[]).map(b=>b.brokerage_id).filter(Boolean))];if(ids.length){const result=await supabase.from("dv_accounting_external_brokerages").select("*").in("id",ids);if(!result.error&&Array.isArray(result.data)){setBrokerages(prev=>[...(Array.isArray(prev)?prev:[]),...result.data])}}}
+
  let recordConditions=conditions;
  if(initial?.id&&supabase){const{data:dbConditions}=await supabase.from("dv_accounting_transaction_conditions").select("*").eq("transaction_id",initial.id);if(dbConditions?.length){recordConditions=dbConditions;}else{const{data:submission}=await supabase.from("dv_accounting_agent_trade_submissions").select("payload").eq("transaction_id",initial.id).order("updated_at",{ascending:false}).limit(1).maybeSingle();const savedConditions=Array.isArray(submission?.payload?.conditions)?submission.payload.conditions:[];if(savedConditions.length)recordConditions=savedConditions.map(x=>({...blankCondition(),condition_type:x.condition_id||"CONDITION",item_type:"CONDITION",due_for:x.due_for||"BOTH",description:x.label||x.description||"",due_date:x.due_date||"",met_date:x.met_date||"",status:x.met?"MET":"OPEN"})).filter(x=>x.description);}}
  const esc=v=>String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
