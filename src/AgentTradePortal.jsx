@@ -728,11 +728,11 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const rejectedDocs=docs.filter(rejected);
    if(!docs.length){setError("Upload documents before sending a trade back to the agent.");return;}
    if(unreviewed.length){setError("Review every uploaded document first. "+unreviewed.length+" document(s) still need an approve or not-approved decision.");return;}
-   if(!rejectedDocs.length&&!missingRequiredDocs.length){setError("Mark documents Not approved or select the missing required documents before sending this trade to the agent.");return;}
+   if(!rejectedDocs.length&&!missingRequiredDocs.length&&!selectedRequiredDocumentIssues.length){setError("Mark documents Not approved or identify missing required documents before sending this trade to the agent.");return;}
    const missingReasons=rejectedDocs.filter(d=>!String(d.match_notes||"").trim());
    if(missingReasons.length){setError("Add a correction reason for every not-approved document before sending it to the agent.");return;}
    const correctionLines=rejectedDocs.map(d=>(d.document_name||d.document_type||"Document")+": "+String(d.match_notes||"").trim());
-   const missingLabels=missingRequiredDocs.map(type=>docTypes.find(([t])=>t===type)?.[1]||type);
+   const missingLabels=[...new Set([...missingRequiredDocs.map(type=>docTypes.find(([t])=>t===type)?.[1]||type),...selectedRequiredDocumentIssues])];
    const notes=[correctionLines.length?"Not approved documents:\\n"+correctionLines.join("\\n"):"",missingLabels.length?"Missing required documents:\\n"+missingLabels.map(x=>"- "+x).join("\\n"):"",String(reviewNotes||"").trim()?"Additional notes:\\n"+String(reviewNotes).trim():""].filter(Boolean).join("\\n\\n");
    if(!window.confirm("Send this trade to the agent for paperwork updates? The transaction will remain linked, and payout stays blocked until required documents are approved."))return;
    setBusy(true);setError("");setMessage("");
