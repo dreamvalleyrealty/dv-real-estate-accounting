@@ -325,8 +325,8 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
 
  const normalizedStreet=normalizePropertyAddress([form.street_number,form.street_name].filter(Boolean).join(" "));
  const addr=normalizedStreet+(form.unit_number?" #"+form.unit_number:"");
- const location=[form.city,form.province,form.postal_code].filter(Boolean).join(", ");
- const leaseTrade=isResidentialLease(form)||String(form.transaction_type||"").toUpperCase().includes("LEASE")||Number(form.lease_value||0)>0; const className=leaseTrade?((["SELLER","LANDLORD","LISTING","SELLING"].includes(String(form.side||"").toUpperCase()))?"LANDLORD SIDE":"TENANT SIDE"):(["SELLER","LISTING","SELLING"].includes(String(form.side||"").toUpperCase())?"SELLING SIDE":"BUYING SIDE");
+ const postal=String(form.postal_code||"").toUpperCase().replace(/\s+/g,"").replace(/^([A-Z]\d[A-Z])(\d[A-Z]\d)$/,"$1 $2"); const location=[form.city,form.province].filter(Boolean).join(", ")+(postal?(form.city||form.province?" ":"")+postal:"");
+ const leaseTrade=isResidentialLease(form)||String(form.transaction_type||"").toUpperCase().includes("LEASE")||String(form.transaction_type||"").toUpperCase().includes("LEASE_PM")||Number(form.lease_value||0)>0; const className=leaseTrade?"LEASE/PM":(["SELLER","LANDLORD","LISTING","SELLING"].includes(String(form.side||"").toUpperCase())?"SELLING SIDE":"BUYING SIDE");
  const propertyType=String(form.market_segment||"RESIDENTIAL").toUpperCase()==="COMMERCIAL"?"COMMERCIAL":"RESIDENTIAL";
  const rawStatus=String(tradeStatus||initial?.status||"DRAFT").toUpperCase();
  const status=["CLOSED","PAID"].includes(rawStatus)?"Closed":"Open";
@@ -346,10 +346,10 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
    const hst=amount*Number(c.hst_rate||0)/100;
    return {c,amount,hst};
  });
- const listing=commissionData.find(x=>x.c.side==="LISTING")||{amount:0,hst:0,c:{}};
- const selling=commissionData.find(x=>x.c.side==="BUYER")||{amount:0,hst:0,c:{}};
+ const listing=commissionData.find(x=>String(x.c.side||"").toUpperCase().includes("LIST"))||{amount:0,hst:0,c:{}};
+ const selling=commissionData.find(x=>x!==listing&&Number(x.amount||0)>0)||commissionData.find(x=>["BUYER","SELLING","SELL","BUY_SELL","BUY/SELL"].includes(String(x.c.side||"").toUpperCase()))||{amount:0,hst:0,c:{}};
  const subTotal=commissionData.reduce((s,x)=>s+x.amount,0), totalHst=commissionData.reduce((s,x)=>s+x.hst,0), totalCommission=subTotal+totalHst, receivableBase=commissionData.filter(x=>x.c.settlement_direction==="RECEIVABLE").reduce((s,x)=>s+x.amount,0), receivableHst=commissionData.filter(x=>x.c.settlement_direction==="RECEIVABLE").reduce((s,x)=>s+x.hst,0), receivableTotal=receivableBase+receivableHst, payableBase=commissionData.filter(x=>x.c.settlement_direction==="PAYABLE").reduce((s,x)=>s+x.amount,0), payableHst=commissionData.filter(x=>x.c.settlement_direction==="PAYABLE").reduce((s,x)=>s+x.hst,0), payableTotal=payableBase+payableHst;
-  const agentListingShare=subTotal>0?effectiveNetPayable*listing.amount/subTotal:0, agentSellingShare=Math.max(0,effectiveNetPayable-agentListingShare), officeListing=Math.max(0,listing.amount-agentListingShare), officeSelling=Math.max(0,selling.amount-agentSellingShare), officeSubtotal=Math.max(0,subTotal-effectiveNetPayable), officeHst=Math.max(0,totalHst-agentHstAmount), officeTotal=Math.max(0,totalCommission-effectiveNetPayable-agentHstAmount);
+  const agentListingShare=listing.amount>0&&subTotal>0?Math.min(listing.amount,effectiveNetPayable*listing.amount/subTotal):0, agentSellingShare=Math.max(0,effectiveNetPayable-agentListingShare), officeListing=Math.max(0,listing.amount-agentListingShare), officeSelling=Math.max(0,(selling.amount||Math.max(0,subTotal-listing.amount))-agentSellingShare), officeSubtotal=Math.max(0,subTotal-effectiveNetPayable), officeHst=Math.max(0,totalHst-agentHstAmount), officeTotal=Math.max(0,totalCommission-agentTotalPayable);
  const agent=agentRows.find(a=>a.id===agentInfo.agent_id);
  const agentName=agent?[agent.first_name,agent.last_name].filter(Boolean).join(" "):"";
  const agentHst=agent?.hst_number||agent?.prec_hst_number||agent?.precHstNumber||agent?.hst||"";
