@@ -275,7 +275,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
   if(!supabase||!payload)return;
   const clean=v=>String(v??"").trim();
   const splitName=value=>{const parts=clean(value).split(/\\s+/).filter(Boolean);return {first_name:parts.length>1?parts.slice(0,-1).join(" "):(parts[0]||""),last_name:parts.length>1?parts[parts.length-1]:""}};
-  const mergeExisting=(existing,incoming)=>{const out={...incoming};for(const key of Object.keys(out)){if(out[key]==null||out[key]==="")out[key]=existing?.[key]??null;}return out};
+  const mergeExisting=(existing,incoming)=>{const out={...incoming};for(const key of Object.keys(out)){if(out[key]==null||out[key]===""){const prior=existing?.[key];out[key]=prior!=null&&prior!==""?prior:(out[key]===""?"":null);}}return out};
   for(const prefix of ["listing_brokerage","buyer_brokerage"]){
    const name=clean(payload[prefix+"_name"]);if(!name)continue;
    const incoming={company_name:name,brokerage_name:name,address:clean(payload[prefix+"_address"])||null,unit:clean(payload[prefix+"_unit"])||null,city:clean(payload[prefix+"_city"])||null,province:clean(payload[prefix+"_province"])||"ON",postal_code:clean(payload[prefix+"_postal_code"])||null,phone:clean(payload[prefix+"_phone"])||null,fax:clean(payload[prefix+"_fax"])||null,billing_email:clean(payload[prefix+"_billing_email"])||null};
