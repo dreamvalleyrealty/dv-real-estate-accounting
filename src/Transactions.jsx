@@ -346,8 +346,8 @@ const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commerc
  }).join("")||"<tr><td colspan='6' class='emptycell'>No contacts recorded</td></tr>";
  const brokerRows=brokers.filter(b=>b.company_name||b.agent_name).map(b=>{
    const master=[...brokerageDirectoryRows].reverse().find(x=>(b.brokerage_id&&x.id===b.brokerage_id)||String(x.company_name||x.brokerage_name||"").trim().toLowerCase()===String(b.company_name||"").trim().toLowerCase())||{};
-   const street=[master.address||b.address,master.unit||b.unit].filter(Boolean).join(", ");
-   const locality=[master.city||b.city,master.province||b.province,master.postal_code||b.postal_code].filter(Boolean).join(" ");
+   const street=[b.address||master.address,b.unit||(!b.address?master.unit:"")].filter(Boolean).join(", ");
+   const locality=[b.city||(!b.address?master.city:""),b.province||(!b.address?master.province:""),b.postal_code||(!b.address?master.postal_code:"")].filter(Boolean).join(" ");
    const address=[street,locality].filter(Boolean).join(", ");
    return "<tr><td>Outside Broker</td><td>"+esc(b.company_name||master.company_name||master.brokerage_name)+"</td><td>"+esc(b.phone||master.phone)+"</td><td>"+esc(address)+"</td><td>"+esc(b.agent_name)+"</td><td>"+esc(b.fax||master.fax)+"</td></tr>";
  }).join("")||"<tr><td colspan='6' class='emptycell'>No outside brokerage recorded</td></tr>";
