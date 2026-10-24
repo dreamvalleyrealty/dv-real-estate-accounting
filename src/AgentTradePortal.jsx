@@ -806,6 +806,14 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
        if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cooperatingBillingEmail)){setError("Enter a valid cooperating brokerage billing email before approving this trade.");return;}
      }
      if(cooperatingName.toLowerCase()!=="dream valley realty inc., brokerage"&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cooperatingBillingEmail)){setError("Enter a valid cooperating brokerage billing email before approving this trade.");return;}
+     const billingKey=listingSide?"buyer_brokerage_billing_email":"listing_brokerage_billing_email";
+     if(cooperatingBillingEmail&&String(p[billingKey]||"").trim()!==cooperatingBillingEmail){
+       const updatedPayload={...p,[billingKey]:cooperatingBillingEmail};
+       const{error:payloadError}=await supabase.from("dv_accounting_agent_trade_submissions").update({payload:updatedPayload,updated_at:new Date().toISOString()}).eq("id",selected.id);
+       if(payloadError){setError("Could not save the brokerage billing email to the trade submission: "+payloadError.message);return;}
+       selected.payload=updatedPayload;
+       try{await syncTradeDirectoryRecords(updatedPayload);}catch(syncError){setError("Billing email was saved to the trade submission, but the brokerage directory sync failed: "+(syncError?.message||String(syncError)));return;}
+     }
    }
    const selectedMissingDocs=missingRequiredDocs.map(type=>({CONDITION_NOTICE_FULFILLMENT:"Notice of Fulfillment of Condition",CONDITION_WAIVER:"Waiver of Condition",CONDITION_AMENDMENT:"Amendment"}[type]||docTypes.find(([key])=>key===type)?.[1]||type));const notesParts=[];if(selectedMissingDocs.length)notesParts.push("Missing required documents:\\n"+selectedMissingDocs.map(label=>"- "+label).join("\\n"));if(reviewNotes.trim())notesParts.push("Additional notes:\\n"+reviewNotes.trim());const effectiveReviewNotes=notesParts.join("\\n\\n");if(status==="NEEDS_CHANGES"&&!selectedMissingDocs.length){setError("Select at least one missing required document.");return}
    setBusy(true);setError("");
