@@ -37,6 +37,7 @@ BEGIN
   END IF;
 
   IF v_primary.representation_group_id IS NULL
+     OR p_opposite_agent_id IS NULL
      OR v_primary.payload->>'opposite_side_dv_agent_id' IS DISTINCT FROM p_opposite_agent_id::text THEN
     RAISE EXCEPTION 'The primary submission does not authorize this opposite-side agent';
   END IF;
@@ -45,7 +46,8 @@ BEGIN
     RAISE EXCEPTION 'Only an active trade submission can be linked to the opposite-side draft';
   END IF;
 
-  IF p_representation_side NOT IN ('LANDLORD','TENANT','SELLER','BUYER')
+  IF p_representation_side IS NULL
+     OR p_representation_side NOT IN ('LANDLORD','TENANT','SELLER','BUYER')
      OR p_representation_side = v_primary.representation_side
      OR (v_primary.representation_side IN ('SELLER','BUYER') AND p_representation_side NOT IN ('SELLER','BUYER'))
      OR (v_primary.representation_side IN ('LANDLORD','TENANT') AND p_representation_side NOT IN ('LANDLORD','TENANT')) THEN
