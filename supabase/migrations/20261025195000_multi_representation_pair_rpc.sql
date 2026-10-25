@@ -108,7 +108,7 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION public.dv_accounting_upsert_multi_representation_pair(uuid, uuid, jsonb, text) TO authenticated;
+REVOKE ALL ON FUNCTION public.dv_accounting_upsert_multi_representation_pair(uuid, uuid, jsonb, text) FROM PUBLIC, anon;\nGRANT EXECUTE ON FUNCTION public.dv_accounting_upsert_multi_representation_pair(uuid, uuid, jsonb, text) TO authenticated;
 
 -- Keep both submissions attached to the same transaction even when an administrator
 -- links the transaction through a separate workflow.
@@ -158,12 +158,13 @@ EXECUTE FUNCTION public.dv_accounting_sync_multi_representation_transaction_link
 DO $migration$
 DECLARE
   v_definition text;
-  v_old text := $old$v_tx_no := coalesce(nullif(trim(coalesce(p->>'transaction_number','')), ''), 'AG-' || upper(substr(replace(s.id::text,'-',''),1,10)));$old$;
+  v_old text := $old$v_tx_no := coalesce(nullif(trim(coalesce(p->>'transaction_number','')), ''), nullif(trim(coalesce(s.trade_number,'')), ''), 'AG-' || upper(substr(replace(s.id::text,'-',''),1,10)));$old$;
+  v_legacy_old text := $legacy$v_tx_no := coalesce(nullif(trim(coalesce(p->>'transaction_number','')), ''), 'AG-' || upper(substr(replace(s.id::text,'-',''),1,10)));$legacy$;
   v_new text := $new$IF s.representation_group_id IS NOT NULL AND s.transaction_id IS NOT NULL THEN
     SELECT nullif(trim(transaction_number), '') INTO v_tx_no
     FROM public.dv_accounting_transactions WHERE id = s.transaction_id;
   END IF;
-  v_tx_no := coalesce(v_tx_no, nullif(trim(coalesce(p->>'transaction_number','')), ''), 'AG-' || upper(substr(replace(s.id::text,'-',''),1,10)));
+  v_tx_no := coalesce(v_tx_no, nullif(trim(coalesce(p->>'transaction_number','')), ''), nullif(trim(coalesce(s.trade_number,'')), ''), 'AG-' || upper(substr(replace(s.id::text,'-',''),1,10)));
   IF s.representation_group_id IS NOT NULL THEN
     p := jsonb_set(p, '{side}', to_jsonb(coalesce((
       SELECT nullif(trim(primary_side.payload->>'side'), '')
@@ -178,9 +179,14 @@ DECLARE
 BEGIN
   SELECT pg_get_functiondef('public.dv_accounting_ensure_agent_trade_transaction(uuid)'::regprocedure)
     INTO v_definition;
+
+  IF position(v_old in v_definition) = 0 THEN
+    v_old := v_legacy_old;
+  END IF;
   IF position(v_old in v_definition) = 0 THEN
     RAISE EXCEPTION 'Could not find expected transaction-number assignment in dv_accounting_ensure_agent_trade_transaction; aborting migration.';
   END IF;
+
   v_definition := replace(v_definition, v_old, v_new);
   EXECUTE v_definition;
 END
