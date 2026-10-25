@@ -273,7 +273,8 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
   return {copied,failed};
  }
  async function syncTradeDirectoryRecords(payload){
-  if(!supabase||!payload)return;
+  // Shared brokerage directories are admin-managed; agent submissions must not write these RLS-protected tables.
+  if(!supabase||!payload||!adminMode)return;
   const clean=v=>String(v??"").trim();
   const splitName=value=>{const parts=clean(value).split(/\\s+/).filter(Boolean);return {first_name:parts.length>1?parts.slice(0,-1).join(" "):(parts[0]||""),last_name:parts.length>1?parts[parts.length-1]:""}};
   const mergeExisting=(existing,incoming)=>{const out={...incoming};for(const key of Object.keys(out)){if(out[key]==null||out[key]===""){const prior=existing?.[key];out[key]=prior!=null&&prior!==""?prior:(out[key]===""?"":null);}}return out};
