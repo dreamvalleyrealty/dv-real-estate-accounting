@@ -84,7 +84,7 @@ function listingStreetParts(listing){
 const inputFields = [
   ["transaction_number","Trade number"],["transaction_type","Transaction type"],["market_segment","Property classification"],["side","Representation side"],["dvr_lead","DVR Lead"],
   ["mls_number","MLS number"],["street_number","Street number"],["street_name","Street name"],["unit_number","Unit"],["city","City"],["province","Province"],["postal_code","Postal code"],
-  ["transaction_date","Trade entry date"],["acceptance_date","Acceptance date"],["offer_date","Offer date"],["deposit_date","Deposit date"],["firm_date","Firm date"],["close_date","Closing date"],["list_price","List price"],["sale_price","Purchase price"],["deposit_amount","Deposit amount"],["condition_list","Conditions notes"],
+  ["transaction_date","Trade entry date"],["acceptance_date","Acceptance date"],["offer_date","Offer date"],["deposit_date","Deposit date"],["firm_date","Firm date"],["close_date","Closing date"],["list_price","List price"],["sale_price","Purchase price"],["deposit_amount","Deposit amount"],
   ["commission_basis","Commission calculation"],["listing_commission_percent","Listing commission (%)"],["listing_commission_amount","Listing commission amount ($)"],["coop_commission_percent","Co-op commission (%)"],["coop_commission_amount","Co-op commission amount ($)"],
   ["buyer_name","Buyer name(s) — first and last names"],
   ["seller_name","Seller name(s) — first and last names"],
