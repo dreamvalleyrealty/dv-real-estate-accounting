@@ -152,3 +152,21 @@ AFTER UPDATE OF transaction_id ON public.dv_accounting_agent_trade_submissions
 FOR EACH ROW
 WHEN (NEW.transaction_id IS DISTINCT FROM OLD.transaction_id)
 EXECUTE FUNCTION public.dv_accounting_sync_multi_representation_transaction_link();
+
+-- When the second representation submits, preserve the transaction's original number
+-- and primary side instead of replacing them with the second submission's trade number/side.
+DO $migration$
+DECLARE
+  v_definition text;
+  v_old text := E"v_tx_no := coalesce(nullif(trim(coalesce(p->>'transaction_number','')), ''), 'AG-' || upper(substr(replace(s.id::text,'-',''),1,10)));";
+  v_new text := E"IF s.representation_group_id IS NOT NULL AND s.transaction_id IS NOT NULL THEN\n    SELECT nullif(trim(transaction_number), '') INTO v_tx_no\n    FROM public.dv_accounting_transactions WHERE id = s.transaction_id;\n  END IF;\n  v_tx_no := coalesce(v_tx_no, nullif(trim(coalesce(p->>'transaction_number','')), ''), 'AG-' || upper(substr(replace(s.id::text,'-',''),1,10)));\n  IF s.representation_group_id IS NOT NULL THEN\n    p := jsonb_set(p, '{side}', to_jsonb(coalesce((\n      SELECT nullif(trim(primary_side.payload->>'side'), '')\n      FROM public.dv_accounting_agent_trade_submissions primary_side\n      WHERE primary_side.representation_group_id = s.representation_group_id\n        AND primary_side.id <> s.id\n        AND nullif(trim(coalesce(primary_side.payload->>'opposite_side_dv_agent_id','')), '') IS NOT NULL\n      ORDER BY primary_side.created_at\n      LIMIT 1\n    ), p->>'side')), true);\n  END IF;";
+BEGIN
+  SELECT pg_get_functiondef('public.dv_accounting_ensure_agent_trade_transaction(uuid)'::regprocedure)
+    INTO v_definition;
+  IF position(v_old in v_definition) = 0 THEN
+    RAISE EXCEPTION 'Could not find expected transaction-number assignment in dv_accounting_ensure_agent_trade_transaction; aborting migration.';
+  END IF;
+  v_definition := replace(v_definition, v_old, v_new);
+  EXECUTE v_definition;
+END
+$migration$;
