@@ -158,8 +158,23 @@ EXECUTE FUNCTION public.dv_accounting_sync_multi_representation_transaction_link
 DO $migration$
 DECLARE
   v_definition text;
-  v_old text := E"v_tx_no := coalesce(nullif(trim(coalesce(p->>'transaction_number','')), ''), 'AG-' || upper(substr(replace(s.id::text,'-',''),1,10)));";
-  v_new text := E"IF s.representation_group_id IS NOT NULL AND s.transaction_id IS NOT NULL THEN\n    SELECT nullif(trim(transaction_number), '') INTO v_tx_no\n    FROM public.dv_accounting_transactions WHERE id = s.transaction_id;\n  END IF;\n  v_tx_no := coalesce(v_tx_no, nullif(trim(coalesce(p->>'transaction_number','')), ''), 'AG-' || upper(substr(replace(s.id::text,'-',''),1,10)));\n  IF s.representation_group_id IS NOT NULL THEN\n    p := jsonb_set(p, '{side}', to_jsonb(coalesce((\n      SELECT nullif(trim(primary_side.payload->>'side'), '')\n      FROM public.dv_accounting_agent_trade_submissions primary_side\n      WHERE primary_side.representation_group_id = s.representation_group_id\n        AND primary_side.id <> s.id\n        AND nullif(trim(coalesce(primary_side.payload->>'opposite_side_dv_agent_id','')), '') IS NOT NULL\n      ORDER BY primary_side.created_at\n      LIMIT 1\n    ), p->>'side')), true);\n  END IF;";
+  v_old text := $old$v_tx_no := coalesce(nullif(trim(coalesce(p->>'transaction_number','')), ''), 'AG-' || upper(substr(replace(s.id::text,'-',''),1,10)));$old$;
+  v_new text := $new$IF s.representation_group_id IS NOT NULL AND s.transaction_id IS NOT NULL THEN
+    SELECT nullif(trim(transaction_number), '') INTO v_tx_no
+    FROM public.dv_accounting_transactions WHERE id = s.transaction_id;
+  END IF;
+  v_tx_no := coalesce(v_tx_no, nullif(trim(coalesce(p->>'transaction_number','')), ''), 'AG-' || upper(substr(replace(s.id::text,'-',''),1,10)));
+  IF s.representation_group_id IS NOT NULL THEN
+    p := jsonb_set(p, '{side}', to_jsonb(coalesce((
+      SELECT nullif(trim(primary_side.payload->>'side'), '')
+      FROM public.dv_accounting_agent_trade_submissions primary_side
+      WHERE primary_side.representation_group_id = s.representation_group_id
+        AND primary_side.id <> s.id
+        AND nullif(trim(coalesce(primary_side.payload->>'opposite_side_dv_agent_id','')), '') IS NOT NULL
+      ORDER BY primary_side.created_at
+      LIMIT 1
+    ), p->>'side')), true);
+  END IF;$new$;
 BEGIN
   SELECT pg_get_functiondef('public.dv_accounting_ensure_agent_trade_transaction(uuid)'::regprocedure)
     INTO v_definition;
