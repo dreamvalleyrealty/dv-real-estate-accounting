@@ -945,36 +945,33 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
   }
 
  async function adminDeleteTrades(ids){
-   if(!adminMode||!isSuperAdmin||!ids.length||!supabase)return;
-   const targets=submissions.filter(s=>ids.includes(s.id));
-   if(!targets.length)return;
-   if(!window.confirm("Permanently delete "+targets.length+" selected trade submission(s), attached documents, and any linked RETURNED transaction? This is allowed only when no posted trust activity, reconciled bank entry, accounting journal, or paid commission is linked. This cannot be undone."))return;
+   if(!adminMode||!ids.length||!supabase)return;
+   const requested=submissions.filter(s=>ids.includes(s.id));
+   const targets=requested.filter(s=>String(s.status||"").toUpperCase()==="DRAFT"&&!s.transaction_id);
+   if(!targets.length){setError("Only draft trade submissions that are not linked to an accounting transaction can be deleted here.");return;}
+   if(targets.length!==requested.length){setError("Only unlinked draft trades can be deleted. Submitted trades and drafts linked to accounting were left unchanged.");}
+   if(!window.confirm("Permanently delete "+targets.length+" draft trade submission(s) and their uploaded documents? This cannot be undone."))return;
    setBusy(true);setError("");setMessage("");
    let deleted=0;let storageWarning="";
    for(const trade of targets){
-     const{data:docRows,error:readError}=await supabase.from("dv_accounting_agent_trade_documents").select("storage_path").eq("submission_id",trade.id);
+     const{data:docRows,error:readError}=await supabase.from("dv_accounting_agent_trade_documents").select("id,storage_path").eq("submission_id",trade.id);
      if(readError){setError("Stopped after "+deleted+" deletion(s): could not load documents for "+(trade.payload?.property_address||trade.id)+": "+readError.message);break;}
      const paths=(docRows||[]).map(d=>d.storage_path).filter(Boolean);
-     if(trade.transaction_id){
-       const{data:archiveRows,error:archiveError}=await supabase.from("dv_accounting_transaction_documents").select("storage_path").eq("transaction_id",trade.transaction_id);
-       if(archiveError){setError("Stopped after "+deleted+" deletion(s): could not load archived files: "+archiveError.message);break;}
-       paths.push(...(archiveRows||[]).map(d=>d.storage_path).filter(Boolean));
+     if(paths.length){
+       const{error:storageError}=await supabase.storage.from("dv-trade-documents").remove([...new Set(paths)]);
+       if(storageError){setError("Stopped before deleting "+(trade.payload?.property_address||trade.id)+": uploaded files could not be removed: "+storageError.message);break;}
      }
-     const{error:deleteError}=await supabase.rpc("dv_accounting_delete_trade_record",{p_transaction_id:null,p_submission_id:trade.id});
+     const{error:docDeleteError}=await supabase.from("dv_accounting_agent_trade_documents").delete().eq("submission_id",trade.id);
+     if(docDeleteError){setError("Stopped after "+deleted+" deletion(s): could not delete document records: "+docDeleteError.message);break;}
+     const{error:deleteError}=await supabase.from("dv_accounting_agent_trade_submissions").delete().eq("id",trade.id).eq("status","DRAFT").is("transaction_id",null);
      if(deleteError){setError("Stopped after "+deleted+" deletion(s): could not delete "+(trade.payload?.property_address||trade.id)+": "+deleteError.message);break;}
-     const uniquePaths=[...new Set(paths)];
-     if(uniquePaths.length){
-       const{error:storageError}=await supabase.storage.from("dv-trade-documents").remove(uniquePaths);
-       if(storageError)storageWarning="Database records were deleted, but some stored document files could not be removed: "+storageError.message;
-     }
      deleted++;
    }
    setSelectedTradeIds([]);
-   if(selected&&ids.includes(selected.id)){setSelected(null);setDocs([]);}
+   if(selected&&targets.some(t=>t.id===selected.id)){setSelected(null);setDocs([]);setAgentCreating(false);setAdminCreating(false);setActiveTab("PROPERTY");}
    setBusy(false);
-   if(deleted)setMessage(deleted+" trade submission(s) deleted"+(storageWarning?" (some stored files may remain in storage).":"."));
+   if(deleted)setMessage(deleted+" draft trade submission(s) deleted"+(storageWarning?" (some stored files may remain in storage).":"."));
    await load();
-   if(storageWarning)setError(storageWarning);
  }
 
  return <div className="agent-trade-portal">
