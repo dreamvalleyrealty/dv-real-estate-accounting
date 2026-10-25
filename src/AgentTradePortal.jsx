@@ -792,17 +792,36 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  }
  async function sendToTransactionsWithoutDocumentApproval(){
    if(!adminMode||!selected?.id||!["SUBMITTED","NEEDS_CHANGES"].includes(selected.status)||selected.transaction_id)return;
-   const confirmed=window.confirm("Send this trade to Transactions as a DRAFT without approving any paperwork? The submission will remain available for document review, and commission payout stays blocked until required documents are approved.");
+   const payload=selected.payload&&typeof selected.payload==="object"?selected.payload:{};
+   const isBuyerSide=["BUYER","TENANT"].includes(String(payload.side||form.side||"SELLER").toUpperCase());
+   const otherEmailKey=isBuyerSide?"listing_brokerage_billing_email":"buyer_brokerage_billing_email";
+   const otherBrokerageName=isBuyerSide?(payload.listing_brokerage_name||form.listing_brokerage_name||"listing brokerage"):(payload.buyer_brokerage_name||form.buyer_brokerage_name||"co-operating brokerage");
+   const currentEmail=String(payload[otherEmailKey]||form[otherEmailKey]||"").trim();
+   const enteredEmail=window.prompt("Enter the other brokerage's billing email address ("+otherBrokerageName+"):",currentEmail);
+   if(enteredEmail===null)return;
+   const billingEmail=enteredEmail.trim();
+   if(!billingEmail||!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(billingEmail)){
+     setError("A valid other brokerage billing email is required before sending this trade to Transactions.");
+     return;
+   }
+   const confirmed=window.confirm("Send this trade to Transactions as a DRAFT using billing email "+billingEmail+" without approving any paperwork? The submission remains available for document review, and commission payout stays blocked until required documents are approved.");
    if(!confirmed)return;
    setBusy(true);setError("");setMessage("");
-   const {data,error:e}=await supabase.rpc("dv_accounting_ensure_agent_trade_transaction",{p_submission_id:selected.id});
-   if(e){setError("Could not send the trade to Transactions: "+e.message);setBusy(false);return;}
-   if(!data){setError("The transaction was not created or linked. Please try again or contact an administrator.");setBusy(false);return;}
-   const {error:updateError}=await supabase.from("dv_accounting_agent_trade_submissions").update({transaction_id:data,updated_at:new Date().toISOString()}).eq("id",selected.id);
-   if(updateError){setError("The transaction was created, but the submission link could not be refreshed: "+updateError.message);setBusy(false);await load();return;}
-   setSelected(prev=>prev?{...prev,transaction_id:data}:prev);
-   setMessage("Trade sent to Transactions as a DRAFT. No documents were approved; paperwork review and commission payout restrictions remain in effect.");
-   setBusy(false);await load();
+   try{
+     const updatedPayload={...payload,[otherEmailKey]:billingEmail};
+     const {error:payloadError}=await supabase.from("dv_accounting_agent_trade_submissions").update({payload:updatedPayload,updated_at:new Date().toISOString()}).eq("id",selected.id);
+     if(payloadError)throw payloadError;
+     const {data,error:e}=await supabase.rpc("dv_accounting_ensure_agent_trade_transaction",{p_submission_id:selected.id});
+     if(e)throw e;
+     if(!data)throw new Error("The transaction was not created or linked. Please try again or contact an administrator.");
+     const {error:updateError}=await supabase.from("dv_accounting_agent_trade_submissions").update({transaction_id:data,updated_at:new Date().toISOString()}).eq("id",selected.id);
+     if(updateError)throw updateError;
+     setSelected(prev=>prev?{...prev,payload:updatedPayload,transaction_id:data}:prev);
+     setForm(prev=>({...prev,[otherEmailKey]:billingEmail}));
+     setMessage("Trade sent to Transactions as a DRAFT. Other brokerage billing email saved. No documents were approved; paperwork review and commission payout restrictions remain in effect.");
+     await load();
+   }catch(e){setError("Could not send the trade to Transactions: "+(e?.message||String(e)));await load();}
+   finally{setBusy(false);}
  }
  async function review(status){
    if(!selected?.id)return;
