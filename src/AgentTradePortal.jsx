@@ -325,8 +325,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      if(missingFields.length){setError("Complete the required fields marked * before submitting: "+missingFields.join(", ")+".");return}
      if(!selected?.id){setError("Save this trade as a draft first, then upload the required documents.");return}
      const sideRule=requirementsBySide?.[form.side]||{types:requiredTypes,required:requiredTypes,counts:requiredDocCounts};const sideRequiredTypes=sideRule.types||requiredTypes;const requiredSet=sideRule.required||sideRequiredTypes;const requiredDocs=docTypes.filter(([type])=>sideRequiredTypes.includes(type)&&requiredSet.includes(type));
-     const missing=requiredDocs.filter(([type])=>docs.filter(d=>d.document_type===type).length<1).map(([,label])=>label+" (not uploaded)");
-     if(missing.length){setError("Upload the required documents before submitting: "+missing.join(", ")+".");return}
+     // Missing required paperwork must not block submission. Submit for admin review and flag paperwork as incomplete until reviewed.
    }
    if(submit&&!adminMode&&(![form.street_number,form.street_name,form.city,form.province,form.postal_code].some(v=>String(v||"").trim())||!form.close_date||!form.transaction_type)){setError("Before submitting, confirm the property address, transaction type and closing date.");return}
    if(draftWriteLock.current)return;draftWriteLock.current=true;
