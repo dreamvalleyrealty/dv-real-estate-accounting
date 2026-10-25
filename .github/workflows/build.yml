@@ -1,4 +1,4 @@
-name: Build Check
+name: Build and Version Check
 on:
   push:
     branches: ["main"]
