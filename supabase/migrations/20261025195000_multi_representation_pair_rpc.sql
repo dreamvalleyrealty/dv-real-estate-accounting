@@ -41,9 +41,8 @@ BEGIN
     RAISE EXCEPTION 'The primary submission does not authorize this opposite-side agent';
   END IF;
 
-  IF v_primary.status NOT IN ('SUBMITTED', 'NEEDS_CHANGES')
-     OR v_primary.transaction_id IS NULL THEN
-    RAISE EXCEPTION 'Submit the primary representation before linking the opposite-side draft';
+  IF v_primary.status NOT IN ('DRAFT', 'SUBMITTED', 'NEEDS_CHANGES') THEN
+    RAISE EXCEPTION 'Only an active trade submission can be linked to the opposite-side draft';
   END IF;
 
   IF p_representation_side NOT IN ('LANDLORD','TENANT','SELLER','BUYER')
