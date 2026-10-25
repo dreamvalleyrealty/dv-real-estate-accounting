@@ -8,6 +8,7 @@ import MoneyInput from "./MoneyInput";
 import CommercialLeaseCommissionEditor from "./CommercialLeaseCommissionEditor";
 import { calculateCommercialLeaseCommission } from "./lib/commercialLeaseCommission";
 import AgentSearchSelect from "./AgentSearchSelect";
+import SellerSettlements from "./SellerSettlements";
 
 function SignedTradeRecordActions({transaction}) {
  const [docs,setDocs]=useState([]),[open,setOpen]=useState(false),[selected,setSelected]=useState(null),[previewUrl,setPreviewUrl]=useState(""),[message,setMessage]=useState("");
