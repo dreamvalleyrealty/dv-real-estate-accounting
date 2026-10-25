@@ -4,8 +4,8 @@
 DO $migration$
 DECLARE
   v_definition text;
-  v_old text := E'if not public.dv_accounting_is_trade_admin() then\n    raise exception ''Only a trade administrator can create or update the linked transaction'';\n  end if;';
-  v_new text := E'if not public.dv_accounting_is_trade_admin() and not exists (\n    select 1\n    from public.dv_accounting_agent_trade_submissions own_submission\n    where own_submission.id = p_submission_id\n      and own_submission.agent_id = public.dv_accounting_my_agent_id()\n      and own_submission.status in (''SUBMITTED'', ''NEEDS_CHANGES'')\n  ) then\n    raise exception ''Only an administrator or the assigned agent for an active submitted trade can synchronize the linked transaction'';\n  end if;';
+  v_old text := E'  if not public.dv_accounting_is_trade_admin() then\n    raise exception ''Only a trade administrator can create or update the linked transaction'';\n  end if;';
+  v_new text := E'  if not public.dv_accounting_is_trade_admin() and not exists (\n    select 1\n    from public.dv_accounting_agent_trade_submissions own_submission\n    where own_submission.id = p_submission_id\n      and own_submission.agent_id = public.dv_accounting_my_agent_id()\n      and own_submission.status in (''SUBMITTED'', ''NEEDS_CHANGES'')\n  ) then\n    raise exception ''Only an administrator or the assigned agent for an active submitted trade can synchronize the linked transaction'';\n  end if;';
 BEGIN
   SELECT pg_get_functiondef('public.dv_accounting_ensure_agent_trade_transaction(uuid)'::regprocedure)
     INTO v_definition;
