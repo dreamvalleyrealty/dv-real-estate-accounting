@@ -140,7 +140,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const [submissionResult,agentResult]=await Promise.all([query,agentPromise]);
    if(agentResult.error){if(adminMode)setError("Could not load the agent list: "+agentResult.error.message);}else setAgents((agentResult.data||[]).slice().sort((a,b)=>String(a.last_name||"").localeCompare(String(b.last_name||""))));
    if(submissionResult.error){setError(submissionResult.error.message);return}
-   const rows=(submissionResult.data||[]).filter(row=>adminMode||String(row.agent_id)===String(agentId)||(Array.isArray(row.payload?.additional_own_side_agents)&&row.payload.additional_own_side_agents.some(a=>String(a.agent_id||a.id)===String(agentId)))||String(row.payload?.opposite_side_dv_agent_id||"")===String(agentId));
+   const rows=(submissionResult.data||[]).filter(row=>adminMode||String(row.agent_id)===String(agentId)||(Array.isArray(row.payload?.additional_own_side_agents)&&row.payload.additional_own_side_agents.some(a=>String(a.agent_id||a.id)===String(agentId))));
    const transactionIds=[...new Set(rows.map(s=>s.transaction_id).filter(Boolean))];
    const submissionIds=rows.map(s=>s.id).filter(Boolean);
    let pendingDocsBySubmission={};
