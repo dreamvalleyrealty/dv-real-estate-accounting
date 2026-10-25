@@ -108,7 +108,8 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.dv_accounting_upsert_multi_representation_pair(uuid, uuid, jsonb, text) FROM PUBLIC, anon;\nGRANT EXECUTE ON FUNCTION public.dv_accounting_upsert_multi_representation_pair(uuid, uuid, jsonb, text) TO authenticated;
+REVOKE ALL ON FUNCTION public.dv_accounting_upsert_multi_representation_pair(uuid, uuid, jsonb, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.dv_accounting_upsert_multi_representation_pair(uuid, uuid, jsonb, text) TO authenticated;
 
 -- Keep both submissions attached to the same transaction even when an administrator
 -- links the transaction through a separate workflow.
