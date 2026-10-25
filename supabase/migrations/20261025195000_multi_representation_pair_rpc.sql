@@ -31,7 +31,7 @@ BEGIN
   END IF;
 
   v_my_agent_id := public.dv_accounting_my_agent_id();
-  IF NOT public.dv_accounting_is_trade_admin()
+  IF COALESCE(public.dv_accounting_is_trade_admin(), false) = false
      AND v_primary.agent_id IS DISTINCT FROM v_my_agent_id THEN
     RAISE EXCEPTION 'Only the assigned agent or a trade administrator can link the opposite representation';
   END IF;
@@ -46,7 +46,9 @@ BEGIN
   END IF;
 
   IF p_representation_side NOT IN ('LANDLORD','TENANT','SELLER','BUYER')
-     OR p_representation_side = v_primary.representation_side THEN
+     OR p_representation_side = v_primary.representation_side
+     OR (v_primary.representation_side IN ('SELLER','BUYER') AND p_representation_side NOT IN ('SELLER','BUYER'))
+     OR (v_primary.representation_side IN ('LANDLORD','TENANT') AND p_representation_side NOT IN ('LANDLORD','TENANT')) THEN
     RAISE EXCEPTION 'The opposite representation side is invalid';
   END IF;
 
@@ -105,3 +107,46 @@ END;
 $function$;
 
 GRANT EXECUTE ON FUNCTION public.dv_accounting_upsert_multi_representation_pair(uuid, uuid, jsonb, text) TO authenticated;
+
+-- Keep both submissions attached to the same transaction even when an administrator
+-- links the transaction through a separate workflow.
+CREATE OR REPLACE FUNCTION public.dv_accounting_sync_multi_representation_transaction_link()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+BEGIN
+  IF NEW.representation_group_id IS NULL OR NEW.transaction_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.dv_accounting_agent_trade_submissions paired
+    WHERE paired.representation_group_id = NEW.representation_group_id
+      AND paired.id <> NEW.id
+      AND paired.transaction_id IS NOT NULL
+      AND paired.transaction_id IS DISTINCT FROM NEW.transaction_id
+  ) THEN
+    RAISE EXCEPTION 'Multi-representation submissions must share one transaction';
+  END IF;
+
+  UPDATE public.dv_accounting_agent_trade_submissions
+  SET transaction_id = NEW.transaction_id,
+      updated_at = now()
+  WHERE representation_group_id = NEW.representation_group_id
+    AND id <> NEW.id
+    AND transaction_id IS NULL;
+
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS trg_sync_multi_representation_transaction_link
+  ON public.dv_accounting_agent_trade_submissions;
+CREATE TRIGGER trg_sync_multi_representation_transaction_link
+AFTER UPDATE OF transaction_id ON public.dv_accounting_agent_trade_submissions
+FOR EACH ROW
+WHEN (NEW.transaction_id IS DISTINCT FROM OLD.transaction_id)
+EXECUTE FUNCTION public.dv_accounting_sync_multi_representation_transaction_link();
