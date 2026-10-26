@@ -191,7 +191,7 @@ begin
   if auth.uid() is null then
     raise exception 'Authentication is required to reopen a seller/landlord settlement.';
   end if;
-  select upper(regexp_replace(coalesce(role,''),'[^A-Z]','','g'))
+  select upper(regexp_replace(upper(coalesce(role,'')),'[^A-Z]','','g'))
     into v_role
   from public.dv_accounting_user_profiles
   where user_id = auth.uid() and active = true
