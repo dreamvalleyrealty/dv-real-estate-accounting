@@ -100,7 +100,16 @@ begin
   update public.dv_accounting_seller_settlement_payments set trust_transaction_id=v_posted_id,status='COMPLETED',completed_at=now(),updated_at=now(),updated_by=auth.uid()
     where id=p.id returning * into p;
   update public.dv_accounting_seller_settlements
-  set seller_paid_amount=coalesce(seller_paid_amount,0)+case when upper(coalesce(p.payee_type,'')) in ('SELLER','LANDLORD') then p.amount else 0 end,
+  set seller_paid_amount=coalesce((
+      select sum(dp.amount)
+      from public.dv_accounting_seller_settlement_payments dp
+      where dp.settlement_id=s.id
+        and dp.transaction_id=s.transaction_id
+        and dp.company_id=s.company_id
+        and upper(coalesce(dp.status,''))='COMPLETED'
+        and dp.trust_transaction_id is not null
+        and upper(coalesce(dp.payee_type,'')) in ('SELLER','LANDLORD')
+    ),0),
     seller_payment_status='COMPLETED',
     seller_payment_reference=p.reference,
     seller_payment_date=p.payment_date,
