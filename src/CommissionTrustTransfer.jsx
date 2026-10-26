@@ -18,7 +18,7 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
   const [s,a,p]=await Promise.all([
    supabase.from("dv_accounting_seller_settlements").select("*").eq("transaction_id",transaction.id).maybeSingle(),
    supabase.from("dv_accounting_bank_accounts").select("*").eq("company_id",transaction.company_id).order("name"),
-   supabase.from("dv_accounting_seller_settlement_payments").select("id,transaction_id,company_id,settlement_id,payee_type,status,amount,trust_transaction_id,trust_disbursement_id").eq("transaction_id",transaction.id)
+   supabase.from("dv_accounting_seller_settlement_payments").select("id,transaction_id,company_id,settlement_id,payee_type,status,amount,trust_transaction_id,trust_disbursement_id,direction_storage_path").eq("transaction_id",transaction.id)
   ]);
   if(s.error||a.error||p.error){setError([s.error,a.error,p.error].filter(Boolean).map(x=>x.message).join(" · "));setLoading(false);return}
   setSettlement(s.data||null);setAccounts(a.data||[]);setPayments(p.data||[]);
@@ -29,9 +29,9 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
  const realEstateAccounts=useMemo(()=>accounts.filter(isRE),[accounts]);
  const commissionAccounts=useMemo(()=>accounts.filter(isCT),[accounts]);
  const amount=useMemo(()=>Math.round((Number(settlement?.listing_commission_amount||0)+Number(settlement?.cooperating_commission_amount||0)+Number(settlement?.commission_hst_amount||0))*100)/100,[settlement]);
- const paid=useMemo(()=>payments.filter(p=>p.settlement_id===settlement?.id&&p.transaction_id===transaction?.id&&p.company_id===transaction?.company_id&&String(p.status||"").toUpperCase()==="COMPLETED"&&(!!p.trust_transaction_id||!!p.trust_disbursement_id)).reduce((sum,p)=>sum+Number(p.amount||0),0),[payments,settlement?.id,transaction?.id,transaction?.company_id]);
+ const paid=useMemo(()=>payments.filter(p=>p.settlement_id===settlement?.id&&p.transaction_id===transaction?.id&&p.company_id===transaction?.company_id&&String(p.status||"").toUpperCase()==="COMPLETED"&&(!!p.trust_transaction_id||!!p.trust_disbursement_id)&&(["SELLER","LANDLORD"].includes(String(p.payee_type||"").toUpperCase())||!!p.direction_storage_path)).reduce((sum,p)=>sum+Number(p.amount||0),0),[payments,settlement?.id,transaction?.id,transaction?.company_id]);
  const outstandingSeller=Math.max(0,Math.round((Number(settlement?.seller_proceeds_amount||0)-paid)*100)/100);
- const isPosted=postedStatus(settlement?.status);
+ const isPosted=postedStatus(settlement?.status);\n const settlementReadyForTransfer=["SELLER_PROCEEDS_CALCULATED","SELLER_PAID"].includes(String(settlement?.status||"").toUpperCase());
  const source=realEstateAccounts.find(a=>a.id===form.real_estate_trust_account_id);
  const destination=commissionAccounts.find(a=>a.id===form.commission_trust_account_id);
  async function saveTransferDetails(){
@@ -46,7 +46,7 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
  }
  async function postTransfer(){
   if(!settlement?.id)return setError("A saved Seller / Landlord Settlement record is required before transfer.");
-  if(isPosted)return setError("This settlement is already marked ready for Commission Payroll. Check its trust ledger history before attempting another transfer.");
+  if(isPosted)return setError("This settlement is already marked ready for Commission Payroll. Check its trust ledger history before attempting another transfer.");\n  if(!settlementReadyForTransfer)return setError("Transfer blocked: save and calculate the Seller / Landlord Settlement first.");
   if(outstandingSeller>0.009)return setError("Transfer blocked: "+money(outstandingSeller)+" in seller/landlord proceeds is still outstanding. Complete and post the seller/landlord payment first.");
   if(!source||!destination||source.id===destination.id)return setError("Select two different valid trust accounts.");
   if(amount<=0)return setError("The saved commission amount must be greater than $0.00.");
@@ -91,7 +91,7 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
     <div className="modalactions" style={{marginTop:16}}>
      <button type="button" className="secondary" onClick={onClose}>Close</button>
      <button type="button" className="secondary" disabled={busy||isPosted} onClick={saveTransferDetails}><Save size={15}/>{busy?"Saving…":"Save Transfer Details"}</button>
-     <button type="button" className="primary" disabled={busy||isPosted||outstandingSeller>0.009||amount<=0||!source||!destination||source.id===destination.id||!form.commission_transfer_reference.trim()||!form.commission_transfer_date} onClick={postTransfer}><ArrowLeftRight size={15}/>{busy?"Posting…":"Post Trust Transfer"}</button>
+     <button type="button" className="primary" disabled={busy||isPosted||!settlementReadyForTransfer||outstandingSeller>0.009||amount<=0||!source||!destination||source.id===destination.id||!form.commission_transfer_reference.trim()||!form.commission_transfer_date} onClick={postTransfer}><ArrowLeftRight size={15}/>{busy?"Posting…":"Post Trust Transfer"}</button>
     </div>
    </div>
   </>}
