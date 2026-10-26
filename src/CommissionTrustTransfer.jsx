@@ -35,7 +35,7 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
  const realEstateAccounts=useMemo(()=>accounts.filter(isRE),[accounts]);
  const commissionAccounts=useMemo(()=>accounts.filter(isCT),[accounts]);
  const amount=useMemo(()=>Math.round((Number(settlement?.listing_commission_amount||0)+Number(settlement?.cooperating_commission_amount||0)+Number(settlement?.commission_hst_amount||0))*100)/100,[settlement]);
- const paid=useMemo(()=>payments.filter(p=>p.settlement_id===settlement?.id&&String(p.status||"").toUpperCase()==="COMPLETED"&&!!p.trust_transaction_id&&(["SELLER","LANDLORD"].includes(String(p.payee_type||"").toUpperCase()))).reduce((sum,p)=>sum+Number(p.amount||0),0),[payments,settlement?.id,transaction?.id,transaction?.company_id]);
+ const paid=useMemo(()=>payments.filter(p=>p.settlement_id===settlement?.id&&String(p.status||"").toUpperCase()==="COMPLETED"&&!!p.trust_transaction_id&&(["SELLER","LANDLORD"].includes(String(p.payee_type||"").toUpperCase())||!!p.direction_storage_path)).reduce((sum,p)=>sum+Number(p.amount||0),0),[payments,settlement?.id,transaction?.id,transaction?.company_id]);
  const outstandingSeller=Math.max(0,Math.round((Number(settlement?.seller_proceeds_amount||0)-paid)*100)/100);
  const isPosted=postedStatus(settlement?.status);
  const settlementReadyForTransfer=["SELLER_PROCEEDS_CALCULATED","SELLER_PAID"].includes(String(settlement?.status||"").toUpperCase());
