@@ -47,7 +47,8 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
  }
  async function postTransfer(){
   if(!settlement?.id)return setError("A saved Seller / Landlord Settlement record is required before transfer.");
-  if(isPosted)return setError("This settlement is already marked ready for Commission Payroll. Check its trust ledger history before attempting another transfer.");\n  if(!settlementReadyForTransfer)return setError("Transfer blocked: save and calculate the Seller / Landlord Settlement first.");
+  if(isPosted)return setError("This settlement is already marked ready for Commission Payroll. Check its trust ledger history before attempting another transfer.");
+  if(!settlementReadyForTransfer)return setError("Transfer blocked: save and calculate the Seller / Landlord Settlement first.");
   if(outstandingSeller>0.009)return setError("Transfer blocked: "+money(outstandingSeller)+" in seller/landlord proceeds is still outstanding. Complete and post the seller/landlord payment first.");
   if(!source||!destination||source.id===destination.id)return setError("Select two different valid trust accounts.");
   if(amount<=0)return setError("The saved commission amount must be greater than $0.00.");
