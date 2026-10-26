@@ -114,7 +114,7 @@ begin
     updated_at=now(),updated_by=auth.uid()
   where id=s.id;
   return p;
-end $function$
+end $function$;
 
 
 CREATE OR REPLACE FUNCTION public.dv_accounting_validate_seller_settlement()
