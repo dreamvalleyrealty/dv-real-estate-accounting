@@ -15,13 +15,19 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
  const load=useCallback(async()=>{
   if(!supabase||!transaction?.id){setLoading(false);setError("Supabase is not connected or the transaction is missing.");return}
   setLoading(true);setError("");setMessage("");
-  const [s,a,p]=await Promise.all([
+  const [s,a]=await Promise.all([
    supabase.from("dv_accounting_seller_settlements").select("*").eq("transaction_id",transaction.id).maybeSingle(),
-   supabase.from("dv_accounting_bank_accounts").select("*").eq("company_id",transaction.company_id).order("name"),
-   supabase.from("dv_accounting_seller_settlement_payments").select("id,transaction_id,company_id,settlement_id,payee_type,status,amount,trust_transaction_id,trust_disbursement_id,direction_storage_path").eq("transaction_id",transaction.id)
+   supabase.from("dv_accounting_bank_accounts").select("*").eq("company_id",transaction.company_id).order("name")
   ]);
-  if(s.error||a.error||p.error){setError([s.error,a.error,p.error].filter(Boolean).map(x=>x.message).join(" · "));setLoading(false);return}
-  setSettlement(s.data||null);setAccounts(a.data||[]);setPayments(p.data||[]);
+  if(s.error||a.error){setError([s.error,a.error].filter(Boolean).map(x=>x.message).join(" · "));setLoading(false);return}
+  const settlementRow=s.data||null;
+  let paymentRows=[];
+  if(settlementRow?.id){
+   const p=await supabase.from("dv_accounting_seller_settlement_payments").select("*").eq("settlement_id",settlementRow.id);
+   if(p.error){setError("Could not load settlement payment history: "+p.error.message);setLoading(false);return}
+   paymentRows=p.data||[];
+  }
+  setSettlement(settlementRow);setAccounts(a.data||[]);setPayments(paymentRows);
   if(s.data)setForm({real_estate_trust_account_id:s.data.real_estate_trust_account_id||"",commission_trust_account_id:s.data.commission_trust_account_id||"",commission_transfer_date:s.data.commission_transfer_date||today(),commission_transfer_reference:s.data.commission_transfer_reference||("Commission transfer - "+(transaction.transaction_number||"Trade"))});
   setLoading(false);
  },[transaction?.id,transaction?.company_id,transaction?.transaction_number]);
@@ -29,7 +35,7 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
  const realEstateAccounts=useMemo(()=>accounts.filter(isRE),[accounts]);
  const commissionAccounts=useMemo(()=>accounts.filter(isCT),[accounts]);
  const amount=useMemo(()=>Math.round((Number(settlement?.listing_commission_amount||0)+Number(settlement?.cooperating_commission_amount||0)+Number(settlement?.commission_hst_amount||0))*100)/100,[settlement]);
- const paid=useMemo(()=>payments.filter(p=>p.settlement_id===settlement?.id&&p.transaction_id===transaction?.id&&p.company_id===transaction?.company_id&&String(p.status||"").toUpperCase()==="COMPLETED"&&(!!p.trust_transaction_id||!!p.trust_disbursement_id)&&(["SELLER","LANDLORD"].includes(String(p.payee_type||"").toUpperCase())||!!p.direction_storage_path)).reduce((sum,p)=>sum+Number(p.amount||0),0),[payments,settlement?.id,transaction?.id,transaction?.company_id]);
+ const paid=useMemo(()=>payments.filter(p=>p.settlement_id===settlement?.id&&p.transaction_id===transaction?.id&&p.company_id===transaction?.company_id&&String(p.status||"").toUpperCase()==="COMPLETED"&&!!p.trust_transaction_id&&(["SELLER","LANDLORD"].includes(String(p.payee_type||"").toUpperCase()))).reduce((sum,p)=>sum+Number(p.amount||0),0),[payments,settlement?.id,transaction?.id,transaction?.company_id]);
  const outstandingSeller=Math.max(0,Math.round((Number(settlement?.seller_proceeds_amount||0)-paid)*100)/100);
  const isPosted=postedStatus(settlement?.status);
  const settlementReadyForTransfer=["SELLER_PROCEEDS_CALCULATED","SELLER_PAID"].includes(String(settlement?.status||"").toUpperCase());
