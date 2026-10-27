@@ -89,7 +89,7 @@ async function downloadSinglePagePdf(html,filename,selector,kind){
   }else{el.style.width="8.14in";el.style.height="auto";el.style.minHeight="0";el.style.margin="0";el.style.overflow="visible"}
   el.style.removeProperty(kind==="trade"?"--trade-size":"--invoice-size");
   const targetHeight=10.55*96;
-  let low=6.5,high=kind==="trade"?19:18,best=low;
+  let low=6.5,high=kind==="trade"?11.5:18,best=low;
   const setSize=size=>doc.body.style.setProperty(kind==="trade"?"--trade-size":"--invoice-size",size+"px");
   for(let i=0;i<20;i++){const mid=(low+high)/2;setSize(mid);const h=Math.max(el.scrollHeight,el.getBoundingClientRect().height);if(h<=targetHeight){best=mid;low=mid}else{high=mid}}
   setSize(best);
