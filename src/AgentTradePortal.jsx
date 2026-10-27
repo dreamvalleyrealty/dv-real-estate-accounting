@@ -345,7 +345,8 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      const {data,error:e}=await supabase.from("dv_accounting_agent_trade_submissions").insert([{agent_id:targetAgentId,submitted_by:user.id,payload,listing_id:payload.listing_id||null,representation_group_id:representationGroupId,representation_side:representationSide,status:submit?"SUBMITTED":"DRAFT",submitted_at:submit?new Date().toISOString():null}]).select().single();
      if(e){setError(e.message);setBusy(false);draftWriteLock.current=false;return}row=data;
    }
-   if(row?.id&&(["SUBMITTED","NEEDS_CHANGES"].includes(String(row.status||"").toUpperCase())||(String(row.status||"").toUpperCase()==="DRAFT"&&Boolean(row.representation_group_id)&&Boolean(row.transaction_id)))){
+   // Always synchronize an already-linked trade when its payload changes. The database helper updates only DRAFT transactions and leaves finalized transactions untouched.
+   if(row?.id&&(Boolean(row.transaction_id)||["SUBMITTED","NEEDS_CHANGES"].includes(String(row.status||"").toUpperCase())||(String(row.status||"").toUpperCase()==="DRAFT"&&Boolean(row.representation_group_id)))){
      const{data:linkedTransactionId,error:linkError}=await supabase.rpc("dv_accounting_ensure_agent_trade_transaction",{p_submission_id:row.id});
      if(linkError||!linkedTransactionId){setError("Trade saved, but its linked draft transaction could not be synchronized: "+(linkError?.message||"No transaction ID was returned."));setBusy(false);draftWriteLock.current=false;return;}
      const{data:refreshedSubmission}=await supabase.from("dv_accounting_agent_trade_submissions").select("*").eq("id",row.id).maybeSingle();
