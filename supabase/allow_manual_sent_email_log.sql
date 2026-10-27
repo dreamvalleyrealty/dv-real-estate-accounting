@@ -1,5 +1,7 @@
 -- Permit authorized transaction editors to record only manual invoice/statement entries.
--- This does not grant broad write access to the email audit log.
+-- The INSERT grant is constrained by the row-level security policy below.
+GRANT INSERT ON TABLE public.dv_accounting_email_log TO authenticated;
+
 DROP POLICY IF EXISTS "Record manually sent transaction documents" ON public.dv_accounting_email_log;
 CREATE POLICY "Record manually sent transaction documents"
 ON public.dv_accounting_email_log
