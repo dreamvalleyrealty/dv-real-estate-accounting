@@ -809,7 +809,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const enteredEmail=window.prompt("Enter the other brokerage's billing email address ("+otherBrokerageName+"):",currentEmail);
    if(enteredEmail===null)return;
    const billingEmail=enteredEmail.trim();
-   if(!billingEmail||!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(billingEmail)){
+   if(!billingEmail||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billingEmail)){
      setError("A valid other brokerage billing email is required before sending this trade to Transactions.");
      return;
    }
