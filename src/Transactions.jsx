@@ -163,8 +163,8 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
  // On a seller/landlord listing-side trade, the LISTING row is ours; on a buyer/tenant-side trade, the BUYER row is ours.
  const ownCommissionSide=["SELLER","LANDLORD","LISTING"].includes(String(form.side||"").toUpperCase())?"LISTING":"BUYER";
  const commissionLineAmount=c=>Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0);
- const ownSideInbound=commissions.reduce((s,c)=>s+(String(c.side||"").toUpperCase()===ownCommissionSide?commissionLineAmount(c):0),0);const receivableCommissionBase=commissions.reduce((s,c)=>s+(String(c.settlement_direction||"").toUpperCase()==="RECEIVABLE"?commissionLineAmount(c):0),0);const inbound=ownSideInbound>0?ownSideInbound:(receivableCommissionBase>0?receivableCommissionBase:commissions.reduce((s,c)=>s+commissionLineAmount(c),0));
- const inboundHst=commissions.reduce((s,c)=>s+((ownSideInbound>0?String(c.side||"").toUpperCase()===ownCommissionSide:(receivableCommissionBase>0?String(c.settlement_direction||"").toUpperCase()==="RECEIVABLE":true))?commissionLineAmount(c)*Number(c.hst_rate||13)/100:0),0);
+ const ownSideReceivables=commissions.filter(c=>String(c.side||"").toUpperCase()===ownCommissionSide&&String(c.settlement_direction||"").toUpperCase()==="RECEIVABLE");const receivableRows=ownSideReceivables.length?ownSideReceivables:commissions.filter(c=>String(c.settlement_direction||"").toUpperCase()==="RECEIVABLE");const inbound=receivableRows.reduce((s,c)=>s+commissionLineAmount(c),0);
+ const inboundHst=receivableRows.reduce((s,c)=>s+commissionLineAmount(c)*Number(c.hst_rate||13)/100,0);
  const receivableHst=inboundHst;
  const receivableTotal=inbound+receivableHst;
  const payableBase=commissions.reduce((s,c)=>s+(c.settlement_direction==="PAYABLE"?Number(c.calculation_type==="PERCENT"?(Number(form.sale_price||0)*Number(c.rate||0)/100):c.amount||0):0),0);
