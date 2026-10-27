@@ -52,7 +52,7 @@ function OtherBrokerageInvoiceActions({transaction}) {
  </>
 }
 
-function cleanStreetName(streetNumber,streetName){let name=String(streetName||"").trim();const number=String(streetNumber||"").trim();if(!name||!number)return name;const escaped=number.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");return name.replace(new RegExp("^(?:"+escaped+"\\s+)+","i"),"").trim()}
+function cleanStreetName(streetNumber,streetName){let name=String(streetName||"").trim().replace(/\s+/g," ");const number=String(streetNumber||"").trim();if(!name)return "";if(number){const escaped=number.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");const fullAddressPrefix=new RegExp("^"+escaped+"\\s*,\\s*","i");if(fullAddressPrefix.test(name)){name=name.replace(fullAddressPrefix,"");const parts=name.split(/\s*,\s*/);if(parts.length>1)name=parts[0];}else{name=name.replace(new RegExp("^(?:"+escaped+"\\s+)+","i"),"").trim();}}return name.trim()}
 function formatPhoneNumber(value){const raw=String(value??"").trim();if(!raw)return "";const digits=raw.replace(/\D/g,"");if(!digits)return "";const national=digits.length===11&&digits.startsWith("1")?digits.slice(1):digits;if(national.length===10)return "+1 ("+national.slice(0,3)+") "+national.slice(3,6)+"-"+national.slice(6,10);return raw}
 const PROVINCES=[["AB","Alberta"],["BC","British Columbia"],["MB","Manitoba"],["NB","New Brunswick"],["NL","Newfoundland and Labrador"],["NS","Nova Scotia"],["NT","Northwest Territories"],["NU","Nunavut"],["ON","Ontario"],["PE","Prince Edward Island"],["QC","Quebec"],["SK","Saskatchewan"],["YT","Yukon"]];
 const today=()=>new Date().toISOString().slice(0,10);
