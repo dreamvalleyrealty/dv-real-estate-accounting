@@ -823,9 +823,14 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      const {data,error:e}=await supabase.rpc("dv_accounting_ensure_agent_trade_transaction",{p_submission_id:selected.id});
      if(e)throw e;
      if(!data)throw new Error("The transaction was not created or linked. Please try again or contact an administrator.");
-     const {error:updateError}=await supabase.from("dv_accounting_agent_trade_submissions").update({transaction_id:data,updated_at:new Date().toISOString()}).eq("id",selected.id);
+     const {data:linkedSubmission,error:updateError}=await supabase.from("dv_accounting_agent_trade_submissions").update({transaction_id:data,payload:updatedPayload,updated_at:new Date().toISOString()}).eq("id",selected.id).select("id,transaction_id,payload,status,updated_at").single();
      if(updateError)throw updateError;
-     setSelected(prev=>prev?{...prev,payload:updatedPayload,transaction_id:data}:prev);
+     if(!linkedSubmission?.transaction_id)throw new Error("Draft transaction was created but the submission link was not saved. Refresh and retry.");
+     const {data:linkedTransaction,error:verifyError}=await supabase.from("dv_accounting_transactions").select("id,transaction_number,status").eq("id",linkedSubmission.transaction_id).maybeSingle();
+     if(verifyError)throw verifyError;
+     if(!linkedTransaction)throw new Error("The submission has a transaction ID, but the linked transaction could not be found.");
+     setSelected(prev=>prev?{...prev,...linkedSubmission,payload:updatedPayload,transaction_id:linkedSubmission.transaction_id}:prev);
+     setSubmissions(prev=>prev.map(row=>row.id===selected.id?{...row,...linkedSubmission,payload:updatedPayload}:row));
      setForm(prev=>({...prev,[otherEmailKey]:billingEmail}));
      setMessage("Trade sent to Transactions as a DRAFT. Other brokerage billing email saved. No documents were approved; paperwork review and commission payout restrictions remain in effect.");
      await load();
