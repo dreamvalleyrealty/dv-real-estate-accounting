@@ -2,7 +2,7 @@ import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {supabase} from "./lib/supabase";
 import MoneyInput from "./MoneyInput";
 import AgentSearchSelect from "./AgentSearchSelect";
-import {Upload,RefreshCw,Search,CheckCircle2,AlertCircle,FileText,Send,Save,Building2,Trash2,ReceiptText,Printer,Pencil,Paperclip} from "lucide-react";
+import {Upload,RefreshCw,Search,CheckCircle2,XCircle,AlertCircle,FileText,Send,Save,Building2,Trash2,ReceiptText,Printer,Pencil,Paperclip} from "lucide-react";
 import { PDFDocument } from "pdf-lib";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
@@ -239,6 +239,16 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
   if(previewDocument?.id===doc.id)setPreviewDocument(data);
   setRenamingDocumentId(null);setDocumentNameDraft("");setMessage("Document name updated.");setBusy(false);
  }
+ async function setDocumentReviewStatus(doc,status){
+  if(!isAdmin||!doc?.id)return;
+  setBusy(true);setError("");setMessage("");
+  const {data,error:e}=await supabase.from("dv_accounting_listing_documents").update({review_status:status,reviewed_by:user?.id||null,reviewed_at:new Date().toISOString()}).eq("id",doc.id).select().single();
+  if(e){setError("Could not update document review status: "+e.message);setBusy(false);return}
+  setDocs(old=>old.map(item=>item.id===doc.id?data:item));
+  if(previewDocument?.id===doc.id)setPreviewDocument(data);
+  setMessage(status==="APPROVED"?"Document approved.":"Document marked not approved.");
+  setBusy(false);
+ }
  async function adminUpdate(status){
   if(!selected?.id)return;
   if(["APPROVED","APPROVED_WITH_CHANGES"].includes(status)){const missing=requirements.filter(r=>r.required&&!docs.some(d=>String(d.document_type||"").trim().toUpperCase()===String(r.code||"").trim().toUpperCase()));if(missing.length){const notes=String(selected.notes||"");const marker="Submission exception";const markerIndex=notes.toLowerCase().indexOf(marker.toLowerCase());const exceptionText=markerIndex>=0?notes.slice(markerIndex):"";const listMarker="missing required documents:";const listIndex=exceptionText.toLowerCase().indexOf(listMarker);const reasonIndex=exceptionText.toLowerCase().indexOf("reason:");const listEnd=exceptionText.indexOf(".",listIndex);const exceptionDocs=listIndex>=0&&listEnd>listIndex?exceptionText.slice(listIndex+listMarker.length,listEnd).split(",").map(x=>x.trim().toLowerCase()):[];const reason=reasonIndex>=0?exceptionText.slice(reasonIndex+7).trim():"";const covered=missing.every(item=>exceptionDocs.includes(String(item.label||"").trim().toLowerCase()));if(reason.length<5||!covered){setError("Cannot approve until required listing documents are uploaded or each missing document is covered by the agent’s submitted exception with a reason: "+missing.map(x=>x.label).join(", "));return}}}
@@ -454,7 +464,7 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
          <div style={{minWidth:0}}>
           {renamingDocumentId===d.id?<div style={{display:"flex",gap:6,alignItems:"center"}}><input aria-label="Document display name" style={{...fieldStyle,minWidth:0}} value={documentNameDraft} onChange={e=>setDocumentNameDraft(e.target.value)} maxLength={180} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();saveDocumentName(d)}if(e.key==="Escape"){setRenamingDocumentId(null);setDocumentNameDraft("")}}}/><button type="button" className="primary" disabled={busy||!documentNameDraft.trim()} onClick={()=>saveDocumentName(d)}>Save</button><button type="button" className="secondary" onClick={()=>{setRenamingDocumentId(null);setDocumentNameDraft("")}}>Cancel</button></div>:<button type="button" onClick={()=>openDocument(d)} style={{display:"flex",alignItems:"center",gap:7,minWidth:0,width:"100%",border:0,padding:0,background:"transparent",color:"var(--navy)",textAlign:"left",cursor:"pointer"}}><FileText size={15}/><span style={{minWidth:0,overflowWrap:"anywhere",fontSize:12}}>{d.document_name||("Document "+(index+1))}<small className="muted" style={{display:"block"}}>{d.created_at?new Date(d.created_at).toLocaleString():""}</small></span></button>}
          </div>
-         <div style={{display:"flex",alignItems:"center",gap:6}}>{canUploadDocs&&renamingDocumentId!==d.id&&<button type="button" className="textbutton" disabled={busy} onClick={()=>{setRenamingDocumentId(d.id);setDocumentNameDraft(d.document_name||"")}}>Rename</button>}{canDeleteDocuments&&<button type="button" className="textbutton danger" disabled={busy} onClick={()=>deleteListingDocument(d)}><Trash2 size={13}/> Delete</button>}</div>
+         <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",justifyContent:"flex-end"}}>{isAdmin&&<><span style={{fontSize:10,fontWeight:700,whiteSpace:"nowrap",padding:"3px 6px",borderRadius:4,border:"1px solid "+(d.review_status==="APPROVED"?"#abefc6":d.review_status==="NOT_APPROVED"?"#fecdca":"#d0d5dd"),background:d.review_status==="APPROVED"?"#ecfdf3":d.review_status==="NOT_APPROVED"?"#fef3f2":"#f8fafc",color:d.review_status==="APPROVED"?"#027a48":d.review_status==="NOT_APPROVED"?"#b42318":"#475467"}}>{d.review_status==="APPROVED"?"Approved":d.review_status==="NOT_APPROVED"?"Not approved":"Pending review"}</span>{d.review_status==="APPROVED"?<button type="button" className="textbutton danger" disabled={busy} onClick={()=>setDocumentReviewStatus(d,"NOT_APPROVED")}><XCircle size={13}/> Unapprove</button>:<button type="button" className="textbutton" disabled={busy} onClick={()=>setDocumentReviewStatus(d,"APPROVED")}><CheckCircle2 size={13}/> Approve</button>}</>}{canUploadDocs&&renamingDocumentId!==d.id&&<button type="button" className="textbutton" disabled={busy} onClick={()=>{setRenamingDocumentId(d.id);setDocumentNameDraft(d.document_name||"")}}>Rename</button>}{canDeleteDocuments&&<button type="button" className="textbutton danger" disabled={busy} onClick={()=>deleteListingDocument(d)}><Trash2 size={13}/> Delete</button>}</div>
         </div>)}
        </div>
       </div>}
