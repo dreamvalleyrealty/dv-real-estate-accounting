@@ -5456,8 +5456,20 @@ create table if not exists public.dv_accounting_listing_documents (
  mime_type text,
  file_size bigint,
  uploaded_by uuid references auth.users(id) on delete set null default auth.uid(),
+ review_status text not null default 'PENDING' check (review_status in ('PENDING','APPROVED','NOT_APPROVED')),
+ reviewed_by uuid references auth.users(id) on delete set null,
+ reviewed_at timestamptz,
  created_at timestamptz not null default now()
 );
+alter table public.dv_accounting_listing_documents
+ add column if not exists review_status text not null default 'PENDING',
+ add column if not exists reviewed_by uuid references auth.users(id) on delete set null,
+ add column if not exists reviewed_at timestamptz;
+alter table public.dv_accounting_listing_documents
+ drop constraint if exists dv_accounting_listing_documents_review_status_check;
+alter table public.dv_accounting_listing_documents
+ add constraint dv_accounting_listing_documents_review_status_check
+ check (review_status in ('PENDING','APPROVED','NOT_APPROVED'));
 create index if not exists idx_dv_listing_documents_listing on public.dv_accounting_listing_documents(listing_id,created_at desc);
 alter table public.dv_accounting_listing_documents enable row level security;
 drop policy if exists "listing documents admin read" on public.dv_accounting_listing_documents;
@@ -5468,6 +5480,8 @@ drop policy if exists "listing documents agent insert own" on public.dv_accounti
 create policy "listing documents agent insert own" on public.dv_accounting_listing_documents for insert to authenticated with check (uploaded_by=auth.uid() and exists(select 1 from public.dv_accounting_listing_submissions s join public.dv_accounting_agents a on a.id=s.agent_id where s.id=listing_id and s.status in ('DRAFT','NEEDS_CHANGES') and lower(trim(a.email))=lower(trim(coalesce(auth.jwt()->>'email','')))));
 drop policy if exists "listing documents admin insert" on public.dv_accounting_listing_documents;
 create policy "listing documents admin insert" on public.dv_accounting_listing_documents for insert to authenticated with check (public.dv_accounting_is_trade_admin() and uploaded_by=auth.uid());
+drop policy if exists "listing documents admin update" on public.dv_accounting_listing_documents;
+create policy "listing documents admin update" on public.dv_accounting_listing_documents for update to authenticated using (public.dv_accounting_is_trade_admin()) with check (public.dv_accounting_is_trade_admin());
 drop policy if exists "listing documents admin delete" on public.dv_accounting_listing_documents;
 create policy "listing documents admin delete" on public.dv_accounting_listing_documents for delete to authenticated using (public.dv_accounting_is_trade_admin());
 
