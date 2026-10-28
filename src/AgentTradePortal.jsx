@@ -603,7 +603,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
        }else{
          const result=await supabase.from("dv_accounting_agent_trade_documents").insert([{
            submission_id:draft.id,document_type:docType,
-           document_name:useCustomDocumentName?newDocLabel.trim():(docTypes.find(([type])=>type===docType)?.[1]||docType),
+           document_name:newDocLabel.trim()||(docTypes.find(([type])=>type===docType)?.[1]||docType),
            storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id,
            match_status:"PENDING",match_notes:null
          }]);
