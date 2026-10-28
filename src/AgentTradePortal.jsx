@@ -751,7 +751,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      if(e)throw e;
      if(!data)throw new Error("No document was updated. Refresh and check administrator permissions.");
      setDocs(current=>current.map(d=>d.id===doc.id?data:d));
-     setMessage(match_status==="MISMATCH"?"Document marked Not approved. After reviewing every uploaded file, use Send to Agent for Update to release the correction request.":match_status==="PENDING"?"Document review set to Pending.":"Document approved. Review the remaining uploaded files before sending any correction request.");
+     setMessage(match_status==="MISMATCH"?"Document marked Not approved and saved. Use Send to Agent for Update only when you want to notify the agent about the required correction.":match_status==="PENDING"?"Document review set to Pending and saved.":"Document approved and saved.");
      await Promise.all([loadDocs(selected?.id),load()]);
    }catch(e){setError("Could not "+(match_status==="MISMATCH"?"mark the document not approved":match_status==="PENDING"?"set the document to pending":"approve")+" document: "+(e?.message||String(e)));}
    finally{setBusy(false)}
