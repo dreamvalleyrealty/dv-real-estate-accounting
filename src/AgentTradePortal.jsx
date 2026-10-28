@@ -247,7 +247,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
     if(!v.name||!v.phone||!v.address||!v.city||!v.province||!v.postal_code){setError("Complete the brokerage name, phone, street address, city, province, and postal code before saving it to the directory.");return;}
     const phoneDigits=normalizePhone(v.phone);
     const duplicate=brokerageDirectory.find(b=>String(b.company_name||b.brokerage_name||b.name||"").trim().toLowerCase()===v.name.toLowerCase()|| (phoneDigits.length>=10&&normalizePhone(b.phone||b.telephone)===phoneDigits));
-    if(duplicate){fillBrokerage(sideKey,v.phone);setError("");setMessage("This brokerage is already in the directory. Its saved details have been filled in.");return;}
+    if(duplicate){if(phoneDigits.length>=10&&normalizePhone(duplicate.phone||duplicate.telephone)===phoneDigits)fillBrokerageByPhone(sideKey,v.phone);else fillBrokerage(sideKey,duplicate.brokerage_name||duplicate.company_name||duplicate.name||v.name);setError("");setMessage("This brokerage is already in the directory. Its saved details have been filled in.");return;}
     setBusy(true);setError("");setMessage("");
     try{
       const {data,error:e}=await supabase.from("dv_accounting_external_brokerages").insert([{company_name:v.name,brokerage_name:v.name,address:v.address,unit:v.unit||null,city:v.city,province:v.province,postal_code:v.postal_code,phone:v.phone,fax:v.fax||null,billing_email:v.billing_email||null,charges_hst:true}]).select().single();
