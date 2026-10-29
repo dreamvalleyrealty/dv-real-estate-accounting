@@ -1,0 +1,2 @@
+alter table public.dv_accounting_inventory_movements drop constraint if exists dv_accounting_inventory_movements_movement_type_check;
+alter table public.dv_accounting_inventory_movements add constraint dv_accounting_inventory_movements_movement_type_check check (movement_type in ('STOCK_IN','BORROW','RETURN','GIFT','SALE','SERVICE','ADJUSTMENT'));
