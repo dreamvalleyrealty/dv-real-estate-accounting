@@ -247,7 +247,10 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
   if(e){setError("Could not update document review status: "+e.message);setBusy(false);return}
   setDocs(old=>old.map(item=>item.id===doc.id?data:item));
   if(previewDocument?.id===doc.id)setPreviewDocument(data);
-  if(status==="APPROVED"&&String(data.document_type||"").toUpperCase()==="LISTING_CANCELLATION"){
+  const approvedDocumentType=String(data.document_type||"").trim().toUpperCase();
+  const approvedRequirement=requirements.find(item=>String(item.code||"").trim().toUpperCase()===approvedDocumentType);
+  const isListingCancellationDocument=/CANCEL(LATION|LED|LING)/i.test(approvedDocumentType)||/CANCEL(LATION|LED|LING)/i.test(String(approvedRequirement?.label||""))||/CANCEL(LATION|LED|LING)/i.test(String(data.document_name||""));
+  if(status==="APPROVED"&&isListingCancellationDocument){
    const listing=selected;
    if(!listing?.id){setError("Cancellation document approved, but no listing is selected to cancel.");setBusy(false);return}
    const cancellationNote="Listing cancelled after admin approval of the seller-signed listing cancellation document.";
