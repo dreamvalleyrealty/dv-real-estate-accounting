@@ -5,6 +5,8 @@ const cors = {"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"
 function json(body: unknown, status=200) { return new Response(JSON.stringify(body), {status, headers:{...cors,"Content-Type":"application/json","Cache-Control":"no-store"}}); }
 const validEmail=(v:string)=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 function decodeBase64(input:string) { const raw=atob(input); const bytes=new Uint8Array(raw.length); for(let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i); return bytes; }
+function torontoGreeting(now=new Date()) { const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Toronto",hour:"2-digit",hourCycle:"h23"}).formatToParts(now); const hour=Number(parts.find(part=>part.type==="hour")?.value||"0"); return hour<12?"Good morning":hour<17?"Good afternoon":"Good evening"; }
+function refreshScheduledGreeting(html:string, now=new Date()) { const greeting=torontoGreeting(now); return html.replace(/Good\s+(?:morning|afternoon|evening)/i,greeting); }
 
 Deno.serve(async (req:Request) => {
   if(req.method==="OPTIONS") return new Response("ok",{headers:cors});
@@ -27,7 +29,7 @@ Deno.serve(async (req:Request) => {
     let logId:string|null=null;
     try {
       const recipient=String(claimed.recipient_email||"").trim(), cc=String(claimed.cc_email||"").trim();
-      const subject=String(claimed.subject||"").trim(), html=String(claimed.html_body||"").trim();
+      const subject=String(claimed.subject||"").trim(), html=refreshScheduledGreeting(String(claimed.html_body||"").trim());
       const attachmentName=String(claimed.attachment_name||"").trim(), base64=String(claimed.attachment_base64||"");
       const documentType=String(claimed.document_type||"");
       if(!validEmail(recipient)||(cc&&!validEmail(cc))) throw new Error("Scheduled email has an invalid recipient address.");
