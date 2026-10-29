@@ -10,7 +10,8 @@ export default function InventoryControl({user,canManage=false}){
  const load=useCallback(async()=>{if(!supabase)return;const r=await Promise.all([supabase.from("dv_accounting_inventory_items").select("*").order("item_name"),supabase.from("dv_accounting_inventory_movements").select("*").order("created_at",{ascending:false}).limit(1000),supabase.from("dv_accounting_agents").select("id,first_name,last_name,branch_id,agent_number").order("last_name"),supabase.from("dv_accounting_branches").select("id,name").order("name"),supabase.from("dv_accounting_inventory_branch_stock").select("*")]);const bad=r.find(x=>x.error);if(bad){setError(bad.error.message);return}setItems(r[0].data||[]);setMoves(r[1].data||[]);setAgents((r[2].data||[]).filter(a=>a.active!==false));setBranches(r[3].data||[]);setBranchStock(r[4].data||[]);setSelectedBranch(v=>v||(r[3].data||[])[0]?.id||"")},[]);
  useEffect(()=>{load()},[load]);
  const agentName=id=>{const a=agents.find(x=>x.id===id);return a?[a.first_name,a.last_name].filter(Boolean).join(" "):"—"};
- const branchName=id=>branches.find(x=>x.id===id)?.name||"—";\n const branchQuantity=(item,branchId=selectedBranch)=>Number(branchStock.find(x=>x.item_id===item.id&&x.branch_id===branchId)?.quantity||0);
+ const branchName=id=>branches.find(x=>x.id===id)?.name||"—";
+ const branchQuantity=(item,branchId=selectedBranch)=>Number(branchStock.find(x=>x.item_id===item.id&&x.branch_id===branchId)?.quantity||0);
  const loans=moves.filter(m=>m.movement_type==="BORROW"&&["OUT","PARTIAL"].includes(m.status));
  const overdue=loans.filter(m=>m.due_date&&m.due_date<today());
  const shown=useMemo(()=>items.filter(i=>(tab==="STOCK"||tab==="LOANS"&&i.item_type==="LOANABLE"||tab==="GIFTS"&&i.item_type==="GIFT"||tab==="SALES"&&["SELLABLE","SERVICE"].includes(i.item_type))&&[i.item_code,i.item_name,i.category,i.description].filter(Boolean).join(" ").toLowerCase().includes(search.toLowerCase())),[items,tab,search]);
