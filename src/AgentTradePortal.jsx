@@ -873,28 +873,32 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    let cooperatingBillingEmail="";
    if(status==="APPROVED"){
      const p=selected.payload||{};
-     const side=String(p.side||"BUYER").toUpperCase();
-     const listingSide=["SELLER","LANDLORD","LISTING"].includes(side);
-     const cooperatingName=String((listingSide?p.buyer_brokerage_name:p.listing_brokerage_name)||"").trim();
-     cooperatingBillingEmail=String((listingSide?p.buyer_brokerage_billing_email:p.listing_brokerage_billing_email)||"").trim();
-     if(!cooperatingName){
-       setError("Enter the cooperating brokerage name and address details before approving this trade.");
-       return;
-     }
-     if(cooperatingName.toLowerCase()!=="dream valley realty inc., brokerage"&&!cooperatingBillingEmail){
-       const supplied=window.prompt("Enter the cooperating brokerage billing email. This is required before transferring the trade to Transactions:");
-       if(supplied===null){setError("Approval cancelled. The cooperating brokerage billing email is required.");return;}
-       cooperatingBillingEmail=String(supplied).trim();
-       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cooperatingBillingEmail)){setError("Enter a valid cooperating brokerage billing email before approving this trade.");return;}
-     }
-     if(cooperatingName.toLowerCase()!=="dream valley realty inc., brokerage"&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cooperatingBillingEmail)){setError("Enter a valid cooperating brokerage billing email before approving this trade.");return;}
-     const billingKey=listingSide?"buyer_brokerage_billing_email":"listing_brokerage_billing_email";
-     if(cooperatingBillingEmail&&String(p[billingKey]||"").trim()!==cooperatingBillingEmail){
-       const updatedPayload={...p,[billingKey]:cooperatingBillingEmail};
-       const{error:payloadError}=await supabase.from("dv_accounting_agent_trade_submissions").update({payload:updatedPayload,updated_at:new Date().toISOString()}).eq("id",selected.id);
-       if(payloadError){setError("Could not save the brokerage billing email to the trade submission: "+payloadError.message);return;}
-       selected.payload=updatedPayload;
-       try{await syncTradeDirectoryRecords(updatedPayload);}catch(syncError){setError("Billing email was saved to the trade submission, but the brokerage directory sync failed: "+(syncError?.message||String(syncError)));return;}
+     // A self-represented buyer or seller has no cooperating brokerage to require.
+     // Check individual party statuses as well as legacy overall status fields.
+     if(!hasSelfRepresentedParty(p)){
+       const side=String(p.side||"BUYER").toUpperCase();
+       const listingSide=["SELLER","LANDLORD","LISTING"].includes(side);
+       const cooperatingName=String((listingSide?p.buyer_brokerage_name:p.listing_brokerage_name)||"").trim();
+       cooperatingBillingEmail=String((listingSide?p.buyer_brokerage_billing_email:p.listing_brokerage_billing_email)||"").trim();
+       if(!cooperatingName){
+         setError("Enter the cooperating brokerage name and address details before approving this trade.");
+         return;
+       }
+       if(cooperatingName.toLowerCase()!=="dream valley realty inc., brokerage"&&!cooperatingBillingEmail){
+         const supplied=window.prompt("Enter the cooperating brokerage billing email. This is required before transferring the trade to Transactions:");
+         if(supplied===null){setError("Approval cancelled. The cooperating brokerage billing email is required.");return;}
+         cooperatingBillingEmail=String(supplied).trim();
+         if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cooperatingBillingEmail)){setError("Enter a valid cooperating brokerage billing email before approving this trade.");return;}
+       }
+       if(cooperatingName.toLowerCase()!=="dream valley realty inc., brokerage"&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cooperatingBillingEmail)){setError("Enter a valid cooperating brokerage billing email before approving this trade.");return;}
+       const billingKey=listingSide?"buyer_brokerage_billing_email":"listing_brokerage_billing_email";
+       if(cooperatingBillingEmail&&String(p[billingKey]||"").trim()!==cooperatingBillingEmail){
+         const updatedPayload={...p,[billingKey]:cooperatingBillingEmail};
+         const{error:payloadError}=await supabase.from("dv_accounting_agent_trade_submissions").update({payload:updatedPayload,updated_at:new Date().toISOString()}).eq("id",selected.id);
+         if(payloadError){setError("Could not save the brokerage billing email to the trade submission: "+payloadError.message);return;}
+         selected.payload=updatedPayload;
+         try{await syncTradeDirectoryRecords(updatedPayload);}catch(syncError){setError("Billing email was saved to the trade submission, but the brokerage directory sync failed: "+(syncError?.message||String(syncError)));return;}
+       }
      }
    }
    const selectedMissingDocs=missingRequiredDocs.map(type=>({CONDITION_NOTICE_FULFILLMENT:"Notice of Fulfillment of Condition",CONDITION_WAIVER:"Waiver of Condition",CONDITION_AMENDMENT:"Amendment"}[type]||docTypes.find(([key])=>key===type)?.[1]||type));const notesParts=[];if(selectedMissingDocs.length)notesParts.push("Missing required documents:\\n"+selectedMissingDocs.map(label=>"- "+label).join("\\n"));if(reviewNotes.trim())notesParts.push("Additional notes:\\n"+reviewNotes.trim());const effectiveReviewNotes=notesParts.join("\\n\\n");if(status==="NEEDS_CHANGES"&&!selectedMissingDocs.length){setError("Select at least one missing required document.");return}
