@@ -298,13 +298,14 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
 const segment=String(form.market_segment||"RESIDENTIAL")==="COMMERCIAL"?"commercial_":"";
   const key="admin_fee_"+segment+kind;
   const ruleAdminType=rule?.[key+"_type"],planAdminType=plan?.[key+"_type"],agentAdminType=agent?.[key+"_type"];
-  const adminType=settings?.admin_fee_override!=null?"AMOUNT":(agentAdminType||ruleAdminType||planAdminType||"AMOUNT");
-  const adminValue=Number(settings?.admin_fee_override??agent?.[key+"_value"]??rule?.[key+"_value"]??plan?.[key+"_value"]??0);
-  const leadType=settings?.lead_fee_override!=null?"AMOUNT":(agent["lead_fee_"+kind+"_type"]||settings?.["lead_fee_"+kind+"_type"]||rule?.["lead_fee_"+kind+"_type"]||plan?.["lead_fee_"+kind+"_type"]||"AMOUNT");
-  const leadValue=Number(settings?.lead_fee_override??agent["lead_fee_"+kind+"_value"]??rule?.["lead_fee_"+kind+"_value"]??plan?.["lead_fee_"+kind+"_value"]??0);
+  const adminType=settings?.admin_fee_override!=null?"AMOUNT":(settings?.[key+"_type"]||agentAdminType||ruleAdminType||planAdminType||"AMOUNT");
+  const adminValue=Number(settings?.admin_fee_override??settings?.[key+"_value"]??agent?.[key+"_value"]??rule?.[key+"_value"]??plan?.[key+"_value"]??0);
+  const leadKey="lead_fee_"+kind;
+  const leadType=settings?.lead_fee_override!=null?"AMOUNT":(settings?.[leadKey+"_type"]||agent[leadKey+"_type"]||rule?.[leadKey+"_type"]||plan?.[leadKey+"_type"]||"AMOUNT");
+  const leadValue=Number(settings?.lead_fee_override??settings?.[leadKey+"_value"]??agent[leadKey+"_value"]??rule?.[leadKey+"_value"]??plan?.[leadKey+"_value"]??0);
   const base=Number(inbound||0);const admin=adminType==="PERCENT"?base*adminValue/100:adminValue;const lead=!!form.is_brokerage_lead?(leadType==="PERCENT"?base*leadValue/100:leadValue):0;const desk=Number(settings?.desk_fee_override??rule?.desk_fee??plan?.desk_fee??agent.desk_fee_override??0);const plannedBrokerageShare=base*(100-split)/100;const minimumBrokerageShareApplies=kind!=="lease";const brokerageShare=minimumBrokerageShareApplies?Math.max(plannedBrokerageShare,500):Math.max(0,plannedBrokerageShare);const minimumBrokerageShareApplied=minimumBrokerageShareApplies&&brokerageShare>plannedBrokerageShare;const gross=Math.max(0,base-brokerageShare);const outstanding=feeChargeRows.filter(x=>x.agent_id===agent.id&&x.status==="OPEN"&&x.applied_to_cheque_id==null).reduce((sum,x)=>sum+Number(x.amount||0),0);const source=settings?.commission_split_override_percent!=null||settings?.admin_fee_override!=null||settings?.lead_fee_override!=null||settings?.desk_fee_override!=null?"Agent fee settings":rule?"Agent fee rule":plan?"Fee plan":"Agent defaults";
   setAgentFee({split,admin,lead,desk,outstanding,agentGross:gross,brokerageShare,minimumBrokerageShareApplied,netPayable:Math.max(0,gross-admin-lead),source,planName:plan?.name||"",ruleName:rule?.name||"",basis:base});
- },[agentInfo.agent_id,agents.rows,plans.rows,feeSettings.rows,feeRules.rows,feeCharges.rows,inbound,form.side,form.market_segment,form.close_date,form.firm_date,form.is_brokerage_lead]);
+ },[agentInfo.agent_id,agentRows,planRows,feeSettingRows,feeRuleRows,feeChargeRows,inbound,form.transaction_type,form.side,form.market_segment,form.close_date,form.firm_date,form.is_brokerage_lead]);
  function setField(k,v){setForm(f=>({...f,[k]:v}))}
  function updatePerson(i,k,v){setPeople(a=>a.map((p,n)=>n===i?{...p,[k]:v}:p))}
  function updateBroker(i,k,v){setBrokers(a=>a.map((p,n)=>n===i?{...p,[k]:v}:p))}
