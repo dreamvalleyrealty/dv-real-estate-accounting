@@ -422,8 +422,10 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
    if(paths.length){const{error:storageError}=await supabase.storage.from("dv-trade-documents").remove(paths);if(storageError)throw new Error("Could not remove draft listing files. Listing was not deleted: "+storageError.message)}
    const{error:docsError}=await supabase.from("dv_accounting_listing_documents").delete().eq("listing_id",row.id);
    if(docsError)throw new Error("Could not remove the draft's document records: "+docsError.message);
-   const{error:deleteError}=await supabase.from("dv_accounting_listing_submissions").delete().eq("id",row.id).eq("status","DRAFT");
+   const{data:deletedRows,error:deleteError}=await supabase.from("dv_accounting_listing_submissions").delete().eq("id",row.id).eq("status","DRAFT").select("id");
    if(deleteError)throw new Error("Could not delete the draft listing: "+deleteError.message);
+   if(!deletedRows||deletedRows.length!==1)throw new Error("The database did not confirm deletion. The draft may still exist or your account may not have permission to delete it. Refresh the list and check permissions.");
+   setRows(old=>old.filter(item=>item.id!==row.id));
    if(selected?.id===row.id){setSelected(null);setNewListing(false);setDocs([]);setPreviewDocument(null);setPreviewUrl("");setFileBatch([])}
    setMessage("Draft listing deleted.");
    await load();
