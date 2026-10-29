@@ -71,6 +71,8 @@ function normalizeTradeAddressFields(values={}){
 }
 function normalizePropertyAddress(value){
  let address=String(value||"").trim().replace(/\s*,\s*/g,", ").replace(/\s+/g," ");
+ // Remove an accidental comma between the street number and street name (for example, "12, Cricket Mews").
+ address=address.replace(/^(\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?),\s+(?=\S)/i,"$1 ");
  // Correct legacy values where the house number was repeated in the saved address.
  address=address.replace(/^(\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?)(?:[\s,]+\1){1,}(?=[\s,])/i,"$1");
  return address;
