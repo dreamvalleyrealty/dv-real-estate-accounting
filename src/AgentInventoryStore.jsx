@@ -39,7 +39,13 @@ export default function AgentInventoryStore({user,agentId}){
    setCart({});setNotes("");await load();
    if(payment==="SQUARE"&&data.checkout_url){window.location.assign(data.checkout_url);return;}
    setMessage("Order "+data.order.order_number+" created. Send the exact amount by Interac e-Transfer to admin@dvrealty.ca and include the order number in the message. Your order remains pending until the office verifies payment.");
-  }catch(e){setError(e.message||"Could not place order.")}finally{setBusy(false)}
+  }catch(e){
+   let detail=e?.message||"Could not place order.";
+   if(e?.context&&typeof e.context.clone==="function"){
+    try{const payload=await e.context.clone().json();if(payload?.error)detail=payload.error;}catch{}
+   }
+   setError(detail);
+  }finally{setBusy(false)}
  };
  const submitBorrow=async()=>{
   setBusy(true);setError("");setMessage("");
