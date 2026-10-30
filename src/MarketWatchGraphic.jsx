@@ -130,14 +130,17 @@ export default function MarketWatchGraphic({agentId,user,adminMode=false}){
   setLoading(true);setError("");
   try{
    let reportQuery=supabase.from("dv_property_market_reports").select("id,report_period,status").neq("report_period","2026-03-01");
-   if(!adminMode)reportQuery=reportQuery.eq("status","APPROVED");\n   const {data:publishedReports,error:publishedError}=await reportQuery;
+   if(!adminMode)reportQuery=reportQuery.eq("status","APPROVED");
+   const {data:publishedReports,error:publishedError}=await reportQuery;
    if(publishedError)throw publishedError;
    const visibleIds=(publishedReports||[]).map(r=>r.id);
    setPublishedIds(visibleIds);
    const pageSize=500;
    const fetchedRows=[];
    for(let offset=0;;offset+=pageSize){
-    let rowQuery=supabase.from("dv_property_market_stat_rows").select("*").order("report_period",{ascending:false}).order("source_page",{ascending:true});\n    if(!adminMode)rowQuery=rowQuery.eq("review_status","APPROVED");\n    const {data:page,error:rowsError}=await rowQuery.range(offset,offset+pageSize-1);
+    let rowQuery=supabase.from("dv_property_market_stat_rows").select("*").order("report_period",{ascending:false}).order("source_page",{ascending:true});
+    if(!adminMode)rowQuery=rowQuery.eq("review_status","APPROVED");
+    const {data:page,error:rowsError}=await rowQuery.range(offset,offset+pageSize-1);
     if(rowsError)throw rowsError;
     fetchedRows.push(...(page||[]));
     if(!page||page.length<pageSize)break;
