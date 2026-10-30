@@ -16,15 +16,20 @@ function readComparableRows(rows){
  return rows.map(r=>({address:String(pick(r,["Address","Property Address","Street Address"])),city:String(pick(r,["City","Municipality"])),property_type:String(pick(r,["Property Type","Type"])),bedrooms:cleanNumber(pick(r,["Bedrooms","Beds","Br"])),bathrooms:cleanNumber(pick(r,["Bathrooms","Baths","Wr"])),square_feet:cleanNumber(pick(r,["Square Feet","Sq Ft","Sqft","Finished Area"])),lot_size:String(pick(r,["Lot Size","Lot"])),parking:String(pick(r,["Parking","Parkings"])),list_price:cleanNumber(pick(r,["List Price","Original Price","Asking Price"])),sold_price:cleanNumber(pick(r,["Sold Price","Sale Price","Selling Price"])),sold_date:String(pick(r,["Sold Date","Closing Date","Sale Date"])).slice(0,10),days_on_market:cleanNumber(pick(r,["Days on Market","DOM"])),condition_notes:String(pick(r,["Condition","Remarks","Notes"])),adjustments:cleanNumber(pick(r,["Adjustments","Adjustment"]))??0,source:"MLS/REALM UPLOAD"})).filter(r=>r.address);
 }
 function extractMarketWatchText(text){
- const month=text.match(/Market Watch\\s+([A-Za-z]+\\s+20\\d{2})/i)?.[1]||text.match(/([A-Za-z]+\\s+20\\d{2})/)?.[1]||"";
- const read=(label)=>{const escaped=label.replace(/[.*+?^${}()|[\\]\\\\]/g,"\\\\function downloadPdf(title,subtitle,lines,agentName){");const m=text.match(new RegExp(escaped+"\\\\s+([\\\\d,]+)\\\\s+([\\\\d,]+)","i"));return m?.[1]?.replace(/,/g,"")||"";};
- const sales=read("Sales"),newListings=read("New Listings");
- const average=text.match(/Average Price\\s+\\$?([\\d,]+)\\s+\\$?[\\d,]+/i)?.[1]?.replace(/,/g,"")||"";
- const active=text.match(/Active Listings\\s+([\\d,]+)\\s+([\\d,]+)/i)?.[1]?.replace(/,/g,"")||"";
- const ldom=text.match(/Avg\\. LDOM\\s+(\\d+)\\s+\\d+/i)?.[1]||"";
- const pdom=text.match(/Avg\\. PDOM\\s+(\\d+)\\s+\\d+/i)?.[1]||"";
- const median=text.match(/Median Price\\s+\\$?([\\d,]+)/i)?.[1]?.replace(/,/g,"")||"";
- return {month,sales,new_listings:newListings,average_price:average,median_price:median,active_listings:active,days_on_market:ldom,average_pdom:pdom,text};
+ const month=text.match(/Market Watch\s+([A-Za-z]+\s+20\d{2})/i)?.[1]||"";
+ const summaryIndex=text.toLowerCase().indexOf("year-over-year summary");
+ const summary=summaryIndex>=0?text.slice(summaryIndex):text;
+ const read=(label)=>{const m=summary.match(new RegExp(label+"\\s+([\\d,]+)","i"));return m?.[1]?.replace(/,/g,"")||"";};
+ return {
+  month,
+  sales:read("Sales"),
+  new_listings:read("New Listings"),
+  average_price:read("Average Price").replace(/,/g,""),
+  median_price:"",
+  days_on_market:(summary.match(/Avg\. LDOM\s+(\d+)/i)?.[1]||""),
+  months_supply:"",
+  text
+ };
 }
 function downloadPdf(title,subtitle,lines,agentName){
  const d=new jsPDF({unit:"mm",format:"a4"}),w=d.internal.pageSize.getWidth();
