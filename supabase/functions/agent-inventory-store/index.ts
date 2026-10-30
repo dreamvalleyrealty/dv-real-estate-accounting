@@ -29,21 +29,43 @@ Deno.serve(async (req: Request) => {
       const lines = Array.isArray(body.items) ? body.items : [];
       if (!lines.length || lines.length > 30) return json({ error: "Choose at least one item." }, 400);
       const branchId = body.branch_id || agent.branch_id || null;
+      const requested = new Map<string, number>();
+      for (const line of lines) {
+        const quantity = Number(line.quantity);
+        if (!Number.isInteger(quantity) || quantity <= 0 || quantity > 100) return json({ error: "Borrowing quantities must be whole numbers between 1 and 100." }, 400);
+        requested.set(String(line.item_id), (requested.get(String(line.item_id)) || 0) + quantity);
+      }
+      const itemRows: any[] = [];
+      for (const [itemId, quantity] of requested) {
+        const { data: item, error } = await db.from("dv_accounting_inventory_items")
+          .select("id,item_name,item_type,is_active,stock_quantity")
+          .eq("id", itemId).single();
+        if (error || !item || item.item_type !== "LOANABLE" || !item.is_active) return json({ error: "A selected item is not available to borrow." }, 400);
+        let onHand = Number(item.stock_quantity || 0);
+        if (branchId) {
+          const { data: branchStock } = await db.from("dv_accounting_inventory_branch_stock")
+            .select("quantity").eq("item_id", item.id).eq("branch_id", branchId).maybeSingle();
+          if (branchStock) onHand = Number(branchStock.quantity || 0);
+        }
+        const { data: approvedRows, error: reservedError } = await db.from("dv_accounting_inventory_borrow_requests")
+          .select("id,items:dv_accounting_inventory_borrow_request_items!inner(quantity,item_id)")
+          .eq("branch_id", branchId).eq("status", "APPROVED")
+          .eq("items.item_id", item.id);
+        if (reservedError) throw reservedError;
+        const reserved = (approvedRows || []).reduce((sum: number, row: any) =>
+          sum + (row.items || []).reduce((n: number, x: any) => n + Number(x.quantity || 0), 0), 0);
+        const available = Math.max(0, onHand - reserved);
+        if (quantity > available) return json({ error: item.item_name + " has only " + available + " available to borrow at this branch. Approved requests are reserved." }, 409);
+        itemRows.push({ item_id: item.id, item_name: item.item_name, quantity });
+      }
       const { data: request, error: insertError } = await db.from("dv_accounting_inventory_borrow_requests").insert({
         request_number: "BR-" + crypto.randomUUID().slice(0, 8).toUpperCase(),
         agent_id: agent.id, branch_id: branchId, pickup_date: body.pickup_date || null,
         due_date: body.due_date || null, notes: String(body.notes || "").slice(0, 1000), status: "PENDING"
       }).select().single();
       if (insertError) throw insertError;
-      const itemRows = [];
-      for (const line of lines) {
-        const { data: item, error } = await db.from("dv_accounting_inventory_items").select("id,item_name,item_type,is_active").eq("id", line.item_id).single();
-        if (error || !item || item.item_type !== "LOANABLE" || !item.is_active) throw new Error("A selected item is not available to borrow.");
-        const quantity = Number(line.quantity);
-        if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("Invalid borrowing quantity.");
-        itemRows.push({ request_id: request.id, item_id: item.id, item_name: item.item_name, quantity });
-      }
-      const { error: linesError } = await db.from("dv_accounting_inventory_borrow_request_items").insert(itemRows);
+      const { error: linesError } = await db.from("dv_accounting_inventory_borrow_request_items")
+        .insert(itemRows.map(x => ({ ...x, request_id: request.id })));
       if (linesError) throw linesError;
       return json({ ok: true, request });
     }
