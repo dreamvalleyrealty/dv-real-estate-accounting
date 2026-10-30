@@ -17,8 +17,15 @@ export default function MarketWatch({user,role="AGENT"}){
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState("");
  const [notice,setNotice]=useState("");
- const [uploadFile,setUploadFile]=useState(null);
- const [uploadMonth,setUploadMonth]=useState(new Date().toISOString().slice(0,7)+"-01");
+ const [uploadFiles,setUploadFiles]=useState([]);
+ const inferReportMonth=file=>{
+  const name=file.name||"";
+  let match=name.match(/(?:mw|market[-_ ]?watch[-_ ]?)?(20)?(2[0-9])[-_ ]?(0[1-9]|1[0-2])/i);
+  if(match){const year=match[1]?Number("20"+match[2]):Number("20"+match[2]);return year+"-"+match[3]+"-01";}
+  match=name.match(/(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\D+(20\d{2})/i);
+  if(match){const months=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];const idx=months.findIndex(m=>match[1].toLowerCase().startsWith(m));return idx>=0?match[2]+"-"+String(idx+1).padStart(2,"0")+"-01":"";}
+  return "";
+ };
  const [filter,setFilter]=useState("all");
 
  const load=useCallback(async()=>{
@@ -157,26 +164,38 @@ export default function MarketWatch({user,role="AGENT"}){
  };
  const upload=async e=>{
   e.preventDefault();
-  if(!management||!uploadFile)return;
+  if(!management||!uploadFiles.length)return;
+  const invalid=uploadFiles.filter(item=>!item.month||!/^\d{4}-\d{2}-01$/.test(item.month));
+  if(invalid.length){setError("Choose a report month for every PDF before uploading.");return;}
+  const seen=new Set();
+  for(const item of uploadFiles){if(seen.has(item.month)){setError("Two selected PDFs have the same report month: "+monthLabel(item.month)+". Select only one PDF per month.");return;}seen.add(item.month);}
+  const existing=uploadFiles.filter(item=>reports.some(r=>r.report_period===item.month));
+  if(existing.length){setError("A report already exists for "+existing.map(x=>monthLabel(x.month)).join(", ")+". Use Re-upload on the existing report to replace its PDF.");return;}
   setBusy(true);setError("");setNotice("");
-  let path=null;
-  try{
-   path=(user?.id||"management")+"/"+Date.now()+"-"+uploadFile.name.replace(/[^a-zA-Z0-9._-]/g,"_");
-   const {error:storageError}=await supabase.storage.from("dv-property-market-reports").upload(path,uploadFile,{contentType:"application/pdf",upsert:false});
-   if(storageError)throw storageError;
-   const {error:insertError}=await supabase.from("dv_property_market_reports").insert({
-    report_period:uploadMonth,geography:"GTA",property_type:"ALL",source_name:uploadFile.name,
-    metrics:{},pdf_storage_path:path,pdf_file_name:uploadFile.name,status:"DRAFT",
-    created_by:user?.id||null,approved_by:null,approved_at:null
-   });
-   if(insertError)throw insertError;
-   setNotice("Original PDF saved to the Market Watch library as a draft. It is not visible to agents and still needs extraction and review.");
-   setUploadFile(null);
-   await load();
-  }catch(err){
-   if(path)await supabase.storage.from("dv-property-market-reports").remove([path]);
-   setError(err.message||"Unable to upload the Market Watch PDF.");
-  }finally{setBusy(false);}
+  const completed=[],failures=[];
+  for(const item of uploadFiles){
+   let path=null;
+   try{
+    path=(user?.id||"management")+"/"+Date.now()+"-"+item.file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+    const {error:storageError}=await supabase.storage.from("dv-property-market-reports").upload(path,item.file,{contentType:"application/pdf",upsert:false});
+    if(storageError)throw storageError;
+    const {error:insertError}=await supabase.from("dv_property_market_reports").insert({
+     report_period:item.month,geography:"GTA",property_type:"ALL",source_name:item.file.name,
+     metrics:{},pdf_storage_path:path,pdf_file_name:item.file.name,status:"DRAFT",
+     created_by:user?.id||null,approved_by:null,approved_at:null
+    });
+    if(insertError)throw insertError;
+    completed.push(monthLabel(item.month));
+   }catch(err){
+    if(path)await supabase.storage.from("dv-property-market-reports").remove([path]);
+    failures.push(item.file.name+": "+(err.message||String(err)));
+   }
+  }
+  if(completed.length)setNotice(completed.length+" PDF(s) uploaded as drafts: "+completed.join(", ")+". Each report still needs extraction, review and publication.");
+  if(failures.length)setError("Some PDFs could not be uploaded: "+failures.join(" | "));
+  setUploadFiles([]);
+  await load();
+  setBusy(false);
  };
  if(loading)return <section className="panel"><p>Loading Market Watch…</p></section>;
  return <div className="market-watch">
@@ -190,10 +209,11 @@ export default function MarketWatch({user,role="AGENT"}){
   {management&&<section className="panel" style={{marginBottom:14}}>
    <h2>Market Watch PDF Library</h2>
    <p className="muted">Upload the original monthly TRREB PDF. New uploads are saved as drafts and are never published automatically.</p>
-   <form onSubmit={upload} className="formgrid">
-    <label>Report month<input type="date" required value={uploadMonth} onChange={e=>setUploadMonth(e.target.value)}/></label>
-    <label>Original PDF<input type="file" accept="application/pdf,.pdf" required onChange={e=>setUploadFile(e.target.files?.[0]||null)}/></label>
-    <div className="actions" style={{alignItems:"end"}}><button className="primary" disabled={busy||!uploadFile}><Upload size={16}/> Save PDF as Draft</button></div>
+   <form onSubmit={upload}>
+    <label>Original TRREB PDFs<input type="file" accept="application/pdf,.pdf" multiple required onChange={e=>{const files=Array.from(e.target.files||[]);setUploadFiles(files.filter(f=>f.type==="application/pdf"||f.name.toLowerCase().endsWith(".pdf")).map(file=>({file,month:inferReportMonth(file)})));e.target.value="";}}/></label>
+    <p className="muted" style={{margin:"8px 0"}}>Select PDFs for several months at once. The month is detected from filenames such as mw2608 or 2026-08. Check or set the month for each file below before uploading.</p>
+    {uploadFiles.length>0&&<div className="tablewrap" style={{marginTop:10}}><table><thead><tr><th>PDF file</th><th>Report month</th><th></th></tr></thead><tbody>{uploadFiles.map((item,index)=><tr key={item.file.name+"-"+index}><td>{item.file.name}</td><td><input aria-label={"Report month for "+item.file.name} type="date" required value={item.month} onChange={e=>setUploadFiles(prev=>prev.map((x,i)=>i===index?{...x,month:e.target.value}:x))}/></td><td><button type="button" className="secondary" onClick={()=>setUploadFiles(prev=>prev.filter((_,i)=>i!==index))}>Remove</button></td></tr>)}</tbody></table></div>}
+    <div className="actions" style={{marginTop:12}}><button className="primary" disabled={busy||!uploadFiles.length}><Upload size={16}/> Upload {uploadFiles.length||""} PDF(s) as Drafts</button></div>
    </form>
   </section>}
   <section className="panel">
