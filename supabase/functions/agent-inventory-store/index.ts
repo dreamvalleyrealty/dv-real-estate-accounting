@@ -25,6 +25,37 @@ Deno.serve(async (req: Request) => {
     if (agentError || !agent) return json({ error: "Your login is not linked to an active agent profile." }, 403);
     const body = await req.json();
     const action = body.action;
+    if (action === "submit_interac_reference") {
+      const orderId = String(body.order_id || "");
+      const reference = String(body.interac_reference || "").trim();
+      if (!orderId || !reference || reference.length > 120) return json({ error: "Enter a valid Interac e-Transfer reference code." }, 400);
+      const { data: order, error: orderError } = await db.from("dv_accounting_inventory_orders")
+        .select("id,order_number,payment_method,payment_status,interac_reference")
+        .eq("id", orderId).eq("agent_id", agent.id).maybeSingle();
+      if (orderError || !order) return json({ error: "Order not found." }, 404);
+      if (order.payment_method !== "INTERAC" || order.payment_status !== "PENDING") return json({ error: "This order is not awaiting an Interac reference." }, 409);
+      if (order.interac_reference) return json({ error: "An Interac reference has already been submitted. Contact the office if it needs correction." }, 409);
+      const { error: updateError } = await db.from("dv_accounting_inventory_orders")
+        .update({ interac_reference: reference, updated_at: new Date().toISOString() })
+        .eq("id", order.id).is("interac_reference", null).eq("payment_status", "PENDING");
+      if (updateError) throw updateError;
+      return json({ ok: true, order_number: order.order_number, message: "Interac reference submitted. The office will verify the transfer." });
+    }
+    if (action === "cancel_interac_order") {
+      const orderId = String(body.order_id || "");
+      const { data: order, error: orderError } = await db.from("dv_accounting_inventory_orders")
+        .select("id,order_number,payment_method,payment_status,interac_reference,order_status")
+        .eq("id", orderId).eq("agent_id", agent.id).maybeSingle();
+      if (orderError || !order) return json({ error: "Order not found." }, 404);
+      if (order.payment_method !== "INTERAC" || order.payment_status !== "PENDING" || order.interac_reference || order.order_status === "FULFILLED") {
+        return json({ error: "This order can no longer be cancelled online. Contact the office for assistance." }, 409);
+      }
+      const { error: cancelError } = await db.from("dv_accounting_inventory_orders")
+        .update({ payment_status: "CANCELLED", order_status: "CANCELLED", updated_at: new Date().toISOString() })
+        .eq("id", order.id).eq("payment_status", "PENDING").is("interac_reference", null);
+      if (cancelError) throw cancelError;
+      return json({ ok: true, order_number: order.order_number, message: "Order cancelled before Interac payment was sent." });
+    }
     if (action === "request_borrow") {
       const lines = Array.isArray(body.items) ? body.items : [];
       if (!lines.length || lines.length > 30) return json({ error: "Choose at least one item." }, 400);
