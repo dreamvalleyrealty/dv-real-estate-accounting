@@ -115,7 +115,7 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  ctx.save();ctx.font="normal 76px Georgia";const marketWidth=ctx.measureText("MARKET").width;ctx.restore();
  text("MARKET",53,121,72,white,"normal","Georgia");text("WATCH",53+marketWidth+14,121,72,gold,"bold","Georgia");
  text(curLabel,230,166,34,white,"normal","Georgia","center");line(54,154,184,154,gold,2);line(455,154,612,154,gold,2);
- text("YEAR-OVER-YEAR SUMMARY",652,132,21,gold,"bold","Georgia");text("ALL TRREB AREAS · ALL HOME TYPES",652,160,14,white,"normal","Georgia");
+ text("YEAR-OVER-YEAR SUMMARY",700,132,21,gold,"bold","Georgia");text("ALL TRREB AREAS · ALL HOME TYPES",700,160,14,white,"normal","Georgia");
  if(logo){const scale=Math.min(112/logo.width,118/logo.height);ctx.drawImage(logo,1024,22,logo.width*scale,logo.height*scale);}
  text("DREAM VALLEY",1140,96,27,white,"normal","Georgia");text("REALTY",1193,126,20,white,"normal","Georgia");
  // Master card layout: three top cards and two lower cards.
@@ -141,7 +141,7 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  text("Average Selling Price",170,739,23,white,"normal","Georgia");
  text("Year-over-Year",198,772,22,white,"normal","Georgia");
  drawYoy(170,786,220,70,"average_price");
- drawChart(420,630,254,250,"average_price",false);
+ drawChart(405,630,270,250,"average_price",false);
  // Average DOM panel.
  rounded(697,578,643,321,22,white,gold,2,true);
  icon("calendar",765,658,43);
