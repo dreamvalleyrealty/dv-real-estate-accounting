@@ -30,6 +30,8 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  const ctx=canvas.getContext("2d");if(!ctx)return;
  const navy="#0f2141",gold="#9e8556",white="#ffffff",red="#e12626",green="#176b3a",ink="#10233d",muted="#68788a";
  const curLabel=monthLabel(data.report.report_period),prevLabel=data.previous?monthLabel(data.previous.report_period):"Prior year";
+ const chartCurLabel=data.report.report_period?new Date(data.report.report_period+"T00:00:00").toLocaleDateString("en-CA",{month:"short",year:"numeric"}):curLabel;
+ const chartPrevLabel=data.previous?.report_period?new Date(data.previous.report_period+"T00:00:00").toLocaleDateString("en-CA",{month:"short",year:"numeric"}):"Prior year";
  const pct=k=>percent(data.values[k],data.previousValues[k]);
  const number=v=>fmtInt(v);
  const money=v=>fmtMoney(v);
@@ -91,12 +93,12 @@ function drawGraphic(canvas,data,agent,headshot,logo){
   const bx1=plotX+(plotW-total)/2,bx2=bx1+bw+gap;
   const barH=v=>v==null?0:Math.max(2,(Number(v)/max)*plotH);
   const h1=barH(cur),h2=barH(prev);
-  const valueLabel=v=>isPrice?"$"+(Number(v)/1000000).toFixed(3)+"M":number(v);
-  if(cur!=null){ctx.fillStyle=navy;ctx.fillRect(bx1,base-h1,bw,h1);text(valueLabel(cur),bx1+bw/2,base-h1-7,compact?10:isPrice?12:14,ink,"bold","Arial","center");}
-  if(prev!=null){ctx.fillStyle=gold;ctx.fillRect(bx2,base-h2,bw,h2);text(valueLabel(prev),bx2+bw/2,base-h2-7,compact?10:isPrice?12:14,ink,"bold","Arial","center");}
+  const valueLabel=v=>isPrice?money(v):number(v);
+  if(cur!=null){ctx.fillStyle=navy;ctx.fillRect(bx1,base-h1,bw,h1);text(valueLabel(cur),bx1+bw/2,base-h1-7,compact?10:isPrice?10:14,ink,"bold","Arial","center");}
+  if(prev!=null){ctx.fillStyle=gold;ctx.fillRect(bx2,base-h2,bw,h2);text(valueLabel(prev),bx2+bw/2,base-h2-7,compact?10:isPrice?10:14,ink,"bold","Arial","center");}
   const labelSize=compact?9:12;
-  text(curLabel,bx1+bw/2,base+(compact?17:21),labelSize,ink,"normal","Arial","center");
-  text(prevLabel,bx2+bw/2,base+(compact?17:21),labelSize,ink,"normal","Arial","center");
+  text(chartCurLabel,bx1+bw/2,base+(compact?17:21),labelSize,ink,"normal","Arial","center");
+  text(chartPrevLabel,bx2+bw/2,base+(compact?17:21),labelSize,ink,"normal","Arial","center");
  }; // Background and header.
  const bg=ctx.createLinearGradient(0,0,W,H);bg.addColorStop(0,"#fbfaf7");bg.addColorStop(1,"#e9edf0");ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
  ctx.fillStyle=navy;ctx.fillRect(0,0,W,198);
@@ -168,7 +170,7 @@ function drawGraphic(canvas,data,agent,headshot,logo){
 }
 export default function MarketWatchGraphic({agentId,user,adminMode=false}){
  const canvasRef=useRef(null);
- const [allRows,setAllRows]=useState([]),[publishedIds,setPublishedIds]=useState([]),[agent,setAgent]=useState(null),[headshotUrl,setHeadshotUrl]=useState(""),[selectedId,setSelectedId]=useState(""),[loading,setLoading]=useState(true),[error,setError]=useState(""),[notice,setNotice]=useState(""),[editingMetrics,setEditingMetrics]=useState(false),[metricDraft,setMetricDraft]=useState({}),[savingMetrics,setSavingMetrics]=useState(false);
+ const [allRows,setAllRows]=useState([]),[publishedIds,setPublishedIds]=useState([]),[agent,setAgent]=useState(null),[headshotUrl,setHeadshotUrl]=useState(""),[selectedId,setSelectedId]=useState(""),[loading,setLoading]=useState(true),[error,setError]=useState(""),[notice,setNotice]=useState(""),[editingMetrics,setEditingMetrics]=useState(false),[metricDraft,setMetricDraft]=useState({}),[savingMetrics,setSavingMetrics]=useState(false),[referenceTestPreview,setReferenceTestPreview]=useState(false);
  const load=useCallback(async()=>{
   if(!supabase){setError("Database connection is not configured.");setLoading(false);return;}
   setLoading(true);setError("");
@@ -224,13 +226,16 @@ export default function MarketWatchGraphic({agentId,user,adminMode=false}){
  const previousRow=findAllGtaRow(comparisonRows);
  const values=useMemo(()=>Object.fromEntries(Object.keys(metricKeys).map(k=>[k,readMetric(currentRow,k)])),[currentRow]);
  const previousValues=useMemo(()=>Object.fromEntries(Object.keys(metricKeys).map(k=>[k,readMetric(previousRow,k)])),[previousRow]);
+ const isSeptember2026=selected?.report_period==="2026-09-01";
+ const previewValues=useMemo(()=>referenceTestPreview&&adminMode&&isSeptember2026?{...values,sales:5040,new_listings:16500,active_listings:26131,average_price:1006409,days_on_market:34}:values,[referenceTestPreview,adminMode,isSeptember2026,values]);
+ const previewPreviousValues=useMemo(()=>referenceTestPreview&&adminMode&&isSeptember2026?{...previousValues,sales:5540,new_listings:19280,active_listings:28813,average_price:1060036,days_on_market:33}:previousValues,[referenceTestPreview,adminMode,isSeptember2026,previousValues]);
  const canRender=!!selected&&!!currentRow&&Object.values(values).some(v=>v!==null);
  useEffect(()=>{
   let cancelled=false;
   if(!canRender||!agent||!canvasRef.current)return;
-  Promise.all([safeImage(headshotUrl),safeImage("/dv-logo.svg")]).then(([head,logo])=>{if(cancelled)return;drawGraphic(canvasRef.current,{report:selected,previous:comparison,values,previousValues}, {name:agent.name||[agent.first_name,agent.last_name].filter(Boolean).join(" "),title:"REALTOR®",phone:agent.cell_phone||"",email:agent.email||""},head,logo);});
+  Promise.all([safeImage(headshotUrl),safeImage("/dv-logo.svg")]).then(([head,logo])=>{if(cancelled)return;drawGraphic(canvasRef.current,{report:selected,previous:comparison,values:previewValues,previousValues:previewPreviousValues}, {name:agent.name||[agent.first_name,agent.last_name].filter(Boolean).join(" "),title:"REALTOR®",phone:agent.cell_phone||"",email:agent.email||""},head,logo);});
   return()=>{cancelled=true;};
- },[canRender,selected?.id,comparison?.id,JSON.stringify(values),JSON.stringify(previousValues),agent,headshotUrl]);
+ },[canRender,selected?.id,comparison?.id,JSON.stringify(previewValues),JSON.stringify(previewPreviousValues),agent,headshotUrl]);
  const download=()=>{const canvas=canvasRef.current;if(!canvas)return;canvas.toBlob(blob=>{if(!blob){setError("The image could not be created. Please try again.");return;}const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="Dream-Valley-Market-Watch-"+String(selected.report_period).slice(0,7)+"-"+(agent?.name||"Agent").replace(/[^a-z0-9]+/gi,"-")+".png";a.click();URL.revokeObjectURL(url);setNotice("Your Market Watch graphic has been downloaded.");},"image/png");};
  if(loading)return <section className="panel"><p>Loading your Market Watch graphic workspace…</p></section>;
  return <div className="market-watch-graphic">
@@ -240,6 +245,10 @@ export default function MarketWatchGraphic({agentId,user,adminMode=false}){
   <section className="panel" style={{marginBottom:14}}>
    <div className="formgrid"><label>{adminMode?"Market Watch month":"Approved Market Watch month"}<select value={selectedId} onChange={e=>{setSelectedId(e.target.value);setNotice("");}}><option value="">Select a report</option>{reports.map(r=><option key={r.id} value={r.id}>{monthLabel(r.report_period)}</option>)}</select></label><label>Agent profile<input value={agent?.name||[agent?.first_name,agent?.last_name].filter(Boolean).join(" ")||"Loading…"} readOnly/></label></div>
    <div className="actions" style={{marginTop:14}}><button type="button" className="secondary" onClick={load} ><RefreshCw size={15}/> Refresh reports</button><button type="button" className="primary" onClick={download} disabled={!canRender}><Download size={16}/> Download PNG</button></div>
+   {adminMode&&isSeptember2026&&<div className="actions" style={{marginTop:10}}>
+    <button type="button" className={referenceTestPreview?"primary":"secondary"} onClick={()=>setReferenceTestPreview(v=>!v)}>{referenceTestPreview?"Reference test figures enabled":"Preview reference test figures"}</button>
+    <span className="muted">Admin preview only. This does not update saved statistics or published reports.</span>
+   </div>}
    {!selected&&<p className="muted" style={{marginBottom:0}}>No approved Market Watch reports are currently available.</p>}
    {selected&&!currentRow&&<div className="notice" style={{marginTop:12}}>This report does not contain an All GTA / All TRREB Areas, All Home Types summary row. The graphic cannot be generated from incomplete data.</div>}
    {selected&&currentRow&&!comparison&&<p className="muted" style={{marginBottom:0}}>The matching month from the previous year is not available. Year-over-year comparisons will display as unavailable.</p>}
@@ -252,7 +261,7 @@ export default function MarketWatchGraphic({agentId,user,adminMode=false}){
    </div>}
   </section>}
   <section className="panel"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:12}}><div><h2 style={{margin:0}}>Graphic Preview</h2><p className="muted" style={{margin:"4px 0 0"}}>1400 × 1120 px · PNG format</p></div><ImageIcon size={22} color={GOLD}/></div>
-   {canRender?<div style={{overflowX:"auto",background:"#e9edf0",padding:10,borderRadius:10}}><canvas ref={canvasRef} style={{display:"block",width:"100%",height:"auto",maxWidth:1100,margin:"0 auto",background:"#e9edf0"}}/></div>:<div className="notice">Select an approved report with complete GTA summary figures to preview the graphic.</div>}
+   {canRender?<div style={{overflowX:"auto",background:"#e9edf0",padding:10,borderRadius:10}}>\n    {adminMode&&referenceTestPreview&&<p className="muted" style={{textAlign:"center",margin:"0 0 8px"}}>Reference test figures preview — values are not saved to the database.</p>}<canvas ref={canvasRef} style={{display:"block",width:"100%",height:"auto",maxWidth:1100,margin:"0 auto",background:"#e9edf0"}}/></div>:<div className="notice">Select an approved report with complete GTA summary figures to preview the graphic.</div>}
   </section>
  </div>;
 }
