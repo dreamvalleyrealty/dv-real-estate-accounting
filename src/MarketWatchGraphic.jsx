@@ -87,11 +87,15 @@ function drawGraphic(canvas,data,agent,headshot,logo){
 }
 export default function MarketWatchGraphic({agentId,user}){
  const canvasRef=useRef(null);
- const [allRows,setAllRows]=useState([]),[agent,setAgent]=useState(null),[headshotUrl,setHeadshotUrl]=useState(""),[selectedId,setSelectedId]=useState(""),[loading,setLoading]=useState(true),[error,setError]=useState(""),[notice,setNotice]=useState("");
+ const [allRows,setAllRows]=useState([]),[publishedIds,setPublishedIds]=useState([]),[agent,setAgent]=useState(null),[headshotUrl,setHeadshotUrl]=useState(""),[selectedId,setSelectedId]=useState(""),[loading,setLoading]=useState(true),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const load=useCallback(async()=>{
   if(!supabase){setError("Database connection is not configured.");setLoading(false);return;}
   setLoading(true);setError("");
   try{
+   const {data:publishedReports,error:publishedError}=await supabase.from("dv_property_market_reports").select("id,report_period").eq("status","APPROVED").neq("report_period","2026-03-01");
+   if(publishedError)throw publishedError;
+   const visibleIds=(publishedReports||[]).map(r=>r.id);
+   setPublishedIds(visibleIds);
    const {data:approvedRows,error:rowsError}=await supabase.from("dv_property_market_stat_rows").select("*").eq("review_status","APPROVED").order("report_period",{ascending:false});
    if(rowsError)throw rowsError;
    const safeRows=(approvedRows||[]).filter(r=>String(r.report_period).slice(0,7)!=="2026-03");
@@ -113,9 +117,9 @@ export default function MarketWatchGraphic({agentId,user}){
   finally{setLoading(false);}
  },[agentId,user?.email]);
  useEffect(()=>{load();},[load]);
- const reports=useMemo(()=>{const grouped=new Map();for(const row of allRows){const key=row.market_report_id;if(!grouped.has(key))grouped.set(key,{id:key,report_period:row.report_period,count:0});grouped.get(key).count++;}const choices=[...grouped.values()].sort((a,b)=>b.report_period.localeCompare(a.report_period)||b.count-a.count);const byMonth=new Map();for(const item of choices)if(!byMonth.has(item.report_period))byMonth.set(item.report_period,item);return [...byMonth.values()];},[allRows]);
+ const reports=useMemo(()=>{const grouped=new Map();for(const row of allRows){if(!publishedIds.includes(row.market_report_id))continue;const key=row.market_report_id;if(!grouped.has(key))grouped.set(key,{id:key,report_period:row.report_period,count:0});grouped.get(key).count++;}const choices=[...grouped.values()].sort((a,b)=>b.report_period.localeCompare(a.report_period)||b.count-a.count);const byMonth=new Map();for(const item of choices)if(!byMonth.has(item.report_period))byMonth.set(item.report_period,item);return [...byMonth.values()];},[allRows,publishedIds]);
  const selected=reports.find(r=>r.id===selectedId)||null;
- const comparison=useMemo(()=>{if(!selected)return null;const target=new Date(selected.report_period+"T00:00:00");target.setFullYear(target.getFullYear()-1);const key=target.toISOString().slice(0,10);return reports.find(r=>r.report_period===key)||null;},[reports,selected]);
+ const comparison=useMemo(()=>{if(!selected)return null;const target=new Date(selected.report_period+"T00:00:00");target.setFullYear(target.getFullYear()-1);const key=target.toISOString().slice(0,10);const prior=allRows.find(r=>r.report_period===key&&r.geography_level==="GTA"&&r.property_type==="ALL"&&r.metric_values?.snlr!=null&&r.metric_values?.months_inventory!=null);return prior?{id:prior.market_report_id,report_period:key}:null;},[allRows,selected]);
  // The monthly GTA summary is the row carrying the monthly market indicators (SNLR and months inventory).
  // YTD and property-type rows can share the same geography label, so do not select them for YoY.
  const findAllGtaRow=list=>{
