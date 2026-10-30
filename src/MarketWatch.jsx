@@ -8,7 +8,8 @@ const monthLabel=value=>value?new Date(value+"T00:00:00").toLocaleDateString("en
 
 export default function MarketWatch({user,role="AGENT"}){
  const management=MANAGEMENT_ROLES.includes(String(role).toUpperCase());
- const [reports,setReports]=useState([]);\n const [agentRows,setAgentRows]=useState([]);
+ const [reports,setReports]=useState([]);
+ const [agentRows,setAgentRows]=useState([]);
  const [rows,setRows]=useState([]);
  const [selectedId,setSelectedId]=useState("");
  const [busy,setBusy]=useState(false);
