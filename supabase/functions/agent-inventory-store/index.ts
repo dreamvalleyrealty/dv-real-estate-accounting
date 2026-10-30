@@ -99,8 +99,16 @@ Deno.serve(async (req: Request) => {
           line_items: snapshots.map(x => ({
             name: x.item_name, quantity: String(x.quantity),
             base_price_money: { amount: Math.round(x.unit_price * 100), currency: "CAD" },
-            ...(x.tax_rate > 0 ? { taxes: [{ uid: "hst-" + x.item_id, name: "HST", percentage: String(x.tax_rate), scope: "LINE_ITEM" }] } : {})
-          }))
+            ...(x.tax_rate > 0 ? { applied_taxes: [{ tax_uid: "hst-" + x.item_id }] } : {})
+          })),
+          taxes: snapshots
+            .filter(x => x.tax_rate > 0)
+            .map(x => ({
+              uid: "hst-" + x.item_id,
+              name: "HST",
+              percentage: String(x.tax_rate),
+              scope: "LINE_ITEM"
+            }))
         },
         checkout_options: { redirect_url: origin + "?inventory_order=" + encodeURIComponent(orderNumber), merchant_support_email: "admin@dvrealty.ca" },
         pre_populated_data: { buyer_email: userData.user.email }
