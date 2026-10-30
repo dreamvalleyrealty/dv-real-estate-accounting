@@ -30,20 +30,23 @@ function parseRows(pageLines,reportPeriod){
   // Some PDF.js builds omit or merge header text items. Fall back to the
   // table's actual geometry: left geography column plus 8/11 numeric cells.
   const numericTableRows=(page.visualRows||[]).filter(row=>{
-   const left=row.items.filter(item=>item.x<190).map(item=>item.text.trim()).filter(Boolean);
-   const right=row.items.filter(item=>item.x>=190).map(item=>item.text).join(" ");
-   const values=right.match(numberPattern)||[];
-   return left.length>0&&(values.length===8||values.length===11);
+   const leftText=row.items.filter(item=>item.x<190).map(item=>item.text).join(" ");
+   const allText=row.items.map(item=>item.text).join(" ");
+   const values=allText.match(numberPattern)||[];
+   return leftText.trim().length>0&&(values.length===8||values.length===11);
   }).length;
   const hasMonthlyTable=hasMonthlyHeader||numericTableRows>=5;
   if(!hasMonthlyTable)continue;
   const pageText=pageWords.join(" ");
   const propertyType=propertyTypeFrom(pageText);
   for(const visualRow of (page.visualRows||[])){
-   const left=visualRow.items.filter(item=>item.x<190).map(item=>item.text.trim()).filter(Boolean);
-   const geography=left.join(" ").replace(/\s+/g," ").trim();
+   const leftItems=visualRow.items.filter(item=>item.x<190);
+   const leftText=leftItems.map(item=>item.text).join(" ");
+   const geography=leftText.replace(numberPattern," ").replace(/\s+/g," ").trim();
    if(!geography||/^(area derived|areaderived|sales|share of total|all home types)$/i.test(geography))continue;
-   const numericText=visualRow.items.filter(item=>item.x>=190).map(item=>item.text).join(" ");
+   // Sales and Dollar Volume are positioned before x=190 in TRREB PDFs.
+   // Read numeric cells across the entire row, in left-to-right order.
+   const numericText=visualRow.items.map(item=>item.text).join(" ");
    const tokens=numericText.match(numberPattern)||[];
    if(tokens.length!==11&&tokens.length!==8)continue;
    const n=tokens.map(v=>Number(v.replace(/[$,%]/g,"").replace(/,/g,"")));
@@ -75,7 +78,7 @@ export async function extractMarketWatchPdf(file,expectedPeriod){
   items.sort((a,b)=>b.y-a.y||a.x-b.x);
   const clusters=[];
   for(const item of items){
-   let cluster=clusters.find(row=>Math.abs(row.y-item.y)<=8);
+   let cluster=clusters.find(row=>Math.abs(row.y-item.y)<=1);
    if(!cluster){cluster={y:item.y,items:[]};clusters.push(cluster);}
    cluster.items.push(item);
   }
