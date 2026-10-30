@@ -23,11 +23,19 @@ function parseRows(pageLines,reportPeriod){
  for(const page of pageLines){
   // TRREB column headings are split across multiple PDF text rows.
   // Detect the full set of labels across the page, not on one reconstructed line.
-  const pageWords=(page.visualRows||[]).flatMap(row=>row.items.map(item=>item.text)).join(" ").toLowerCase().match(/[a-z]+/g)||[];
+  const pageItems=(page.visualRows||[]).flatMap(row=>row.items);
+  const pageWords=pageItems.map(item=>item.text).join(" ").toLowerCase().match(/[a-z]+/g)||[];
   const pageWordSet=new Set(pageWords);
-  // In this TRREB PDF the two words in headings are separate PDF text objects,
-  // and PDF.js may not preserve a whitespace boundary between them.
-  const hasMonthlyTable=["dollar","volume","average","price","median","new","listings"].every(word=>pageWordSet.has(word));
+  const hasMonthlyHeader=["dollar","volume","average","price","median","new","listings"].every(word=>pageWordSet.has(word));
+  // Some PDF.js builds omit or merge header text items. Fall back to the
+  // table's actual geometry: left geography column plus 8/11 numeric cells.
+  const numericTableRows=(page.visualRows||[]).filter(row=>{
+   const left=row.items.filter(item=>item.x<190).map(item=>item.text.trim()).filter(Boolean);
+   const right=row.items.filter(item=>item.x>=190).map(item=>item.text).join(" ");
+   const values=right.match(numberPattern)||[];
+   return left.length>0&&(values.length===8||values.length===11);
+  }).length;
+  const hasMonthlyTable=hasMonthlyHeader||numericTableRows>=5;
   if(!hasMonthlyTable)continue;
   const pageText=pageWords.join(" ");
   const propertyType=propertyTypeFrom(pageText);
@@ -81,7 +89,7 @@ export async function extractMarketWatchPdf(file,expectedPeriod){
  const detected=fileMatch?"20"+fileMatch[1]+"-"+fileMatch[2]+"-01":monthLine?new Date(monthLine+" 1").toISOString().slice(0,7)+"-01":null;
  if(!detected)throw new Error("Could not identify the report month from the PDF cover or filename.");
  if(detected.slice(0,7)!==expectedPeriod.slice(0,7))throw new Error("Report month mismatch. Selected "+expectedPeriod.slice(0,7)+" but PDF indicates "+detected.slice(0,7)+". Correct the report month or upload the matching PDF.");
- const tablePages=pageLines.filter(p=>{const words=(p.visualRows||[]).flatMap(row=>row.items.map(item=>item.text)).join(" ").toLowerCase().match(/[a-z]+/g)||[];const set=new Set(words);return ["dollar","volume","average","price","median","new","listings"].every(word=>set.has(word));}).length;
+ const tablePages=pageLines.filter(p=>{const items=(p.visualRows||[]).flatMap(row=>row.items);const words=items.map(item=>item.text).join(" ").toLowerCase().match(/[a-z]+/g)||[];const set=new Set(words);const header=["dollar","volume","average","price","median","new","listings"].every(word=>set.has(word));const numeric=(p.visualRows||[]).filter(row=>row.items.some(item=>item.x<190&&item.text.trim())&&((row.items.filter(item=>item.x>=190).map(item=>item.text).join(" ").match(numberPattern)||[]).length===8||(row.items.filter(item=>item.x>=190).map(item=>item.text).join(" ").match(numberPattern)||[]).length===11)).length;return header||numeric>=5;}).length;
  const candidateRows=pageLines.reduce((sum,p)=>sum+p.lines.filter(line=>/^\s*.+?\s{2,}(?=\$?[\d,])/.test(line)).length,0);
  const rows=parseRows(pageLines,expectedPeriod);
  const coverText=pageLines.slice(0,4).flatMap(p=>p.lines).join(" ");
