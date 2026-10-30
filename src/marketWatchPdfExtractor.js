@@ -22,7 +22,7 @@ function parseRows(pageLines,reportPeriod){
  };
  for(const page of pageLines){
   const pageText=page.lines.join(" ");
-  if(!/Sales\s+Dollar Volume\s+Average Price\s+Median Price\s+New Listings/i.test(pageText)||/Year-to-Date/i.test(pageText))continue;
+  if(!/Dollar Volume/i.test(pageText)||!/Average Price/i.test(pageText)||!/Median Price/i.test(pageText)||!/New Listings/i.test(pageText))continue;
   const propertyType=propertyTypeFrom(pageText);
   for(const line of page.lines){
    const match=line.match(/^\s*(.+?)\s{2,}(?=\$?[\d,])/);
@@ -51,14 +51,20 @@ export async function extractMarketWatchPdf(file,expectedPeriod){
  const pdf=await pdfjsLib.getDocument({data:bytes}).promise;
  const pageLines=[];let fullText="";
  for(let i=1;i<=pdf.numPages;i++){
-  const page=await pdf.getPage(i),content=await page.getTextContent(),grouped=new Map();
+  const page=await pdf.getPage(i),content=await page.getTextContent(),items=[];
   for(const item of content.items){
    if(!item.str?.trim())continue;
-   const y=Math.round(item.transform?.[5]||0);
-   if(!grouped.has(y))grouped.set(y,[]);
-   grouped.get(y).push({x:item.transform?.[4]||0,text:sanitize(item.str)});
+   items.push({y:item.transform?.[5]||0,x:item.transform?.[4]||0,text:sanitize(item.str)});
   }
-  const lines=[...grouped.entries()].sort((a,b)=>b[0]-a[0]).map(([,items])=>items.sort((a,b)=>a.x-b.x).map(x=>x.text).join("  "));
+  // Cluster text items on nearby visual baselines; PDF table cells often differ slightly in Y.
+  items.sort((a,b)=>b.y-a.y||a.x-b.x);
+  const clusters=[];
+  for(const item of items){
+   let cluster=clusters.find(row=>Math.abs(row.y-item.y)<=2.5);
+   if(!cluster){cluster={y:item.y,items:[]};clusters.push(cluster);}
+   cluster.items.push(item);
+  }
+  const lines=clusters.sort((a,b)=>b.y-a.y).map(row=>row.items.sort((a,b)=>a.x-b.x).map(x=>x.text).join("  "));
   pageLines.push({page:i,lines});fullText+=lines.join("\n")+"\n";
  }
  const cover=pageLines.slice(0,2).flatMap(p=>p.lines);
