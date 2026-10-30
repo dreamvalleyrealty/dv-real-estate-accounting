@@ -92,21 +92,15 @@ export default function MarketWatchGraphic({agentId,user}){
   if(!supabase){setError("Database connection is not configured.");setLoading(false);return;}
   setLoading(true);setError("");
   try{
-   // Only published reports are available to agents. Row approval alone is not publication.
-   const {data:publishedReports,error:reportsError}=await supabase.from("dv_property_market_reports").select("id,report_period,status").eq("status","APPROVED").order("report_period",{ascending:false});
-   if(reportsError)throw reportsError;
-   const safeReports=(publishedReports||[]).filter(r=>String(r.report_period).slice(0,7)!=="2026-03");
-   const reportIds=safeReports.map(r=>r.id);
-   let approvedRows=[];
-   if(reportIds.length){
-    const {data,error:rowsError}=await supabase.from("dv_property_market_stat_rows").select("*").in("market_report_id",reportIds).eq("review_status","APPROVED").order("report_period",{ascending:false});
-    if(rowsError)throw rowsError;
-    approvedRows=data||[];
-   }
-   const safeRows=approvedRows.filter(r=>String(r.report_period).slice(0,7)!=="2026-03");
+   const {data:approvedRows,error:rowsError}=await supabase.from("dv_property_market_stat_rows").select("*").eq("review_status","APPROVED").order("report_period",{ascending:false});
+   if(rowsError)throw rowsError;
+   const safeRows=(approvedRows||[]).filter(r=>String(r.report_period).slice(0,7)!=="2026-03");
    setAllRows(safeRows);
-   const rowCounts=new Map();for(const row of safeRows)rowCounts.set(row.market_report_id,(rowCounts.get(row.market_report_id)||0)+1);
-   const clean=safeReports.filter(report=>(rowCounts.get(report.id)||0)>0).map(report=>({...report,count:rowCounts.get(report.id)||0}));
+   const grouped=new Map();
+   for(const row of safeRows){const key=row.market_report_id;if(!grouped.has(key))grouped.set(key,{id:key,report_period:row.report_period,count:0});grouped.get(key).count++;}
+   const choices=[...grouped.values()].sort((a,b)=>b.report_period.localeCompare(a.report_period)||b.count-a.count);
+   const bestByMonth=new Map();for(const item of choices)if(!bestByMonth.has(item.report_period))bestByMonth.set(item.report_period,item);
+   const clean=[...bestByMonth.values()];
    setSelectedId(old=>clean.some(r=>r.id===old)?old:(clean[0]?.id||""));
    let profileQuery=supabase.from("dv_accounting_agents").select("id,first_name,last_name,name,email,cell_phone,headshot_path");
    if(agentId)profileQuery=profileQuery.eq("id",agentId);else if(user?.email)profileQuery=profileQuery.ilike("email",user.email.trim());else throw new Error("Your agent profile could not be identified.");
