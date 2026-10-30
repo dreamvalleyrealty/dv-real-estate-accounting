@@ -28,27 +28,46 @@ function extractMarketWatchText(text){
 }
 function parseMarketWatchDetailRows(pageLines,reportPeriod){
  const rows=[];
- const numberPattern=/\$?[\d,]+(?:\.\d+)?%?/g;
+ const numberPattern=/\\$?[\\d,]+(?:\\.\\d+)?%?/g;
+ const knownTypes=[
+  [/all home types/i,"ALL"],[/detached/i,"Detached"],[/semi[- ]detached/i,"Semi-Detached"],
+  [/condo townhouse/i,"Condo Townhouse"],[/att\\/row\\/twnhouse|freehold townhouse/i,"Freehold Townhouse"],
+  [/townhouse/i,"Townhouse"],[/condo apartment|condo apt/i,"Condo Apartment"]
+ ];
+ const normalizeGeo=value=>value.replace(/\\s+/g," ").trim().replace(/^(?:area|municipality)derived\\s+/i,"").trim();
  for(const page of pageLines){
   const pageText=page.lines.join(" ");
-  if(!/Sales\s+Dollar Volume\s+Average Price\s+Median Price\s+New Listings/i.test(pageText))continue;
-  const titleMatch=pageText.match(/(All Home types|Detached|Semi-Detached|Townhouse|Condo Townhouse|Condo Apartment|Condo Apt|Att\/Row\/Twnhouse),?\s+[A-Za-z]+\s+20\d{2}/i);
-  const rawTitle=titleMatch?.[1]||"ALL";
-  const title=/All Home types/i.test(rawTitle)?"ALL":/Condo Apt/i.test(rawTitle)?"Condo Apartment":/Att\/Row\/Twnhouse/i.test(rawTitle)?"Freehold Townhouse":rawTitle;
+  if(!/Sales\\s+Dollar Volume\\s+Average Price\\s+Median Price\\s+New Listings/i.test(pageText))continue;
+  const titleMatch=pageText.match(/(All Home types|Detached|Semi[- ]Detached|Condo Townhouse|Townhouse|Condo Apartment|Condo Apt|Att\\/Row\\/Twnhouse|Freehold Townhouse),?\\s+[A-Za-z]+\\s+20\\d{2}/i);
+  let propertyType=titleMatch?.[1]||"";
+  propertyType=knownTypes.find(([re])=>re.test(propertyType))?.[1]||"ALL";
   for(const line of page.lines){
-   const match=line.match(/^\s*(Toronto\s+(?:[WCE]\d{2}|West|Central|East)|City of Toronto|Mississauga|Brampton|Markham|Richmond Hill|Vaughan|Pickering|Ajax|Whitby|Oshawa|Oakville|Burlington|Milton|All TRREB Areas)\s+(.*)$/i);
-   if(!match)continue;
-   const geography=match[1].trim();
-   if(/^All TRREB Areas$/i.test(geography))continue;
-   const tokens=(match[2].match(numberPattern)||[]).slice(0,11);
+   const rowMatch=line.match(/^\\s*(.+?)\\s{2,}(?=\\$?[\\d,])/);
+   if(!rowMatch)continue;
+   const geography=normalizeGeo(rowMatch[1]);
+   if(!geography||/^(sales|share of total|average price|area derived|areaderived)$/i.test(geography))continue;
+   const rest=line.slice(rowMatch[0].length);
+   const tokens=rest.match(numberPattern)||[];
    if(tokens.length!==11)continue;
-   const n=tokens.map(v=>Number(v.replace(/[$,%]/g,"").replace(/,/g,"")));
-   if(n.some(v=>!Number.isFinite(v)))continue;
-   const community=/^Toronto\s+[WCE]\d{2}$/i.test(geography);
-   rows.push({report_period:reportPeriod,geography_level:community?"COMMUNITY":"MUNICIPALITY",geography_name:geography,geography_parent:community?"Toronto":null,property_type:title,metric_values:{sales:n[0],dollar_volume:n[1],average_price:n[2],median_price:n[3],new_listings:n[4],snlr:n[5],active_listings:n[6],months_inventory:n[7],sale_to_list_ratio:n[8],days_on_market:n[9],property_days_on_market:n[10]},source_page:page.page,source_table:title,extraction_method:"PDF_TEXT_LAYOUT",review_status:"PENDING"});
+   const values=tokens.map(v=>Number(v.replace(/[$,%]/g,"").replace(/,/g,"")));
+   if(values.some(v=>!Number.isFinite(v)))continue;
+   const community=/^Toronto\\s+[WCE]\\d{2}$/i.test(geography);
+   const gta=/^All TRREB Areas$/i.test(geography);
+   const region=/^(Halton|Peel|York|Durham|Toronto) Region$/i.test(geography);
+   rows.push({
+    report_period:reportPeriod,
+    geography_level:gta?"GTA":community?"COMMUNITY":region?"REGION":"MUNICIPALITY",
+    geography_name:gta?"All GTA":geography,
+    geography_parent:community?"City of Toronto":null,
+    property_type:propertyType,
+    metric_values:{sales:values[0],dollar_volume:values[1],average_price:values[2],median_price:values[3],new_listings:values[4],snlr:values[5],active_listings:values[6],months_inventory:values[7],sale_to_list_ratio:values[8],days_on_market:values[9],property_days_on_market:values[10]},
+    source_page:page.page,source_table:propertyType,extraction_method:"PDF_TEXT_LAYOUT_VALIDATED",review_status:"PENDING"
+   });
   }
  }
- return rows;
+ const unique=new Map();
+ for(const row of rows){const key=[row.report_period,row.geography_level,row.geography_name,row.property_type].join("|");if(!unique.has(key))unique.set(key,row);}
+ return [...unique.values()];
 }
 function downloadPdf(title,subtitle,lines,agentName){
  const d=new jsPDF({unit:"mm",format:"a4"}),w=d.internal.pageSize.getWidth();
