@@ -116,7 +116,13 @@ export default function MarketWatchGraphic({agentId,user}){
  const reports=useMemo(()=>{const grouped=new Map();for(const row of allRows){const key=row.market_report_id;if(!grouped.has(key))grouped.set(key,{id:key,report_period:row.report_period,count:0});grouped.get(key).count++;}const choices=[...grouped.values()].sort((a,b)=>b.report_period.localeCompare(a.report_period)||b.count-a.count);const byMonth=new Map();for(const item of choices)if(!byMonth.has(item.report_period))byMonth.set(item.report_period,item);return [...byMonth.values()];},[allRows]);
  const selected=reports.find(r=>r.id===selectedId)||null;
  const comparison=useMemo(()=>{if(!selected)return null;const target=new Date(selected.report_period+"T00:00:00");target.setFullYear(target.getFullYear()-1);const key=target.toISOString().slice(0,10);return reports.find(r=>r.report_period===key)||null;},[reports,selected]);
- const findAllGtaRow=list=>list.find(r=>r.property_type==="ALL"&&(/all gta|all trreb areas|greater toronto area/i.test(r.geography_name||"")))||list.find(r=>r.property_type==="ALL"&&r.geography_level==="GTA")||null;
+ // The monthly GTA summary is the row carrying the monthly market indicators (SNLR and months inventory).
+ // YTD and property-type rows can share the same geography label, so do not select them for YoY.
+ const findAllGtaRow=list=>{
+  const candidates=list.filter(r=>r.property_type==="ALL"&&r.geography_level==="GTA"&&(/all gta|all trreb areas|greater toronto area/i.test(r.geography_name||"")));
+  const monthly=candidates.filter(r=>r.metric_values?.snlr!=null&&r.metric_values?.months_inventory!=null);
+  return monthly.sort((a,b)=>(a.source_page||999)-(b.source_page||999))[0]||candidates.sort((a,b)=>(a.source_page||999)-(b.source_page||999))[0]||null;
+ };
  const rows=useMemo(()=>allRows.filter(r=>r.market_report_id===selectedId),[allRows,selectedId]);
  const comparisonRows=useMemo(()=>comparison?allRows.filter(r=>r.market_report_id===comparison.id):[],[allRows,comparison]);
  const currentRow=findAllGtaRow(rows);
