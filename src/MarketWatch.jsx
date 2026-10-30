@@ -87,7 +87,7 @@ export default function MarketWatch({user,role="AGENT"}){
    if(downloadError)throw downloadError;
    const file=new File([blob],report.pdf_file_name||report.source_name||"market-watch.pdf",{type:"application/pdf"});
    const result=await extractMarketWatchPdf(file,report.report_period);
-   if(!result.rows.length)throw new Error("The PDF was read ("+result.pages+" pages), but no detailed statistical tables were detected. No rows were saved. The extraction layout needs adjustment for this PDF.");
+   if(!result.rows.length)throw new Error("The PDF was read ("+result.pages+" pages), but no rows were extracted. Diagnostic: "+(result.summary?.table_pages??0)+" table pages matched; "+(result.summary?.candidate_rows??0)+" candidate text rows found. No rows were saved.");
    const {error:rowError}=await supabase.from("dv_property_market_stat_rows").insert(result.rows.map(({report_period,...row})=>({...row,market_report_id:report.id,report_period:report.report_period})));
    if(rowError)throw rowError;
    const {error:reportError}=await supabase.from("dv_property_market_reports").update({extracted_text:result.text,metrics:{...(report.metrics||{}),extracted_pages:result.pages,extracted_rows:result.rows.length,extraction_method:"PDF_TEXT_LAYOUT",extraction_status:"PENDING_REVIEW"}}).eq("id",report.id);
