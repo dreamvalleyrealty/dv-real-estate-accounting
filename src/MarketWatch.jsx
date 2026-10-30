@@ -127,10 +127,10 @@ export default function MarketWatch({user,role="AGENT"}){
    newPath=(user?.id||"management")+"/"+Date.now()+"-"+file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
    const {error:uploadError}=await supabase.storage.from("dv-property-market-reports").upload(newPath,file,{contentType:"application/pdf",upsert:false});
    if(uploadError)throw uploadError;
-   const {error:updateError}=await supabase.from("dv_property_market_reports").update({pdf_storage_path:newPath,pdf_file_name:file.name,source_name:file.name,extracted_text:null,metrics:{},status:"DRAFT",approved_by:null,approved_at:null}).eq("id",report.id);
-   if(updateError)throw updateError;
    const {error:rowsError}=await supabase.from("dv_property_market_stat_rows").delete().eq("market_report_id",report.id);
    if(rowsError)throw rowsError;
+   const {error:updateError}=await supabase.from("dv_property_market_reports").update({pdf_storage_path:newPath,pdf_file_name:file.name,source_name:file.name,extracted_text:null,metrics:{},status:"DRAFT",approved_by:null,approved_at:null}).eq("id",report.id);
+   if(updateError)throw updateError;
    if(oldPath){const {error:removeError}=await supabase.storage.from("dv-property-market-reports").remove([oldPath]);if(removeError)throw removeError;}
    setNotice("PDF replaced. The report is back in DRAFT with no extracted rows. Run Extract PDF to process the new file.");
    await load();
