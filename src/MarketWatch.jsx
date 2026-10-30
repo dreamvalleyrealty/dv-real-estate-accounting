@@ -108,21 +108,6 @@ export default function MarketWatch({user,role="AGENT"}){
   }finally{setBusy(false);}
  };
  if(loading)return <section className="panel"><p>Loading Market Watch…</p></section>;
- if(!management)return <div className="market-watch">
-  <section className="panel" style={{background:"#0f2141",color:"#fff",padding:22,marginBottom:16}}>
-   <div style={{fontSize:12,letterSpacing:2,color:"#c8b58e",fontWeight:800}}>DREAM VALLEY REALTY</div>
-   <h1 style={{margin:"8px 0 4px",fontSize:26}}>Market Watch</h1>
-   <p style={{margin:0,opacity:.85}}>Approved TRREB Market Watch statistics. Original reports and unverified figures are held for management review.</p>
-  </section>
-  {error&&<div className="notice" style={{marginBottom:12,borderColor:"#d97706"}}><AlertCircle size={17}/>{error}</div>}
-  <section className="panel">
-   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}><div><h2 style={{marginBottom:4}}>Published Market Statistics</h2><p className="muted" style={{margin:0}}>Showing approved source rows only. No averages or totals are recalculated here.</p></div><button className="secondary" onClick={load}><RefreshCw size={15}/> Refresh</button></div>
-   <div className="tablewrap" style={{marginTop:12}}><table><thead><tr><th>Month</th><th>Geography</th><th>Level</th><th>Property type</th><th>Sales</th><th>Average price</th><th>Median price</th><th>New listings</th><th>DOM</th></tr></thead><tbody>
-    {agentRows.map(row=><tr key={row.id}><td>{monthLabel(row.report_period)}</td><td>{row.geography_name}</td><td>{row.geography_level}</td><td>{row.property_type}</td><td>{row.metric_values?.sales??"—"}</td><td>{money(row.metric_values?.average_price)}</td><td>{money(row.metric_values?.median_price)}</td><td>{row.metric_values?.new_listings??"—"}</td><td>{row.metric_values?.days_on_market??"—"}</td></tr>)}
-    {!agentRows.length&&<tr><td colSpan="9">No approved Market Watch statistics are currently available.</td></tr>}
-   </tbody></table></div>
-  </section>
- </div>;
  return <div className="market-watch">
   <section className="panel" style={{background:"#0f2141",color:"#fff",padding:22,marginBottom:16}}>
    <div style={{fontSize:12,letterSpacing:2,color:"#c8b58e",fontWeight:800}}>DREAM VALLEY REALTY</div>
