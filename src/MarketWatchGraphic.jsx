@@ -80,7 +80,7 @@ function drawGraphic(canvas,data,agent,headshot,logo){
   const cur=data.values[key],prev=data.previousValues[key],isPrice=key==="average_price";
   const vals=[Number(cur)||0,Number(prev)||0],maxRaw=Math.max(...vals,1);
   const max=isPrice?Math.ceil(maxRaw/250000)*250000:key==="days_on_market"?Math.ceil(maxRaw/10)*10:Math.ceil(maxRaw/2000)*2000;
-  const left=compact?28:(isPrice?48:54),right=compact?7:8,top=compact?18:12,bottom=compact?43:48;
+  const left=compact?28:(isPrice?43:54),right=compact?7:8,top=compact?18:12,bottom=compact?43:48;
   const plotX=x+left,plotY=y+top,plotW=w-left-right,base=y+h-bottom,plotH=base-plotY;
   line(plotX,base,plotX+plotW,base,"#b8c0c9",1);
   for(let i=0;i<=4;i++){
@@ -91,19 +91,21 @@ function drawGraphic(canvas,data,agent,headshot,logo){
    if(key==="days_on_market")tick=String(Math.round(v));
    text(tick,plotX-7,yy+4,compact?10:13,ink,"normal","Arial","right");
   }
-  const bw=compact?34:(isPrice?48:58);
+  const bw=compact?34:(isPrice?54:58);
   const center1=plotX+plotW*(compact?0.27:0.25),center2=plotX+plotW*(compact?0.73:0.75);
   const bx1=center1-bw/2,bx2=center2-bw/2;
   const barH=v=>v==null?0:Math.max(2,(Number(v)/max)*plotH);
   const h1=barH(cur),h2=barH(prev);
   const valueLabel=v=>isPrice?money(v):number(v);
-  if(cur!=null){ctx.fillStyle=navy;ctx.fillRect(bx1,base-h1,bw,h1);text(valueLabel(cur),bx1+bw/2,base-h1-7,compact?10:isPrice?10:14,ink,"bold","Arial","center");}
+  if(cur!=null){ctx.fillStyle=navy;ctx.fillRect(bx1,base-h1,bw,h1);text(valueLabel(cur),bx1+bw/2,base-h1-7,compact?10:isPrice?11:14,ink,"bold","Arial","center");}
   if(prev!=null){ctx.fillStyle=gold;ctx.fillRect(bx2,base-h2,bw,h2);text(valueLabel(prev),bx2+bw/2,base-h2-7,compact?10:isPrice?10:14,ink,"bold","Arial","center");}
   const labelSize=compact?9:10;
   text(compact?compactCurLabel:chartCurLabel,bx1+bw/2,base+(compact?17:21),labelSize,ink,"normal","Arial","center");
   text(compact?compactPrevLabel:chartPrevLabel,bx2+bw/2,base+(compact?17:21),labelSize,ink,"normal","Arial","center");
  }; // Background and header.
  const bg=ctx.createLinearGradient(0,0,W,H);bg.addColorStop(0,"#fbfaf7");bg.addColorStop(1,"#e9edf0");ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+ ctx.fillStyle="#ffffff";ctx.beginPath();ctx.moveTo(0,205);ctx.lineTo(34,242);ctx.lineTo(34,734);ctx.lineTo(0,748);ctx.closePath();ctx.fill();
+ ctx.beginPath();ctx.moveTo(W,205);ctx.lineTo(W-34,242);ctx.lineTo(W-34,734);ctx.lineTo(W,748);ctx.closePath();ctx.fill();
  ctx.fillStyle=navy;ctx.fillRect(0,0,W,198);
  // Toronto skyline and CN Tower, in the same header position as the master.
  const buildings=[[846,137,20,61],[870,112,22,86],[897,143,16,55],[918,102,22,96],[944,126,18,72],[966,78,24,120],[995,117,19,81],[1018,94,25,104],[1048,132,18,66],[1070,108,25,90],[1101,137,18,61],[1122,116,22,82],[1148,143,20,55]];
@@ -111,9 +113,9 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  line(897,49,897,154,"#53677a",3);line(889,79,905,79,"#53677a",3);line(891,65,903,65,"#53677a",2);
  ctx.beginPath();ctx.moveTo(897,49);ctx.lineTo(892,67);ctx.lineTo(902,67);ctx.closePath();ctx.fillStyle="#53677a";ctx.fill();
  ctx.save();ctx.font="normal 76px Georgia";const marketWidth=ctx.measureText("MARKET").width;ctx.restore();
- text("MARKET",53,121,76,white,"normal","Georgia");text("WATCH",53+marketWidth+18,121,76,gold,"bold","Georgia");
- text(curLabel,198,166,35,white,"normal","Georgia","center");line(54,154,184,154,gold,2);line(455,154,610,154,gold,2);
- text("YEAR-OVER-YEAR SUMMARY",650,132,22,gold,"bold","Georgia");text("ALL TRREB AREAS · ALL HOME TYPES",650,160,15,white,"normal","Georgia");
+ text("MARKET",53,121,72,white,"normal","Georgia");text("WATCH",53+marketWidth+14,121,72,gold,"bold","Georgia");
+ text(curLabel,230,166,34,white,"normal","Georgia","center");line(54,154,184,154,gold,2);line(455,154,612,154,gold,2);
+ text("YEAR-OVER-YEAR SUMMARY",652,132,21,gold,"bold","Georgia");text("ALL TRREB AREAS · ALL HOME TYPES",652,160,14,white,"normal","Georgia");
  if(logo){const scale=Math.min(112/logo.width,118/logo.height);ctx.drawImage(logo,1024,22,logo.width*scale,logo.height*scale);}
  text("DREAM VALLEY",1140,96,27,white,"normal","Georgia");text("REALTY",1193,126,20,white,"normal","Georgia");
  // Master card layout: three top cards and two lower cards.
@@ -134,12 +136,12 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  // Average price panel.
  rounded(36,578,651,321,22,navy,null,0,true);
  icon("dollar",116,658,43);
- text("AVERAGE PRICE",178,637,37,gold,"bold","Georgia");
- text(money(data.values.average_price),157,695,61,white,"normal","Georgia");
+ text("AVERAGE PRICE",178,637,36,gold,"bold","Georgia");
+ text(money(data.values.average_price),157,695,58,white,"normal","Georgia");
  text("Average Selling Price",170,739,23,white,"normal","Georgia");
  text("Year-over-Year",198,772,22,white,"normal","Georgia");
  drawYoy(170,786,220,70,"average_price");
- drawChart(414,632,260,246,"average_price",false);
+ drawChart(420,630,254,250,"average_price",false);
  // Average DOM panel.
  rounded(697,578,643,321,22,white,gold,2,true);
  icon("calendar",765,658,43);
