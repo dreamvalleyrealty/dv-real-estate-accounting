@@ -29,40 +29,42 @@ function extractMarketWatchText(text){
 function parseMarketWatchDetailRows(pageLines,reportPeriod){
  const rows=[];
  const numberPattern=/\\$?[\\d,]+(?:\\.\\d+)?%?/g;
- const knownTypes=[
-  [/all home types/i,"ALL"],[/detached/i,"Detached"],[/semi[- ]detached/i,"Semi-Detached"],
-  [/condo townhouse/i,"Condo Townhouse"],[/att\\/row\\/twnhouse|freehold townhouse/i,"Freehold Townhouse"],
-  [/townhouse/i,"Townhouse"],[/condo apartment|condo apt/i,"Condo Apartment"]
- ];
  const normalizeGeo=value=>value.replace(/\\s+/g," ").trim().replace(/^(?:area|municipality)derived\\s+/i,"").trim();
+ const propertyTypeFrom=pageText=>{
+  const m=pageText.match(/(All Home types|Detached|Semi[- ]Detached|Condo Townhouse|Townhouse|Condo Apartment|Condo Apt|Att\\/Row\\/Twnhouse|Freehold Townhouse),?\\s+[A-Za-z]+,?\\s+(?:Year-to-Date\\s+)?20\\d{2}/i);
+  const v=m?.[1]||"";
+  if(/all home types/i.test(v))return "ALL";
+  if(/semi/i.test(v))return "Semi-Detached";
+  if(/detached/i.test(v))return "Detached";
+  if(/condo townhouse/i.test(v))return "Condo Townhouse";
+  if(/att\\/row|freehold townhouse/i.test(v))return "Freehold Townhouse";
+  if(/condo apartment|condo apt/i.test(v))return "Condo Apartment";
+  if(/townhouse/i.test(v))return "Townhouse";
+  return "ALL";
+ };
  for(const page of pageLines){
   const pageText=page.lines.join(" ");
   if(!/Sales\\s+Dollar Volume\\s+Average Price\\s+Median Price\\s+New Listings/i.test(pageText))continue;
-  const titleMatch=pageText.match(/(All Home types|Detached|Semi[- ]Detached|Condo Townhouse|Townhouse|Condo Apartment|Condo Apt|Att\\/Row\\/Twnhouse|Freehold Townhouse),?\\s+[A-Za-z]+\\s+20\\d{2}/i);
-  let propertyType=titleMatch?.[1]||"";
-  propertyType=knownTypes.find(([re])=>re.test(propertyType))?.[1]||"ALL";
+  const propertyType=propertyTypeFrom(pageText);
+  const isYtd=/Year-to-Date/i.test(pageText);
+  if(isYtd)continue;
   for(const line of page.lines){
    const rowMatch=line.match(/^\\s*(.+?)\\s{2,}(?=\\$?[\\d,])/);
    if(!rowMatch)continue;
    const geography=normalizeGeo(rowMatch[1]);
    if(!geography||/^(sales|share of total|average price|area derived|areaderived)$/i.test(geography))continue;
-   const rest=line.slice(rowMatch[0].length);
-   const tokens=rest.match(numberPattern)||[];
-   if(tokens.length!==11)continue;
-   const values=tokens.map(v=>Number(v.replace(/[$,%]/g,"").replace(/,/g,"")));
-   if(values.some(v=>!Number.isFinite(v)))continue;
-   const community=/^Toronto\\s+[WCE]\\d{2}$/i.test(geography);
+   const tokens=line.slice(rowMatch[0].length).match(numberPattern)||[];
+   if(tokens.length!==11&&tokens.length!==8)continue;
+   const n=tokens.map(v=>Number(v.replace(/[$,%]/g,"").replace(/,/g,"")));
+   if(n.some(v=>!Number.isFinite(v)))continue;
+   const full=tokens.length===11;
    const gta=/^All TRREB Areas$/i.test(geography);
+   const community=/^Toronto\\s+[WCE]\\d{2}$/i.test(geography);
    const region=/^(Halton|Peel|York|Durham|Toronto) Region$/i.test(geography);
-   rows.push({
-    report_period:reportPeriod,
-    geography_level:gta?"GTA":community?"COMMUNITY":region?"REGION":"MUNICIPALITY",
-    geography_name:gta?"All GTA":geography,
-    geography_parent:community?"City of Toronto":null,
-    property_type:propertyType,
-    metric_values:{sales:values[0],dollar_volume:values[1],average_price:values[2],median_price:values[3],new_listings:values[4],snlr:values[5],active_listings:values[6],months_inventory:values[7],sale_to_list_ratio:values[8],days_on_market:values[9],property_days_on_market:values[10]},
-    source_page:page.page,source_table:propertyType,extraction_method:"PDF_TEXT_LAYOUT_VALIDATED",review_status:"PENDING"
-   });
+   const metrics=full
+    ?{sales:n[0],dollar_volume:n[1],average_price:n[2],median_price:n[3],new_listings:n[4],snlr:n[5],active_listings:n[6],months_inventory:n[7],sale_to_list_ratio:n[8],days_on_market:n[9],property_days_on_market:n[10]}
+    :{sales:n[0],dollar_volume:n[1],average_price:n[2],median_price:n[3],new_listings:n[4],active_listings:n[5],sale_to_list_ratio:n[6],days_on_market:n[7]};
+   rows.push({report_period:reportPeriod,geography_level:gta?"GTA":community?"COMMUNITY":region?"REGION":"MUNICIPALITY",geography_name:gta?"All GTA":geography,geography_parent:community?"City of Toronto":null,property_type:propertyType,metric_values:metrics,source_page:page.page,source_table:propertyType,extraction_method:full?"PDF_TEXT_LAYOUT_11_METRICS":"PDF_TEXT_LAYOUT_8_METRICS",review_status:"PENDING"});
   }
  }
  const unique=new Map();
