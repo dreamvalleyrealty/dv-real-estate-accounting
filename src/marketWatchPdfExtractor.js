@@ -22,14 +22,13 @@ function parseRows(pageLines,reportPeriod){
  };
  for(const page of pageLines){
   const pageText=page.lines.join(" ");
-  if(!/Dollar\s+Volume/i.test(pageText)||!/Average\s+Price/i.test(pageText)||!/Median\s+Price/i.test(pageText)||!/New\s+Listings/i.test(pageText))continue;
   const propertyType=propertyTypeFrom(pageText);
-  for(const line of page.lines){
-   const match=line.match(/^\s*(.+?)\s{2,}(?=\$?[\d,])/);
-   if(!match)continue;
-   const geography=match[1].replace(/\s+/g," ").trim().replace(/^(?:area|municipality)derived\s+/i,"");
-   if(!geography||/^(sales|share of total|average price|area derived|areaderived)$/i.test(geography))continue;
-   const tokens=line.slice(match[0].length).match(numberPattern)||[];
+  for(const visualRow of (page.visualRows||[])){
+   const left=visualRow.items.filter(item=>item.x<190).map(item=>item.text.trim()).filter(Boolean);
+   const geography=left.join(" ").replace(/\s+/g," ").trim();
+   if(!geography||/^(area derived|areaderived|sales|share of total|all home types)$/i.test(geography))continue;
+   const numericText=visualRow.items.filter(item=>item.x>=190).map(item=>item.text).join(" ");
+   const tokens=numericText.match(numberPattern)||[];
    if(tokens.length!==11&&tokens.length!==8)continue;
    const n=tokens.map(v=>Number(v.replace(/[$,%]/g,"").replace(/,/g,"")));
    if(n.some(v=>!Number.isFinite(v)))continue;
@@ -38,11 +37,11 @@ function parseRows(pageLines,reportPeriod){
    const community=/^Toronto\s+[WCE]\d{2}$/i.test(geography);
    const region=/^(Halton|Peel|York|Durham|Toronto) Region$/i.test(geography);
    const metrics=full?{sales:n[0],dollar_volume:n[1],average_price:n[2],median_price:n[3],new_listings:n[4],snlr:n[5],active_listings:n[6],months_inventory:n[7],sale_to_list_ratio:n[8],days_on_market:n[9],property_days_on_market:n[10]}:{sales:n[0],dollar_volume:n[1],average_price:n[2],median_price:n[3],new_listings:n[4],active_listings:n[5],sale_to_list_ratio:n[6],days_on_market:n[7]};
-   rows.push({report_period:reportPeriod,geography_level:gta?"GTA":community?"COMMUNITY":region?"REGION":"MUNICIPALITY",geography_name:gta?"All GTA":geography,geography_parent:community?"City of Toronto":null,property_type:propertyType,metric_values:metrics,source_page:page.page,source_table:propertyType,extraction_method:full?"PDF_TEXT_LAYOUT_11_METRICS":"PDF_TEXT_LAYOUT_8_METRICS",review_status:"PENDING"});
+   rows.push({report_period:reportPeriod,geography_level:gta?"GTA":community?"COMMUNITY":region?"REGION":"MUNICIPALITY",geography_name:gta?"All GTA":geography,geography_parent:community?"City of Toronto":null,property_type:propertyType,metric_values:metrics,source_page:page.page,source_table:propertyType,extraction_method:full?"PDF_COORDINATE_LAYOUT_11_METRICS":"PDF_COORDINATE_LAYOUT_8_METRICS",review_status:"PENDING"});
   }
  }
  const unique=new Map();
- for(const row of rows){const key=[row.report_period,row.geography_level,row.geography_name,row.property_type].join("|");if(!unique.has(key))unique.set(key,row);}
+ for(const row of rows){const key=[row.report_period,row.geography_level,row.geography_name,row.property_type,row.source_page].join("|");if(!unique.has(key))unique.set(key,row);}
  return [...unique.values()];
 }
 export async function extractMarketWatchPdf(file,expectedPeriod){
@@ -64,8 +63,9 @@ export async function extractMarketWatchPdf(file,expectedPeriod){
    if(!cluster){cluster={y:item.y,items:[]};clusters.push(cluster);}
    cluster.items.push(item);
   }
-  const lines=clusters.sort((a,b)=>b.y-a.y).map(row=>row.items.sort((a,b)=>a.x-b.x).map(x=>x.text).join("  "));
-  pageLines.push({page:i,lines});fullText+=lines.join("\n")+"\n";
+  const visualRows=clusters.sort((a,b)=>b.y-a.y).map(row=>({y:row.y,items:row.items.sort((a,b)=>a.x-b.x).map(x=>({x:x.x,text:x.text}))}));
+  const lines=visualRows.map(row=>row.items.map(x=>x.text).join("  "));
+  pageLines.push({page:i,lines,visualRows});fullText+=lines.join("\n")+"\n";
  }
  const cover=pageLines.slice(0,2).flatMap(p=>p.lines);
  const monthLine=cover.map(x=>x.trim()).find(x=>new RegExp("^("+MONTHS.join("|")+")\\s+20\\d{2}$","i").test(x));
