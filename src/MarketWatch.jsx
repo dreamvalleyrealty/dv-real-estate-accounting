@@ -30,6 +30,8 @@ export default function MarketWatch({user,role="AGENT"}){
  const [filter,setFilter]=useState("all");
  const [graphicAgents,setGraphicAgents]=useState([]);
  const [graphicAgentId,setGraphicAgentId]=useState("");
+ const [manualPeriod,setManualPeriod]=useState(new Date().toISOString().slice(0,7)+"-01");
+ const [manualStats,setManualStats]=useState({sales:"",new_listings:"",active_listings:"",average_price:"",days_on_market:""});
 
  const load=useCallback(async()=>{
   if(!supabase){setLoading(false);return;}
@@ -160,6 +162,32 @@ export default function MarketWatch({user,role="AGENT"}){
    setError("Could not replace PDF: "+(e.message||String(e)));
   }finally{setBusy(false);}
  };
+ const createManualMonth=async e=>{
+  e.preventDefault();
+  if(!management)return;
+  if(reports.some(r=>r.report_period===manualPeriod)){setError("A Market Watch report already exists for this month. Open it and edit the saved summary figures.");return;}
+  const values={};
+  for(const key of ["sales","new_listings","active_listings","average_price","days_on_market"]){
+   const raw=manualStats[key];
+   if(raw===""||!Number.isFinite(Number(raw))||Number(raw)<0){setError("Enter a valid non-negative value for every monthly statistic.");return;}
+   values[key]=Number(raw);
+  }
+  setBusy(true);setError("");setNotice("");
+  let reportId=null;
+  try{
+   const {data:report,error:reportError}=await supabase.from("dv_property_market_reports").insert({report_period:manualPeriod,geography:"GTA",property_type:"ALL",source_name:"Manual Market Watch entry",metrics:{},status:"DRAFT",created_by:user?.id||null}).select("id").single();
+   if(reportError)throw reportError;
+   reportId=report.id;
+   const {error:rowError}=await supabase.from("dv_property_market_stat_rows").insert({market_report_id:reportId,report_period:manualPeriod,geography_level:"GTA",geography_name:"All GTA",geography_parent:null,property_type:"ALL",bedrooms:null,metric_values:values,source_page:0,source_table:"MANUAL_ENTRY",extraction_method:"MANUAL",review_status:"PENDING"});
+   if(rowError)throw rowError;
+   setNotice("Manual "+monthLabel(manualPeriod)+" statistics saved as a draft. Review and approve the row, then publish the report.");
+   setManualStats({sales:"",new_listings:"",active_listings:"",average_price:"",days_on_market:""});
+   await load();
+  }catch(err){
+   if(reportId)await supabase.from("dv_property_market_reports").delete().eq("id",reportId);
+   setError("Could not save the manual month: "+(err.message||String(err)));
+  }finally{setBusy(false);}
+ };
  const approveAllRows=async report=>{
   if(!management||!report||!rows.length)return;
   if(!window.confirm("Approve all "+rows.length+" extracted rows for "+monthLabel(report.report_period)+"? Check the source PDF first."))return;
@@ -220,6 +248,17 @@ export default function MarketWatch({user,role="AGENT"}){
   {error&&<div className="notice" style={{marginBottom:12,borderColor:"#d97706"}}><AlertCircle size={17}/>{error}</div>}
   {notice&&<div className="notice" style={{marginBottom:12}}><CheckCircle2 size={17}/>{notice}</div>}
   {management&&<section className="panel" style={{marginBottom:14}}>
+   <h2>Enter Monthly Statistics Manually</h2>
+   <p className="muted">Create a month without a PDF. New entries are saved as drafts for review.</p>
+   <form onSubmit={createManualMonth}>
+    <div className="formgrid">
+     <label>Reporting month<input type="date" required value={manualPeriod} onChange={e=>setManualPeriod(e.target.value.slice(0,7)+"-01")}/></label>
+     {[[ "sales","Sold" ],[ "new_listings","New listings" ],[ "active_listings","Active listings" ],[ "average_price","Average selling price" ],[ "days_on_market","Average DOM" ]].map(([key,label])=><label key={key}>{label}<input type="number" min="0" step="1" required value={manualStats[key]} onChange={e=>setManualStats(v=>({...v,[key]:e.target.value}))}/></label>)}
+    </div>
+    <div className="actions" style={{marginTop:12}}><button className="primary" disabled={busy}>Save monthly statistics as Draft</button></div>
+   </form>
+  </section>}
+   {management&&<section className="panel" style={{marginBottom:14}}>
    <h2>Market Watch PDF Library</h2>
    <p className="muted">Upload the original monthly TRREB PDF. New uploads are saved as drafts and are never published automatically.</p>
    <form onSubmit={upload}>
