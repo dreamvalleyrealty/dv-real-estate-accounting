@@ -23,9 +23,13 @@ function parseRows(pageLines,reportPeriod){
  for(const page of pageLines){
   // TRREB column headings are split across multiple PDF text rows.
   // Detect the full set of labels across the page, not on one reconstructed line.
-  const pageText=(page.visualRows||[]).flatMap(row=>row.items.map(item=>item.text)).join(" ").replace(/\s+/g," ");
-  const hasMonthlyTable=/Dollar\s+Volume/i.test(pageText)&&/Average\s+Price/i.test(pageText)&&/Median\s+Price/i.test(pageText)&&/New\s+Listings/i.test(pageText);
+  const pageWords=(page.visualRows||[]).flatMap(row=>row.items.map(item=>item.text)).join(" ").toLowerCase().match(/[a-z]+/g)||[];
+  const pageWordSet=new Set(pageWords);
+  // In this TRREB PDF the two words in headings are separate PDF text objects,
+  // and PDF.js may not preserve a whitespace boundary between them.
+  const hasMonthlyTable=["dollar","volume","average","price","median","new","listings"].every(word=>pageWordSet.has(word));
   if(!hasMonthlyTable)continue;
+  const pageText=pageWords.join(" ");
   const propertyType=propertyTypeFrom(pageText);
   for(const visualRow of (page.visualRows||[])){
    const left=visualRow.items.filter(item=>item.x<190).map(item=>item.text.trim()).filter(Boolean);
@@ -77,7 +81,7 @@ export async function extractMarketWatchPdf(file,expectedPeriod){
  const detected=fileMatch?"20"+fileMatch[1]+"-"+fileMatch[2]+"-01":monthLine?new Date(monthLine+" 1").toISOString().slice(0,7)+"-01":null;
  if(!detected)throw new Error("Could not identify the report month from the PDF cover or filename.");
  if(detected.slice(0,7)!==expectedPeriod.slice(0,7))throw new Error("Report month mismatch. Selected "+expectedPeriod.slice(0,7)+" but PDF indicates "+detected.slice(0,7)+". Correct the report month or upload the matching PDF.");
- const tablePages=pageLines.filter(p=>{const t=(p.visualRows||[]).flatMap(row=>row.items.map(item=>item.text)).join(" ").replace(/\s+/g," ");return /Dollar\s+Volume/i.test(t)&&/Average\s+Price/i.test(t)&&/Median\s+Price/i.test(t)&&/New\s+Listings/i.test(t);}).length;
+ const tablePages=pageLines.filter(p=>{const words=(p.visualRows||[]).flatMap(row=>row.items.map(item=>item.text)).join(" ").toLowerCase().match(/[a-z]+/g)||[];const set=new Set(words);return ["dollar","volume","average","price","median","new","listings"].every(word=>set.has(word));}).length;
  const candidateRows=pageLines.reduce((sum,p)=>sum+p.lines.filter(line=>/^\s*.+?\s{2,}(?=\$?[\d,])/.test(line)).length,0);
  const rows=parseRows(pageLines,expectedPeriod);
  const coverText=pageLines.slice(0,4).flatMap(p=>p.lines).join(" ");
