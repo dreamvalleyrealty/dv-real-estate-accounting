@@ -1,0 +1,30 @@
+import React,{useCallback,useEffect,useState} from "react";
+import {supabase} from "./lib/supabase";
+import {AlertCircle,RefreshCw} from "lucide-react";
+const money=v=>v==null||v===""?"—":new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:0}).format(Number(v));
+const month=v=>v?new Date(v+"T00:00:00").toLocaleDateString("en-CA",{month:"long",year:"numeric"}):"—";
+export default function MarketWatchAgent(){
+ const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState("");
+ const load=useCallback(async()=>{
+  setLoading(true);setError("");
+  const {data,error}=await supabase.from("dv_property_market_stat_rows").select("*").eq("review_status","APPROVED").order("report_period",{ascending:false}).order("source_page");
+  if(error)setError(error.message);else setRows(data||[]);
+  setLoading(false);
+ },[]);
+ useEffect(()=>{load();},[load]);
+ return <div className="market-watch">
+  <section className="panel" style={{background:"#0f2141",color:"#fff",padding:22,marginBottom:16}}>
+   <div style={{fontSize:12,letterSpacing:2,color:"#c8b58e",fontWeight:800}}>DREAM VALLEY REALTY</div>
+   <h1 style={{margin:"8px 0 4px",fontSize:26}}>Market Watch</h1>
+   <p style={{margin:0,opacity:.85}}>Approved TRREB market statistics. Unverified reports remain with brokerage management.</p>
+  </section>
+  {error&&<div className="notice" style={{marginBottom:12,borderColor:"#d97706"}}><AlertCircle size={17}/>{error}</div>}
+  <section className="panel">
+   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}><div><h2 style={{marginBottom:4}}>Published Market Statistics</h2><p className="muted" style={{margin:0}}>Figures are shown as recorded in the approved source rows. No totals or averages are recalculated.</p></div><button className="secondary" onClick={load}><RefreshCw size={15}/> Refresh</button></div>
+   <div className="tablewrap" style={{marginTop:12}}><table><thead><tr><th>Month</th><th>Geography</th><th>Level</th><th>Property type</th><th>Sales</th><th>Average price</th><th>Median price</th><th>New listings</th><th>DOM</th></tr></thead><tbody>
+    {loading?<tr><td colSpan="9">Loading approved Market Watch data…</td></tr>:rows.map(r=><tr key={r.id}><td>{month(r.report_period)}</td><td>{r.geography_name}</td><td>{r.geography_level}</td><td>{r.property_type}</td><td>{r.metric_values?.sales??"—"}</td><td>{money(r.metric_values?.average_price)}</td><td>{money(r.metric_values?.median_price)}</td><td>{r.metric_values?.new_listings??"—"}</td><td>{r.metric_values?.days_on_market??"—"}</td></tr>)}
+    {!loading&&!rows.length&&<tr><td colSpan="9">No approved Market Watch statistics are currently available.</td></tr>}
+   </tbody></table></div>
+  </section>
+ </div>;
+}
