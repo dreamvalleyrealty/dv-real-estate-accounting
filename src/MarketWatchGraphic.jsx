@@ -2,7 +2,7 @@ import React,{useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {supabase} from "./lib/supabase";
 import {Download,RefreshCw,Image as ImageIcon,AlertCircle,CheckCircle2} from "lucide-react";
 
-const NAVY="#061c34",GOLD="#c9973c",WHITE="#ffffff";
+const NAVY="#0f2141",GOLD="#9e8556",WHITE="#ffffff";
 const monthLabel=value=>value?new Date(value+"T00:00:00").toLocaleDateString("en-CA",{month:"long",year:"numeric"}):"";
 const fmtInt=value=>value==null||value===""?"—":new Intl.NumberFormat("en-CA",{maximumFractionDigits:0}).format(Number(value));
 const fmtMoney=value=>value==null||value===""?"—":new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:0}).format(Number(value));
@@ -26,8 +26,8 @@ function drawBarPair(ctx,x,y,w,h,current,previous,currentLabel,previousLabel,max
 }
 function drawGraphic(canvas,data,agent,headshot,logo){
  const ctx=canvas.getContext("2d");if(!ctx)return;
- const W=1400,H=1120;canvas.width=W;canvas.height=H;
- const navy="#061c34",gold="#c9973c",cream="#f7f5ef",red="#e12626",green="#16713b";
+ const W=1402,H=1122;canvas.width=W;canvas.height=H;
+ const navy="#0f2141",gold="#9e8556",cream="#f7f5ef",red="#e12626",green="#16713b";
  const curLabel=monthLabel(data.report.report_period),prevLabel=data.previous?monthLabel(data.previous.report_period):"Prior year";
  const changeFor=key=>percent(data.values[key],data.previousValues[key]);
  const formatFor=key=>key==="average_price"?fmtMoney:fmtInt;
