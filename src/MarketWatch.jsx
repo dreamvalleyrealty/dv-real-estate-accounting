@@ -1,6 +1,7 @@
 import React,{useCallback,useEffect,useMemo,useState} from "react";
 import {supabase} from "./lib/supabase";
 import {extractMarketWatchPdf} from "./marketWatchPdfExtractor";
+import MarketWatchGraphic from "./MarketWatchGraphic";
 import {AlertCircle,CheckCircle2,FileText,RefreshCw,Upload,ExternalLink,ShieldAlert,Eye,Trash2,RotateCcw} from "lucide-react";
 
 const MANAGEMENT_ROLES=["SUPERADMIN","ADMIN","BROKER","BROKER_OF_RECORD","BROKER OF RECORD","BROKER-OF-RECORD","MANAGEMENT","MANAGER","OWNER"];
@@ -27,6 +28,8 @@ export default function MarketWatch({user,role="AGENT"}){
   return "";
  };
  const [filter,setFilter]=useState("all");
+ const [graphicAgents,setGraphicAgents]=useState([]);
+ const [graphicAgentId,setGraphicAgentId]=useState("");
 
  const load=useCallback(async()=>{
   if(!supabase){setLoading(false);return;}
@@ -41,6 +44,16 @@ export default function MarketWatch({user,role="AGENT"}){
   finally{setLoading(false);}
  },[]);
  useEffect(()=>{load();},[load]);
+ useEffect(()=>{
+  if(!management||!supabase)return;
+  let cancelled=false;
+  supabase.from("dv_accounting_agents").select("id,name,first_name,last_name,email,active").eq("active",true).order("name").then(({data,error})=>{
+   if(cancelled)return;
+   if(error){setError("Could not load agent profiles for the graphic generator: "+error.message);return;}
+   const list=data||[];setGraphicAgents(list);setGraphicAgentId(current=>list.some(a=>a.id===current)?current:(list[0]?.id||""));
+  });
+  return()=>{cancelled=true;};
+ },[management]);
  useEffect(()=>{
   if(!selectedId||!supabase){setRows([]);return;}
   let cancelled=false;
@@ -216,7 +229,18 @@ export default function MarketWatch({user,role="AGENT"}){
     <div className="actions" style={{marginTop:12}}><button className="primary" disabled={busy||!uploadFiles.length}><Upload size={16}/> Upload {uploadFiles.length||""} PDF(s) as Drafts</button></div>
    </form>
   </section>}
-  <section className="panel">
+    {management&&<section className="panel" style={{marginBottom:14}}>
+   <h2>Market Watch Graphic Generator</h2>
+   <p className="muted">Choose an agent to preview or download a monthly graphic. The generator uses saved TRREB statistics and the agent's profile photo and contact details.</p>
+   <label style={{display:"block",maxWidth:520,marginBottom:14}}>Agent profile
+    <select value={graphicAgentId} onChange={e=>setGraphicAgentId(e.target.value)}>
+     <option value="">Select an agent</option>
+     {graphicAgents.map(a=><option key={a.id} value={a.id}>{a.name||[a.first_name,a.last_name].filter(Boolean).join(" ")}{a.email?" · "+a.email:""}</option>)}
+    </select>
+   </label>
+   {graphicAgentId?<MarketWatchGraphic user={user} agentId={graphicAgentId} adminMode={true}/>:<p className="muted">No active agent profiles are available.</p>}
+  </section>}
+ <section className="panel">
    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
     <div><h2 style={{marginBottom:4}}>Monthly Reports</h2><p className="muted" style={{margin:0}}>{management?"Select a report to inspect its original PDF and extracted rows.":"Only approved reports available to agents are listed."}</p></div>
     <div className="actions"><select value={filter} onChange={e=>setFilter(e.target.value)} aria-label="Filter reports"><option value="all">All reports</option><option value="review">Needs review</option><option value="approved">Published</option></select><button className="secondary" onClick={load}><RefreshCw size={15}/> Refresh</button></div>
