@@ -261,7 +261,8 @@ export default function MarketWatchGraphic({agentId,user,adminMode=false}){
    </div>}
   </section>}
   <section className="panel"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:12}}><div><h2 style={{margin:0}}>Graphic Preview</h2><p className="muted" style={{margin:"4px 0 0"}}>1400 × 1120 px · PNG format</p></div><ImageIcon size={22} color={GOLD}/></div>
-   {canRender?<div style={{overflowX:"auto",background:"#e9edf0",padding:10,borderRadius:10}}>\n    {adminMode&&referenceTestPreview&&<p className="muted" style={{textAlign:"center",margin:"0 0 8px"}}>Reference test figures preview — values are not saved to the database.</p>}<canvas ref={canvasRef} style={{display:"block",width:"100%",height:"auto",maxWidth:1100,margin:"0 auto",background:"#e9edf0"}}/></div>:<div className="notice">Select an approved report with complete GTA summary figures to preview the graphic.</div>}
+   {canRender?<div style={{overflowX:"auto",background:"#e9edf0",padding:10,borderRadius:10}}>
+    {adminMode&&referenceTestPreview&&<p className="muted" style={{textAlign:"center",margin:"0 0 8px"}}>Reference test figures preview — values are not saved to the database.</p>}<canvas ref={canvasRef} style={{display:"block",width:"100%",height:"auto",maxWidth:1100,margin:"0 auto",background:"#e9edf0"}}/></div>:<div className="notice">Select an approved report with complete GTA summary figures to preview the graphic.</div>}
   </section>
  </div>;
 }
