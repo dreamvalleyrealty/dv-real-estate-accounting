@@ -75,25 +75,29 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  const drawChart=(x,y,w,h,key,compact=false)=>{
   const cur=data.values[key],prev=data.previousValues[key],isPrice=key==="average_price";
   const vals=[Number(cur)||0,Number(prev)||0],maxRaw=Math.max(...vals,1);
-  const max=isPrice?Math.ceil(maxRaw/250000)*250000: key==="days_on_market"?Math.ceil(maxRaw/10)*10:Math.ceil(maxRaw/2000)*2000;
-  const left=compact?30:58,right=8,top=8,bottom=compact?35:42,plotX=x+left,plotY=y+top,plotW=w-left-right,base=y+h-bottom,plotH=base-plotY;
+  const max=isPrice?Math.ceil(maxRaw/250000)*250000:key==="days_on_market"?Math.ceil(maxRaw/10)*10:Math.ceil(maxRaw/2000)*2000;
+  const left=compact?28:(isPrice?48:54),right=compact?7:8,top=compact?18:12,bottom=compact?43:48;
+  const plotX=x+left,plotY=y+top,plotW=w-left-right,base=y+h-bottom,plotH=base-plotY;
   line(plotX,base,plotX+plotW,base,"#b8c0c9",1);
   for(let i=0;i<=4;i++){
    const yy=base-plotH*i/4;line(plotX,yy,plotX+plotW,yy,"#e6e9ed",1);
-   const v=max*i/4;let tick=isPrice?(v===0?"$0":v>=1000000?"$"+(v/1000000).toFixed(v%1000000===0?0:2)+"M":"$"+Math.round(v/1000)+"K"):number(v);
+   const v=max*i/4;
+   let tick=isPrice?(v===0?"$0":v>=1000000?"$"+(v/1000000).toFixed(v%1000000===0?0:2)+"M":"$"+Math.round(v/1000)+"K"):number(v);
    if(!isPrice&&v>=1000)tick=Math.round(v/1000)+"K";
-   if(!isPrice&&key==="days_on_market")tick=String(Math.round(v));
-   text(tick,plotX-8,yy+5,compact?11:15,ink,"normal","Arial","right");
+   if(key==="days_on_market")tick=String(Math.round(v));
+   text(tick,plotX-7,yy+4,compact?10:13,ink,"normal","Arial","right");
   }
-  const bw=compact?42:64,gap=compact?26:42,total=bw*2+gap,bx1=plotX+(plotW-total)/2,bx2=bx1+bw+gap;
+  const bw=compact?34:(isPrice?48:58),gap=compact?18:(isPrice?24:30),total=bw*2+gap;
+  const bx1=plotX+(plotW-total)/2,bx2=bx1+bw+gap;
   const barH=v=>v==null?0:Math.max(2,(Number(v)/max)*plotH);
   const h1=barH(cur),h2=barH(prev);
-  if(cur!=null){ctx.fillStyle=navy;ctx.fillRect(bx1,base-h1,bw,h1);text(isPrice?money(cur):number(cur),bx1+bw/2,base-h1-8,compact?12:16,ink,"bold","Arial","center");}
-  if(prev!=null){ctx.fillStyle=gold;ctx.fillRect(bx2,base-h2,bw,h2);text(isPrice?money(prev):number(prev),bx2+bw/2,base-h2-8,compact?12:16,ink,"bold","Arial","center");}
-  text(curLabel,bx1+bw/2,base+(compact?18:23),compact?10:14,ink,"normal","Arial","center");
-  text(prevLabel,bx2+bw/2,base+(compact?18:23),compact?10:14,ink,"normal","Arial","center");
- };
- // Background and header.
+  const valueLabel=v=>isPrice?"$"+(Number(v)/1000000).toFixed(3)+"M":number(v);
+  if(cur!=null){ctx.fillStyle=navy;ctx.fillRect(bx1,base-h1,bw,h1);text(valueLabel(cur),bx1+bw/2,base-h1-7,compact?10:isPrice?12:14,ink,"bold","Arial","center");}
+  if(prev!=null){ctx.fillStyle=gold;ctx.fillRect(bx2,base-h2,bw,h2);text(valueLabel(prev),bx2+bw/2,base-h2-7,compact?10:isPrice?12:14,ink,"bold","Arial","center");}
+  const labelSize=compact?9:12;
+  text(curLabel,bx1+bw/2,base+(compact?17:21),labelSize,ink,"normal","Arial","center");
+  text(prevLabel,bx2+bw/2,base+(compact?17:21),labelSize,ink,"normal","Arial","center");
+ }; // Background and header.
  const bg=ctx.createLinearGradient(0,0,W,H);bg.addColorStop(0,"#fbfaf7");bg.addColorStop(1,"#e9edf0");ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
  ctx.fillStyle=navy;ctx.fillRect(0,0,W,198);
  // Toronto skyline and CN Tower, in the same header position as the master.
@@ -101,8 +105,9 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  ctx.fillStyle="#102b46";buildings.forEach(([bx,by,bw,bh])=>{ctx.fillRect(bx,by,bw,bh);ctx.fillStyle="#2d4962";for(let yy=by+9;yy<by+bh-5;yy+=13)for(let xx=bx+5;xx<bx+bw-3;xx+=8)ctx.fillRect(xx,yy,3,4);ctx.fillStyle="#102b46";});
  line(897,49,897,154,"#53677a",3);line(889,79,905,79,"#53677a",3);line(891,65,903,65,"#53677a",2);
  ctx.beginPath();ctx.moveTo(897,49);ctx.lineTo(892,67);ctx.lineTo(902,67);ctx.closePath();ctx.fillStyle="#53677a";ctx.fill();
- text("MARKET",53,121,76,white,"normal","Georgia");text("WATCH",356,121,76,gold,"bold","Georgia");
- text(curLabel,198,166,37,white,"normal","Georgia","center");line(54,154,184,154,gold,2);line(455,154,610,154,gold,2);
+ ctx.save();ctx.font="normal 76px Georgia";const marketWidth=ctx.measureText("MARKET").width;ctx.restore();
+ text("MARKET",53,121,76,white,"normal","Georgia");text("WATCH",53+marketWidth+18,121,76,gold,"bold","Georgia");
+ text(curLabel,198,166,35,white,"normal","Georgia","center");line(54,154,184,154,gold,2);line(455,154,610,154,gold,2);
  text("YEAR-OVER-YEAR SUMMARY",650,132,22,gold,"bold","Georgia");text("ALL TRREB AREAS · ALL HOME TYPES",650,160,15,white,"normal","Georgia");
  if(logo){const scale=Math.min(112/logo.width,118/logo.height);ctx.drawImage(logo,1024,22,logo.width*scale,logo.height*scale);}
  text("DREAM VALLEY",1140,96,27,white,"normal","Georgia");text("REALTY",1193,126,20,white,"normal","Georgia");
@@ -129,7 +134,7 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  text("Average Selling Price",170,739,23,white,"normal","Georgia");
  text("Year-over-Year",198,772,22,white,"normal","Georgia");
  drawYoy(170,786,220,70,"average_price");
- drawChart(430,632,244,246,"average_price",false);
+ drawChart(414,632,260,246,"average_price",false);
  // Average DOM panel.
  rounded(697,578,643,321,22,white,gold,2,true);
  icon("calendar",765,658,43);
@@ -138,7 +143,7 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  text("Avg. DOM",846,741,24,ink,"normal","Georgia");
  text("(Listing Days on Market)",846,770,19,ink,"normal","Georgia");
  text("Year-over-Year",801,801,21,ink,"normal","Georgia");
- drawYoy(786,817,168,61,"days_on_market");
+ drawYoy(786,817,168,70,"days_on_market");
  drawChart(1000,630,315,248,"days_on_market",false);
  // Source pill and footer. The footer begins below all cards/charts.
  rounded(437,911,502,31,16,"#fff8e9",gold,1,false);
@@ -159,7 +164,7 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  text("☎",252,1061,23,gold,"normal","Arial");text(agent.phone||"",286,1061,20,white,"normal","Arial");
  text("✉",610,1061,25,gold,"normal","Arial");text(agent.email||"",650,1061,20,white,"normal","Arial");
  text("◎",1014,1061,25,gold,"normal","Arial");text("dreamvalleyrealty.ca",1050,1061,20,white,"normal","Arial");
- text("G U I D I N G   Y O U   H O M E ,   E V E R Y   S T E P   O F   T H E   W A Y .",701,1107,14,gold,"normal","Georgia","center");
+ text("G U I D I N G   Y O U   H O M E ,   E V E R Y   S T E P   O F   T H E   W A Y .",701,1102,13,gold,"normal","Georgia","center");
 }
 export default function MarketWatchGraphic({agentId,user,adminMode=false}){
  const canvasRef=useRef(null);
