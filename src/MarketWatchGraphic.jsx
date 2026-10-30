@@ -96,9 +96,15 @@ export default function MarketWatchGraphic({agentId,user}){
    if(publishedError)throw publishedError;
    const visibleIds=(publishedReports||[]).map(r=>r.id);
    setPublishedIds(visibleIds);
-   const {data:approvedRows,error:rowsError}=await supabase.from("dv_property_market_stat_rows").select("*").eq("review_status","APPROVED").order("report_period",{ascending:false});
-   if(rowsError)throw rowsError;
-   const safeRows=(approvedRows||[]).filter(r=>String(r.report_period).slice(0,7)!=="2026-03");
+   const pageSize=500;
+   const fetchedRows=[];
+   for(let offset=0;;offset+=pageSize){
+    const {data:page,error:rowsError}=await supabase.from("dv_property_market_stat_rows").select("*").eq("review_status","APPROVED").order("report_period",{ascending:false}).order("source_page",{ascending:true}).range(offset,offset+pageSize-1);
+    if(rowsError)throw rowsError;
+    fetchedRows.push(...(page||[]));
+    if(!page||page.length<pageSize)break;
+   }
+   const safeRows=fetchedRows.filter(r=>String(r.report_period).slice(0,7)!=="2026-03");
    setAllRows(safeRows);
    const grouped=new Map();
    for(const row of safeRows){const key=row.market_report_id;if(!grouped.has(key))grouped.set(key,{id:key,report_period:row.report_period,count:0});grouped.get(key).count++;}
