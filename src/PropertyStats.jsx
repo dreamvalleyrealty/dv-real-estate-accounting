@@ -23,7 +23,7 @@ function downloadPdf(title,subtitle,lines,agentName){
  d.save(title.toLowerCase().replace(/[^a-z0-9]+/g,"-")+".pdf");
 }
 export default function PropertyStats({user,role="AGENT",agentId=null,agentName=""}){
- const management=["SUPERADMIN","ADMIN","BROKER","MANAGEMENT"].includes(String(role).toUpperCase());
+ const management=["SUPERADMIN","ADMIN","BROKER","MANAGEMENT","MANAGER"].includes(String(role).toUpperCase());
  const [tab,setTab]=useState("market"),[marketRows,setMarketRows]=useState([]),[cmas,setCmas]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const [period,setPeriod]=useState(dateToday().slice(0,7)+"-01"),[geo,setGeo]=useState("GTA"),[ptype,setPtype]=useState("ALL"),[source,setSource]=useState("TRREB Market Watch"),[metric,setMetric]=useState({sales:"",new_listings:"",average_price:"",median_price:"",days_on_market:"",months_supply:"",notes:""});
  const [cma,setCma]=useState(blankCma),[comps,setComps]=useState([]),[editingId,setEditingId]=useState(null),[comp,setComp]=useState(blankComp),[showComp,setShowComp]=useState(false),[importCount,setImportCount]=useState(0),[agent,setAgent]=useState(null);
