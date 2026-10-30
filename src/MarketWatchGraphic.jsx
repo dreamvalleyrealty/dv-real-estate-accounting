@@ -87,38 +87,39 @@ function drawGraphic(canvas,data,agent,headshot,logo){
 }
 export default function MarketWatchGraphic({agentId,user}){
  const canvasRef=useRef(null);
- const [reports,setReports]=useState([]),[rows,setRows]=useState([]),[agent,setAgent]=useState(null),[headshotUrl,setHeadshotUrl]=useState(""),[selectedId,setSelectedId]=useState(""),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
+ const [allRows,setAllRows]=useState([]),[agent,setAgent]=useState(null),[headshotUrl,setHeadshotUrl]=useState(""),[selectedId,setSelectedId]=useState(""),[loading,setLoading]=useState(true),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const load=useCallback(async()=>{
   if(!supabase){setError("Database connection is not configured.");setLoading(false);return;}
   setLoading(true);setError("");
   try{
-   const {data:reportData,error:reportError}=await supabase.from("dv_property_market_reports").select("id,report_period,source_name,status,metrics").eq("status","APPROVED").order("report_period",{ascending:false});
-   if(reportError)throw reportError;
-   const clean=(reportData||[]).filter(r=>String(r.report_period).slice(0,7)!=="2026-03");
-   setReports(clean);setSelectedId(old=>clean.some(r=>r.id===old)?old:(clean[0]?.id||""));
+   const {data:approvedRows,error:rowsError}=await supabase.from("dv_property_market_stat_rows").select("*").eq("review_status","APPROVED").order("report_period",{ascending:false});
+   if(rowsError)throw rowsError;
+   const safeRows=(approvedRows||[]).filter(r=>String(r.report_period).slice(0,7)!=="2026-03");
+   setAllRows(safeRows);
+   const grouped=new Map();
+   for(const row of safeRows){const key=row.market_report_id;if(!grouped.has(key))grouped.set(key,{id:key,report_period:row.report_period,count:0});grouped.get(key).count++;}
+   const choices=[...grouped.values()].sort((a,b)=>b.report_period.localeCompare(a.report_period)||b.count-a.count);
+   const bestByMonth=new Map();for(const item of choices)if(!bestByMonth.has(item.report_period))bestByMonth.set(item.report_period,item);
+   const clean=[...bestByMonth.values()];
+   setSelectedId(old=>clean.some(r=>r.id===old)?old:(clean[0]?.id||""));
    let profileQuery=supabase.from("dv_accounting_agents").select("id,first_name,last_name,name,email,cell_phone,headshot_path");
    if(agentId)profileQuery=profileQuery.eq("id",agentId);else if(user?.email)profileQuery=profileQuery.ilike("email",user.email.trim());else throw new Error("Your agent profile could not be identified.");
    const {data:profile,error:profileError}=await profileQuery.maybeSingle();
    if(profileError)throw profileError;
    if(!profile)throw new Error("Your agent profile was not found. Please contact the office.");
-   setAgent(profile);
+   setAgent(profile);setHeadshotUrl("");
    if(profile.headshot_path){const {data:photo,error:photoError}=await supabase.storage.from("dv-personnel").createSignedUrl(profile.headshot_path,3600);if(!photoError)setHeadshotUrl(photo?.signedUrl||"");}
   }catch(e){setError(e.message||"Unable to load Market Watch graphic data.");}
   finally{setLoading(false);}
  },[agentId,user?.email]);
  useEffect(()=>{load();},[load]);
- useEffect(()=>{
-  if(!selectedId)return;
-  let cancelled=false;
-  supabase.from("dv_property_market_stat_rows").select("*").eq("market_report_id",selectedId).eq("review_status","APPROVED").then(({data,error})=>{if(cancelled)return;if(error)setError(error.message);else setRows(data||[]);});
-  return()=>{cancelled=true;};
- },[selectedId]);
+ const reports=useMemo(()=>{const grouped=new Map();for(const row of allRows){const key=row.market_report_id;if(!grouped.has(key))grouped.set(key,{id:key,report_period:row.report_period,count:0});grouped.get(key).count++;}const choices=[...grouped.values()].sort((a,b)=>b.report_period.localeCompare(a.report_period)||b.count-a.count);const byMonth=new Map();for(const item of choices)if(!byMonth.has(item.report_period))byMonth.set(item.report_period,item);return [...byMonth.values()];},[allRows]);
  const selected=reports.find(r=>r.id===selectedId)||null;
  const comparison=useMemo(()=>{if(!selected)return null;const target=new Date(selected.report_period+"T00:00:00");target.setFullYear(target.getFullYear()-1);const key=target.toISOString().slice(0,10);return reports.find(r=>r.report_period===key)||null;},[reports,selected]);
  const findAllGtaRow=list=>list.find(r=>r.property_type==="ALL"&&(/all gta|all trreb areas|greater toronto area/i.test(r.geography_name||"")))||list.find(r=>r.property_type==="ALL"&&r.geography_level==="GTA")||null;
+ const rows=useMemo(()=>allRows.filter(r=>r.market_report_id===selectedId),[allRows,selectedId]);
+ const comparisonRows=useMemo(()=>comparison?allRows.filter(r=>r.market_report_id===comparison.id):[],[allRows,comparison]);
  const currentRow=findAllGtaRow(rows);
- const [comparisonRows,setComparisonRows]=useState([]);
- useEffect(()=>{if(!comparison?.id){setComparisonRows([]);return;}let cancelled=false;supabase.from("dv_property_market_stat_rows").select("*").eq("market_report_id",comparison.id).eq("review_status","APPROVED").then(({data,error})=>{if(cancelled)return;if(error)setError(error.message);else setComparisonRows(data||[]);});return()=>{cancelled=true;};},[comparison?.id]);
  const previousRow=findAllGtaRow(comparisonRows);
  const values=useMemo(()=>Object.fromEntries(Object.keys(metricKeys).map(k=>[k,readMetric(currentRow,k)])),[currentRow]);
  const previousValues=useMemo(()=>Object.fromEntries(Object.keys(metricKeys).map(k=>[k,readMetric(previousRow,k)])),[previousRow]);
@@ -137,7 +138,7 @@ export default function MarketWatchGraphic({agentId,user}){
   {notice&&<div className="notice" role="status" style={{marginBottom:12}}><CheckCircle2 size={16}/>{notice}</div>}
   <section className="panel" style={{marginBottom:14}}>
    <div className="formgrid"><label>Approved Market Watch month<select value={selectedId} onChange={e=>{setSelectedId(e.target.value);setNotice("");}}><option value="">Select a report</option>{reports.map(r=><option key={r.id} value={r.id}>{monthLabel(r.report_period)}</option>)}</select></label><label>Agent profile<input value={agent?.name||[agent?.first_name,agent?.last_name].filter(Boolean).join(" ")||"Loading…"} readOnly/></label></div>
-   <div className="actions" style={{marginTop:14}}><button type="button" className="secondary" onClick={load} disabled={busy}><RefreshCw size={15}/> Refresh reports</button><button type="button" className="primary" onClick={download} disabled={!canRender}><Download size={16}/> Download PNG</button></div>
+   <div className="actions" style={{marginTop:14}}><button type="button" className="secondary" onClick={load} ><RefreshCw size={15}/> Refresh reports</button><button type="button" className="primary" onClick={download} disabled={!canRender}><Download size={16}/> Download PNG</button></div>
    {!selected&&<p className="muted" style={{marginBottom:0}}>No approved Market Watch reports are currently available.</p>}
    {selected&&!currentRow&&<div className="notice" style={{marginTop:12}}>This report does not contain an approved All GTA / All TRREB Areas, All Home Types row. The graphic cannot be generated from incomplete data.</div>}
    {selected&&currentRow&&!comparison&&<p className="muted" style={{marginBottom:0}}>The matching month from the previous year is not approved yet. Year-over-year comparisons will display as unavailable.</p>}
