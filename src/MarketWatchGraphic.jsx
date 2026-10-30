@@ -26,7 +26,7 @@ function drawBarPair(ctx,x,y,w,h,current,previous,currentLabel,previousLabel,max
 }
 function drawGraphic(canvas,data,agent,headshot,logo){
  const ctx=canvas.getContext("2d");if(!ctx)return;
- const W=1400,H=1050;canvas.width=W;canvas.height=H;
+ const W=1400,H=1120;canvas.width=W;canvas.height=H;
  const navy="#061c34",gold="#c9973c",cream="#f7f5ef",red="#e12626",green="#16713b";
  const curLabel=monthLabel(data.report.report_period),prevLabel=data.previous?monthLabel(data.previous.report_period):"Prior year";
  const changeFor=key=>percent(data.values[key],data.previousValues[key]);
@@ -47,8 +47,9 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  line(54,174,184,174,gold,2);line(455,174,610,174,gold,2);
  text("YEAR-OVER-YEAR SUMMARY",650,116,22,"#e5b85f","bold","Georgia");
  text("ALL TRREB AREAS · ALL HOME TYPES",650,145,15,"#ffffff","normal","Georgia");
- if(logo){const maxW=310,maxH=125,scale=Math.min(maxW/logo.width,maxH/logo.height);ctx.drawImage(logo,1030,20,logo.width*scale,logo.height*scale);}
- else{text("DV",1045,125,82,gold,"bold","Georgia");text("DREAM VALLEY",1150,92,27,"#ffffff","normal","Georgia");text("REALTY",1195,124,21,"#ffffff","normal","Georgia");}
+ if(logo){const maxW=135,maxH=125,scale=Math.min(maxW/logo.width,maxH/logo.height);ctx.drawImage(logo,1010,20,logo.width*scale,logo.height*scale);}
+ else{text("DV",1015,125,82,gold,"bold","Georgia");}
+ text("DREAM VALLEY",1140,92,27,"#ffffff","normal","Georgia");text("REALTY",1185,124,21,"#ffffff","normal","Georgia");
  // Decorative diagonal edge treatments.
  ctx.fillStyle="#ffffff";ctx.beginPath();ctx.moveTo(0,210);ctx.lineTo(42,255);ctx.lineTo(0,300);ctx.closePath();ctx.fill();
  ctx.fillStyle=gold;ctx.beginPath();ctx.moveTo(1400,760);ctx.lineTo(1400,1050);ctx.lineTo(1160,1050);ctx.closePath();ctx.fill();
@@ -110,16 +111,16 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  drawRound(430,920,540,42,20,"#fff8e8",gold,1);
  text("SOURCE: TRREB MARKET WATCH · "+curLabel.toUpperCase(),700,947,17,navy,"bold","Georgia","center");
  // Footer with agent portrait and contact details.
- ctx.fillStyle=navy;ctx.fillRect(0,970,W,80);ctx.fillStyle=gold;ctx.fillRect(0,966,W,4);
- ctx.beginPath();ctx.arc(132,1000,82,0,Math.PI*2);ctx.fillStyle="#ffffff";ctx.fill();ctx.lineWidth=5;ctx.strokeStyle=gold;ctx.stroke();
- if(headshot){ctx.save();ctx.beginPath();ctx.arc(132,1000,74,0,Math.PI*2);ctx.clip();const scale=Math.max(148/headshot.width,148/headshot.height);const sw=148/scale,sh=148/scale;ctx.drawImage(headshot,(headshot.width-sw)/2,(headshot.height-sh)/2,sw,sh,58,926,148,148);ctx.restore();}
- else{text((agent.name||"Agent").split(/\s+/).map(x=>x[0]).slice(0,2).join("").toUpperCase(),132,1012,40,navy,"bold","Arial","center");}
+ ctx.fillStyle=navy;ctx.fillRect(0,950,W,170);ctx.fillStyle=gold;ctx.fillRect(0,948,W,4);
+ ctx.beginPath();ctx.arc(132,1019,82,0,Math.PI*2);ctx.fillStyle="#ffffff";ctx.fill();ctx.lineWidth=5;ctx.strokeStyle=gold;ctx.stroke();
+ if(headshot){ctx.save();ctx.beginPath();ctx.arc(132,1019,74,0,Math.PI*2);ctx.clip();const scale=Math.max(148/headshot.width,148/headshot.height);const sw=148/scale,sh=148/scale;ctx.drawImage(headshot,(headshot.width-sw)/2,(headshot.height-sh)/2,sw,sh,58,926,148,148);ctx.restore();}
+ else{text((agent.name||"Agent").split(/\s+/).map(x=>x[0]).slice(0,2).join("").toUpperCase(),132,1031,40,navy,"bold","Arial","center");}
  text(agent.name||"Agent",252,1000,39,"#e5b85f","normal","Georgia");
- text(agent.title||"REALTOR®",252,1030,20,"#ffffff","normal","Georgia");
- text(agent.phone||"",320,1032,19,"#ffffff","normal","Arial");
- text(agent.email||"",650,1032,19,"#ffffff","normal","Arial");
- text("dreamvalleyrealty.ca",1040,1032,19,"#ffffff","normal","Arial");
- text("G U I D I N G   Y O U   H O M E ,   E V E R Y   S T E P   O F   T H E   W A Y .",700,1045,13,"#e5b85f","normal","Georgia","center");
+ text(agent.title||"REALTOR®",252,1032,20,"#ffffff","normal","Georgia");
+ text(agent.phone||"",320,1070,19,"#ffffff","normal","Arial");
+ text(agent.email||"",650,1070,19,"#ffffff","normal","Arial");
+ text("dreamvalleyrealty.ca",1040,1070,19,"#ffffff","normal","Arial");
+ text("G U I D I N G   Y O U   H O M E ,   E V E R Y   S T E P   O F   T H E   W A Y .",700,1110,13,"#e5b85f","normal","Georgia","center");
 }
 export default function MarketWatchGraphic({agentId,user}){
  const canvasRef=useRef(null);
