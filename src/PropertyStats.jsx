@@ -20,7 +20,7 @@ function readComparableRows(rows){
  return rows.map(r=>({address:String(pick(r,["Address","Property Address","Street Address"])),city:String(pick(r,["City","Municipality"])),property_type:String(pick(r,["Property Type","Type"])),bedrooms:cleanNumber(pick(r,["Bedrooms","Beds","Br"])),bathrooms:cleanNumber(pick(r,["Bathrooms","Baths","Wr"])),square_feet:cleanNumber(pick(r,["Square Feet","Sq Ft","Sqft","Finished Area"])),lot_size:String(pick(r,["Lot Size","Lot"])),parking:String(pick(r,["Parking","Parkings"])),list_price:cleanNumber(pick(r,["List Price","Original Price","Asking Price"])),sold_price:cleanNumber(pick(r,["Sold Price","Sale Price","Selling Price"])),sold_date:String(pick(r,["Sold Date","Closing Date","Sale Date"])).slice(0,10),days_on_market:cleanNumber(pick(r,["Days on Market","DOM"])),condition_notes:String(pick(r,["Condition","Remarks","Notes"])),adjustments:cleanNumber(pick(r,["Adjustments","Adjustment"]))??0,source:"MLS/REALM UPLOAD"})).filter(r=>r.address);
 }
 function extractMarketWatchText(text){
- const month=text.match(/Market\s*Watch\s*[:–-]?\s*([A-Za-z]+\s+20\d{2})/i)?.[1]||text.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+20\d{2}\b/i)?.[0]||"";
+ const month=text.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+20\d{2}\b/i)?.[0]||"";
  const headline=text.match(/Metrics\s+2026\s+2025\s+Sales\s+([\d,]+)\s+[\d,]+\s+Average Price\s+\$?([\d,]+)\s+\$?[\d,]+\s+New Listings\s+([\d,]+)\s+[\d,]+/i);
  const days=text.match(/Avg\. LDOM\s+(\d+)\s+\d+/i)?.[1]||"";
  const median=text.match(/Median Price\s+\$?([\d,]+)/i)?.[1]?.replace(/,/g,"")||"";
