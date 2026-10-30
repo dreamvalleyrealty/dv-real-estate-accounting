@@ -30,8 +30,10 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  const ctx=canvas.getContext("2d");if(!ctx)return;
  const navy="#0f2141",gold="#9e8556",white="#ffffff",red="#e12626",green="#176b3a",ink="#10233d",muted="#68788a";
  const curLabel=monthLabel(data.report.report_period),prevLabel=data.previous?monthLabel(data.previous.report_period):"Prior year";
- const chartCurLabel=data.report.report_period?new Date(data.report.report_period+"T00:00:00").toLocaleDateString("en-CA",{month:"short",year:"numeric"}):curLabel;
- const chartPrevLabel=data.previous?.report_period?new Date(data.previous.report_period+"T00:00:00").toLocaleDateString("en-CA",{month:"short",year:"numeric"}):"Prior year";
+ const chartCurLabel=data.report.report_period?new Date(data.report.report_period+"T00:00:00").toLocaleDateString("en-CA",{month:"long",year:"numeric"}):curLabel;
+ const chartPrevLabel=data.previous?.report_period?new Date(data.previous.report_period+"T00:00:00").toLocaleDateString("en-CA",{month:"long",year:"numeric"}):"Prior year";
+ const compactCurLabel=data.report.report_period?new Date(data.report.report_period+"T00:00:00").toLocaleDateString("en-CA",{month:"short",year:"2-digit"}):"Current";
+ const compactPrevLabel=data.previous?.report_period?new Date(data.previous.report_period+"T00:00:00").toLocaleDateString("en-CA",{month:"short",year:"2-digit"}):"Prior";
  const pct=k=>percent(data.values[k],data.previousValues[k]);
  const number=v=>fmtInt(v);
  const money=v=>fmtMoney(v);
@@ -89,16 +91,17 @@ function drawGraphic(canvas,data,agent,headshot,logo){
    if(key==="days_on_market")tick=String(Math.round(v));
    text(tick,plotX-7,yy+4,compact?10:13,ink,"normal","Arial","right");
   }
-  const bw=compact?34:(isPrice?48:58),gap=compact?18:(isPrice?24:30),total=bw*2+gap;
-  const bx1=plotX+(plotW-total)/2,bx2=bx1+bw+gap;
+  const bw=compact?34:(isPrice?48:58);
+  const center1=plotX+plotW*(compact?0.27:0.25),center2=plotX+plotW*(compact?0.73:0.75);
+  const bx1=center1-bw/2,bx2=center2-bw/2;
   const barH=v=>v==null?0:Math.max(2,(Number(v)/max)*plotH);
   const h1=barH(cur),h2=barH(prev);
   const valueLabel=v=>isPrice?money(v):number(v);
   if(cur!=null){ctx.fillStyle=navy;ctx.fillRect(bx1,base-h1,bw,h1);text(valueLabel(cur),bx1+bw/2,base-h1-7,compact?10:isPrice?10:14,ink,"bold","Arial","center");}
   if(prev!=null){ctx.fillStyle=gold;ctx.fillRect(bx2,base-h2,bw,h2);text(valueLabel(prev),bx2+bw/2,base-h2-7,compact?10:isPrice?10:14,ink,"bold","Arial","center");}
-  const labelSize=compact?9:12;
-  text(chartCurLabel,bx1+bw/2,base+(compact?17:21),labelSize,ink,"normal","Arial","center");
-  text(chartPrevLabel,bx2+bw/2,base+(compact?17:21),labelSize,ink,"normal","Arial","center");
+  const labelSize=compact?9:10;
+  text(compact?compactCurLabel:chartCurLabel,bx1+bw/2,base+(compact?17:21),labelSize,ink,"normal","Arial","center");
+  text(compact?compactPrevLabel:chartPrevLabel,bx2+bw/2,base+(compact?17:21),labelSize,ink,"normal","Arial","center");
  }; // Background and header.
  const bg=ctx.createLinearGradient(0,0,W,H);bg.addColorStop(0,"#fbfaf7");bg.addColorStop(1,"#e9edf0");ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
  ctx.fillStyle=navy;ctx.fillRect(0,0,W,198);
@@ -170,7 +173,7 @@ function drawGraphic(canvas,data,agent,headshot,logo){
 }
 export default function MarketWatchGraphic({agentId,user,adminMode=false}){
  const canvasRef=useRef(null);
- const [allRows,setAllRows]=useState([]),[publishedIds,setPublishedIds]=useState([]),[agent,setAgent]=useState(null),[headshotUrl,setHeadshotUrl]=useState(""),[selectedId,setSelectedId]=useState(""),[loading,setLoading]=useState(true),[error,setError]=useState(""),[notice,setNotice]=useState(""),[editingMetrics,setEditingMetrics]=useState(false),[metricDraft,setMetricDraft]=useState({}),[savingMetrics,setSavingMetrics]=useState(false);
+ const [allRows,setAllRows]=useState([]),[publishedIds,setPublishedIds]=useState([]),[agent,setAgent]=useState(null),[headshotUrl,setHeadshotUrl]=useState(""),[selectedId,setSelectedId]=useState(""),[loading,setLoading]=useState(true),[error,setError]=useState(""),[notice,setNotice]=useState(""),[editingMetrics,setEditingMetrics]=useState(false),[metricDraft,setMetricDraft]=useState({}),[savingMetrics,setSavingMetrics]=useState(false),[referenceTestPreview,setReferenceTestPreview]=useState(false);
  const load=useCallback(async()=>{
   if(!supabase){setError("Database connection is not configured.");setLoading(false);return;}
   setLoading(true);setError("");
