@@ -22,7 +22,8 @@ function parseRows(pageLines,reportPeriod){
  };
  for(const page of pageLines){
   const pageText=(page.visualRows||[]).flatMap(row=>row.items.map(item=>item.text)).join(" ");
-  if(!/Dollar\s+Volume/i.test(pageText)||!/Average\s+Price/i.test(pageText)||!/Median\s+Price/i.test(pageText)||!/New\s+Listings/i.test(pageText))continue;
+  const monthlyHeader=page.lines.find(line=>/Dollar\s+Volume/i.test(line)&&/Average\s+Price/i.test(line)&&/Median\s+Price/i.test(line)&&/New\s+Listings/i.test(line));
+  if(!monthlyHeader)continue;
   const propertyType=propertyTypeFrom(pageText);
   for(const visualRow of (page.visualRows||[])){
    const left=visualRow.items.filter(item=>item.x<190).map(item=>item.text.trim()).filter(Boolean);
