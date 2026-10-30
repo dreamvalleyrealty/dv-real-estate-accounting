@@ -122,21 +122,21 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  text("dreamvalleyrealty.ca",1040,1070,19,"#ffffff","normal","Arial");
  text("G U I D I N G   Y O U   H O M E ,   E V E R Y   S T E P   O F   T H E   W A Y .",700,1110,13,"#e5b85f","normal","Georgia","center");
 }
-export default function MarketWatchGraphic({agentId,user}){
+export default function MarketWatchGraphic({agentId,user,adminMode=false}){
  const canvasRef=useRef(null);
- const [allRows,setAllRows]=useState([]),[publishedIds,setPublishedIds]=useState([]),[agent,setAgent]=useState(null),[headshotUrl,setHeadshotUrl]=useState(""),[selectedId,setSelectedId]=useState(""),[loading,setLoading]=useState(true),[error,setError]=useState(""),[notice,setNotice]=useState("");
+ const [allRows,setAllRows]=useState([]),[publishedIds,setPublishedIds]=useState([]),[agent,setAgent]=useState(null),[headshotUrl,setHeadshotUrl]=useState(""),[selectedId,setSelectedId]=useState(""),[loading,setLoading]=useState(true),[error,setError]=useState(""),[notice,setNotice]=useState(""),[editingMetrics,setEditingMetrics]=useState(false),[metricDraft,setMetricDraft]=useState({}),[savingMetrics,setSavingMetrics]=useState(false);
  const load=useCallback(async()=>{
   if(!supabase){setError("Database connection is not configured.");setLoading(false);return;}
   setLoading(true);setError("");
   try{
-   const {data:publishedReports,error:publishedError}=await supabase.from("dv_property_market_reports").select("id,report_period").eq("status","APPROVED").neq("report_period","2026-03-01");
+   let reportQuery=supabase.from("dv_property_market_reports").select("id,report_period,status").neq("report_period","2026-03-01");\n   if(!adminMode)reportQuery=reportQuery.eq("status","APPROVED");\n   const {data:publishedReports,error:publishedError}=await reportQuery;
    if(publishedError)throw publishedError;
    const visibleIds=(publishedReports||[]).map(r=>r.id);
    setPublishedIds(visibleIds);
    const pageSize=500;
    const fetchedRows=[];
    for(let offset=0;;offset+=pageSize){
-    const {data:page,error:rowsError}=await supabase.from("dv_property_market_stat_rows").select("*").eq("review_status","APPROVED").order("report_period",{ascending:false}).order("source_page",{ascending:true}).range(offset,offset+pageSize-1);
+    let rowQuery=supabase.from("dv_property_market_stat_rows").select("*").order("report_period",{ascending:false}).order("source_page",{ascending:true});\n    if(!adminMode)rowQuery=rowQuery.eq("review_status","APPROVED");\n    const {data:page,error:rowsError}=await rowQuery.range(offset,offset+pageSize-1);
     if(rowsError)throw rowsError;
     fetchedRows.push(...(page||[]));
     if(!page||page.length<pageSize)break;
@@ -158,7 +158,7 @@ export default function MarketWatchGraphic({agentId,user}){
    if(profile.headshot_path){const {data:photo,error:photoError}=await supabase.storage.from("dv-personnel").createSignedUrl(profile.headshot_path,3600);if(!photoError)setHeadshotUrl(photo?.signedUrl||"");}
   }catch(e){setError(e.message||"Unable to load Market Watch graphic data.");}
   finally{setLoading(false);}
- },[agentId,user?.email]);
+ },[agentId,user?.email,adminMode]);
  useEffect(()=>{load();},[load]);
  const reports=useMemo(()=>{const grouped=new Map();for(const row of allRows){if(!publishedIds.includes(row.market_report_id))continue;const key=row.market_report_id;if(!grouped.has(key))grouped.set(key,{id:key,report_period:row.report_period,count:0});grouped.get(key).count++;}const choices=[...grouped.values()].sort((a,b)=>b.report_period.localeCompare(a.report_period)||b.count-a.count);const byMonth=new Map();for(const item of choices)if(!byMonth.has(item.report_period))byMonth.set(item.report_period,item);return [...byMonth.values()];},[allRows,publishedIds]);
  const selected=reports.find(r=>r.id===selectedId)||null;
@@ -190,12 +190,19 @@ export default function MarketWatchGraphic({agentId,user}){
   {error&&<div className="notice" role="alert" style={{marginBottom:12,borderColor:"#d97706"}}><AlertCircle size={16}/>{error}</div>}
   {notice&&<div className="notice" role="status" style={{marginBottom:12}}><CheckCircle2 size={16}/>{notice}</div>}
   <section className="panel" style={{marginBottom:14}}>
-   <div className="formgrid"><label>Approved Market Watch month<select value={selectedId} onChange={e=>{setSelectedId(e.target.value);setNotice("");}}><option value="">Select a report</option>{reports.map(r=><option key={r.id} value={r.id}>{monthLabel(r.report_period)}</option>)}</select></label><label>Agent profile<input value={agent?.name||[agent?.first_name,agent?.last_name].filter(Boolean).join(" ")||"Loading…"} readOnly/></label></div>
+   <div className="formgrid"><label>{adminMode?"Market Watch month":"Approved Market Watch month"}<select value={selectedId} onChange={e=>{setSelectedId(e.target.value);setNotice("");}}><option value="">Select a report</option>{reports.map(r=><option key={r.id} value={r.id}>{monthLabel(r.report_period)}</option>)}</select></label><label>Agent profile<input value={agent?.name||[agent?.first_name,agent?.last_name].filter(Boolean).join(" ")||"Loading…"} readOnly/></label></div>
    <div className="actions" style={{marginTop:14}}><button type="button" className="secondary" onClick={load} ><RefreshCw size={15}/> Refresh reports</button><button type="button" className="primary" onClick={download} disabled={!canRender}><Download size={16}/> Download PNG</button></div>
    {!selected&&<p className="muted" style={{marginBottom:0}}>No approved Market Watch reports are currently available.</p>}
-   {selected&&!currentRow&&<div className="notice" style={{marginTop:12}}>This report does not contain an approved All GTA / All TRREB Areas, All Home Types row. The graphic cannot be generated from incomplete data.</div>}
-   {selected&&currentRow&&!comparison&&<p className="muted" style={{marginBottom:0}}>The matching month from the previous year is not approved yet. Year-over-year comparisons will display as unavailable.</p>}
+   {selected&&!currentRow&&<div className="notice" style={{marginTop:12}}>This report does not contain an All GTA / All TRREB Areas, All Home Types summary row. The graphic cannot be generated from incomplete data.</div>}
+   {selected&&currentRow&&!comparison&&<p className="muted" style={{marginBottom:0}}>The matching month from the previous year is not available. Year-over-year comparisons will display as unavailable.</p>}
   </section>
+  {adminMode&&selected&&currentRow&&<section className="panel" style={{marginBottom:14}}>
+   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}><div><h3 style={{margin:"0 0 4px"}}>Monthly GTA summary figures</h3><p className="muted" style={{margin:0}}>Edit the saved monthly summary values. Year-over-year percentages are calculated automatically.</p></div><button type="button" className="secondary" onClick={()=>{setMetricDraft({sales:readMetric(currentRow,"sales")??"",new_listings:readMetric(currentRow,"new_listings")??"",active_listings:readMetric(currentRow,"active_listings")??"",average_price:readMetric(currentRow,"average_price")??"",days_on_market:readMetric(currentRow,"days_on_market")??""});setEditingMetrics(v=>!v);}}>{editingMetrics?"Close editor":"Edit monthly figures"}</button></div>
+   {editingMetrics&&<div className="formgrid" style={{marginTop:14}}>
+    {[[ "sales","Sold" ],[ "new_listings","New listings" ],[ "active_listings","Active listings" ],[ "average_price","Average selling price" ],[ "days_on_market","Average DOM" ]].map(([key,label])=><label key={key}>{label}<input type="number" min="0" step={key==="average_price"?"1":"1"} value={metricDraft[key]??""} onChange={e=>setMetricDraft(v=>({...v,[key]:e.target.value}))}/></label>)}
+    <div className="actions" style={{alignItems:"end"}}><button type="button" className="primary" disabled={savingMetrics} onClick={async()=>{setSavingMetrics(true);setError("");setNotice("");try{const next={...(currentRow.metric_values||{})};for(const key of Object.keys(metricDraft)){const raw=metricDraft[key];if(raw===""||!Number.isFinite(Number(raw))||Number(raw)<0)throw new Error("Enter a valid non-negative value for every figure.");next[key]=Number(raw);}const {data,error}=await supabase.from("dv_property_market_stat_rows").update({metric_values:next}).eq("id",currentRow.id).select("id").maybeSingle();if(error)throw error;if(!data)throw new Error("The database did not confirm the statistics update. Check your management permissions.");setAllRows(prev=>prev.map(row=>row.id===currentRow.id?{...row,metric_values:next}:row));setEditingMetrics(false);setNotice("Monthly GTA summary figures saved.");}catch(e){setError(e.message||"Could not save monthly figures.");}finally{setSavingMetrics(false);}}}>Save figures</button></div>
+   </div>}
+  </section>}
   <section className="panel"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:12}}><div><h2 style={{margin:0}}>Graphic Preview</h2><p className="muted" style={{margin:"4px 0 0"}}>1400 × 1120 px · PNG format</p></div><ImageIcon size={22} color={GOLD}/></div>
    {canRender?<div style={{overflowX:"auto",background:"#e9edf0",padding:10,borderRadius:10}}><canvas ref={canvasRef} style={{display:"block",width:"100%",height:"auto",maxWidth:1100,margin:"0 auto",background:"#e9edf0"}}/></div>:<div className="notice">Select an approved report with complete GTA summary figures to preview the graphic.</div>}
   </section>
