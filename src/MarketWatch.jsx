@@ -1,6 +1,7 @@
 import React,{useCallback,useEffect,useMemo,useState} from "react";
 import {supabase} from "./lib/supabase";
-import {AlertCircle,CheckCircle2,FileText,RefreshCw,Upload,ExternalLink,ShieldAlert,Eye} from "lucide-react";
+import {extractMarketWatchPdf} from "./marketWatchPdfExtractor";
+import {AlertCircle,CheckCircle2,FileText,RefreshCw,Upload,ExternalLink,ShieldAlert,Eye,Trash2,RotateCcw} from "lucide-react";
 
 const MANAGEMENT_ROLES=["SUPERADMIN","ADMIN","BROKER","MANAGEMENT","MANAGER"];
 const money=value=>value==null||value===""?"—":new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:0}).format(Number(value));
@@ -78,6 +79,74 @@ export default function MarketWatch({user,role="AGENT"}){
   }catch(e){setError("Could not publish the report: "+(e.message||String(e)));}
   finally{setBusy(false);}
  };
+ const extractSelected=async report=>{
+  if(!management||!report?.pdf_storage_path)return;
+  setBusy(true);setError("");setNotice("");
+  try{
+   const {data:blob,error:downloadError}=await supabase.storage.from("dv-property-market-reports").download(report.pdf_storage_path);
+   if(downloadError)throw downloadError;
+   const file=new File([blob],report.pdf_file_name||report.source_name||"market-watch.pdf",{type:"application/pdf"});
+   const result=await extractMarketWatchPdf(file,report.report_period);
+   if(!result.rows.length)throw new Error("The PDF was read ("+result.pages+" pages), but no detailed statistical tables were detected. No rows were saved. The extraction layout needs adjustment for this PDF.");
+   const {error:rowError}=await supabase.from("dv_property_market_stat_rows").insert(result.rows.map(({report_period,...row})=>({...row,market_report_id:report.id,report_period:report.report_period})));
+   if(rowError)throw rowError;
+   const {error:reportError}=await supabase.from("dv_property_market_reports").update({extracted_text:result.text,metrics:{...(report.metrics||{}),extracted_pages:result.pages,extracted_rows:result.rows.length,extraction_method:"PDF_TEXT_LAYOUT",extraction_status:"PENDING_REVIEW"}}).eq("id",report.id);
+   if(reportError)throw reportError;
+   setNotice("Read "+result.pages+" pages and extracted "+result.rows.length+" statistical rows. All rows are pending management review.");
+   await load();
+  }catch(e){setError(e.message||"PDF extraction failed.");}
+  finally{setBusy(false);}
+ };
+ const deleteReport=async report=>{
+  if(!management||!report)return;
+  if(!window.confirm("Permanently delete "+monthLabel(report.report_period)+", its extracted rows and its stored PDF? This cannot be undone."))return;
+  setBusy(true);setError("");setNotice("");
+  try{
+   const {error:rowsError}=await supabase.from("dv_property_market_stat_rows").delete().eq("market_report_id",report.id);
+   if(rowsError)throw rowsError;
+   const {error:reportError}=await supabase.from("dv_property_market_reports").delete().eq("id",report.id);
+   if(reportError)throw reportError;
+   if(report.pdf_storage_path){
+    const {error:storageError}=await supabase.storage.from("dv-property-market-reports").remove([report.pdf_storage_path]);
+    if(storageError)throw storageError;
+   }
+   if(selectedId===report.id){setSelectedId("");setRows([]);}
+   setNotice("Report, extracted rows and original PDF deleted.");
+   await load();
+  }catch(e){setError("Delete did not complete: "+(e.message||String(e)));}
+  finally{setBusy(false);}
+ };
+ const reuploadReport=async(report,file)=>{
+  if(!management||!report||!file)return;
+  if(file.type!=="application/pdf"&&!file.name.toLowerCase().endsWith(".pdf")){setError("Please select a PDF file.");return;}
+  if(!window.confirm("Replace the original PDF for "+monthLabel(report.report_period)+" and clear its extracted rows so the new file can be reprocessed?"))return;
+  setBusy(true);setError("");setNotice("");
+  const oldPath=report.pdf_storage_path;
+  let newPath=null;
+  try{
+   newPath=(user?.id||"management")+"/"+Date.now()+"-"+file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+   const {error:uploadError}=await supabase.storage.from("dv-property-market-reports").upload(newPath,file,{contentType:"application/pdf",upsert:false});
+   if(uploadError)throw uploadError;
+   const {error:updateError}=await supabase.from("dv_property_market_reports").update({pdf_storage_path:newPath,pdf_file_name:file.name,source_name:file.name,extracted_text:null,metrics:{},status:"DRAFT",approved_by:null,approved_at:null}).eq("id",report.id);
+   if(updateError)throw updateError;
+   const {error:rowsError}=await supabase.from("dv_property_market_stat_rows").delete().eq("market_report_id",report.id);
+   if(rowsError)throw rowsError;
+   if(oldPath){const {error:removeError}=await supabase.storage.from("dv-property-market-reports").remove([oldPath]);if(removeError)throw removeError;}
+   setNotice("PDF replaced. The report is back in DRAFT with no extracted rows. Run Extract PDF to process the new file.");
+   await load();
+  }catch(e){
+   if(newPath)await supabase.storage.from("dv-property-market-reports").remove([newPath]);
+   setError("Could not replace PDF: "+(e.message||String(e)));
+  }finally{setBusy(false);}
+ };
+ const approveAllRows=async report=>{
+  if(!management||!report||!rows.length)return;
+  if(!window.confirm("Approve all "+rows.length+" extracted rows for "+monthLabel(report.report_period)+"? Check the source PDF first."))return;
+  setBusy(true);setError("");setNotice("");
+  const {error}=await supabase.from("dv_property_market_stat_rows").update({review_status:"APPROVED"}).eq("market_report_id",report.id);
+  if(error)setError(error.message);else{setRows(prev=>prev.map(x=>({...x,review_status:"APPROVED"})));setNotice("All extracted rows approved. You can now publish the report.");}
+  setBusy(false);
+ };
  const approveRow=async row=>{
   if(!management)return;
   setBusy(true);setError("");setNotice("");
@@ -138,7 +207,7 @@ export default function MarketWatch({user,role="AGENT"}){
       <td>{r.pdf_file_name||r.source_name||"No PDF attached"}</td>
       <td>{String(r.report_period).slice(0,7)==="2026-03"?"REVIEW REQUIRED":r.status||"DRAFT"}</td>
       <td>{selectedId===r.id?rows.length:"—"}</td>
-      <td><div className="actions"><button className="secondary" onClick={()=>setSelectedId(r.id)}><Eye size={14}/> Review</button>{r.pdf_storage_path&&<button className="secondary" onClick={()=>openPdf(r)}><ExternalLink size={14}/> PDF</button>}</div></td>
+      <td><div className="actions"><button className="secondary" onClick={()=>setSelectedId(r.id)}><Eye size={14}/> Review</button>{r.pdf_storage_path&&<button className="secondary" onClick={()=>openPdf(r)}><ExternalLink size={14}/> PDF</button>}{management&&<button className="secondary" disabled={busy} title="Delete report" onClick={()=>deleteReport(r)}><Trash2 size={14}/></button>}{management&&<label className="secondary" style={{display:"inline-flex",alignItems:"center",gap:5,padding:"8px 10px",borderRadius:6,cursor:"pointer"}}><RotateCcw size={14}/> Re-upload<input type="file" accept="application/pdf,.pdf" hidden disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(file)reuploadReport(r,file);e.target.value="";}}/></label>}</div></td>
      </tr>)}
      {!visibleReports.length&&<tr><td colSpan="5">No reports match this filter.</td></tr>}</tbody>
     </table>
@@ -148,7 +217,9 @@ export default function MarketWatch({user,role="AGENT"}){
    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
     <div><h2 style={{marginBottom:4}}>{monthLabel(selected.report_period)} — Review</h2><p className="muted" style={{margin:0}}>Source: {selected.pdf_file_name||selected.source_name||"PDF not attached"} · {rows.length} extracted rows</p></div>
     <div className="actions">{selected.pdf_storage_path&&<button className="secondary" onClick={()=>openPdf(selected)}><FileText size={15}/> Open Original PDF</button>}
-     {management&&String(selected.report_period).slice(0,7)==="2026-03"&&<button className="secondary" disabled={busy} onClick={()=>returnToReview(selected)}><ShieldAlert size={15}/> Move to Review</button>}
+     {management&&selected.pdf_storage_path&&rows.length===0&&<button className="primary" disabled={busy} onClick={()=>extractSelected(selected)}><FileText size={15}/> Extract PDF</button>}
+     {management&&rows.length>0&&rows.some(x=>x.review_status!=="APPROVED")&&<button className="secondary" disabled={busy} onClick={()=>approveAllRows(selected)}>Approve All Rows</button>}
+     {management&&selected.status==="APPROVED"&&<button className="secondary" disabled={busy} onClick={()=>returnToReview(selected)}><ShieldAlert size={15}/> Move to Review</button>}
      {management&&selected.status!=="APPROVED"&&<button className="primary" disabled={busy||!rows.length||rows.some(x=>x.review_status!=="APPROVED")} onClick={()=>approveReport(selected)}>Approve & Publish</button>}
     </div>
    </div>
@@ -156,7 +227,7 @@ export default function MarketWatch({user,role="AGENT"}){
    <div className="tablewrap" style={{marginTop:12,maxHeight:560,overflow:"auto"}}>
     <table><thead><tr><th>Page</th><th>Geography</th><th>Level</th><th>Property type</th><th>Sales</th><th>Avg. price</th><th>Median</th><th>New listings</th><th>DOM</th><th>Review</th></tr></thead>
      <tbody>{rows.map(row=><tr key={row.id}><td>{row.source_page||"—"}</td><td>{row.geography_name}</td><td>{row.geography_level}</td><td>{row.property_type}</td><td>{row.metric_values?.sales??"—"}</td><td>{money(row.metric_values?.average_price)}</td><td>{money(row.metric_values?.median_price)}</td><td>{row.metric_values?.new_listings??"—"}</td><td>{row.metric_values?.days_on_market??"—"}</td><td>{row.review_status==="APPROVED"?<span style={{color:"#167447"}}>Approved</span>:management?<button className="secondary" disabled={busy} onClick={()=>approveRow(row)}>Approve row</button>:"Pending"}</td></tr>)}
-     {!rows.length&&<tr><td colSpan="10">No extracted detail rows are attached to this report. It cannot be published until extraction and validation are complete.</td></tr>}</tbody>
+     {!rows.length&&<tr><td colSpan="10">No extracted detail rows are attached. Click “Extract PDF” to read the original report and create pending rows for review.</td></tr>}</tbody>
     </table>
    </div>
    {String(selected.report_period).slice(0,7)==="2026-03"&&<div className="notice" style={{marginTop:12,borderColor:"#d97706"}}><ShieldAlert size={17}/> March 2026 is excluded from agent access while its 319 extracted rows are being rechecked. The source PDF and rows remain intact.</div>}
