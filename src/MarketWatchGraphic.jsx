@@ -42,10 +42,10 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  skyline.forEach(([x,y,w,h])=>{ctx.fillRect(x,y,w,h);for(let wy=y+9;wy<y+h-5;wy+=13)for(let wx=x+5;wx<x+w-3;wx+=8){ctx.fillStyle="#29445c";ctx.fillRect(wx,wy,3,4);}ctx.fillStyle="#0d2943";});
  // CN Tower silhouette.
  line(896,48,896,150,"#29445c",3);line(888,79,904,79,"#29445c",3);line(891,64,901,64,"#29445c",2);ctx.beginPath();ctx.moveTo(896,48);ctx.lineTo(891,67);ctx.lineTo(901,67);ctx.closePath();ctx.fillStyle="#29445c";ctx.fill();
- text("MARKET",52,105,76,"#ffffff","bold","Georgia");text("WATCH",350,105,76,"#e5b85f","bold","Georgia");
+ text("MARKET",52,105,76,"#ffffff","bold","Georgia");text("WATCH",350,105,76,"#9e8556","bold","Georgia");
  text(curLabel,198,160,37,"#ffffff","normal","Georgia","center");
  line(54,174,184,174,gold,2);line(455,174,610,174,gold,2);
- text("YEAR-OVER-YEAR SUMMARY",650,116,22,"#e5b85f","bold","Georgia");
+ text("YEAR-OVER-YEAR SUMMARY",650,116,22,"#9e8556","bold","Georgia");
  text("ALL TRREB AREAS · ALL HOME TYPES",650,145,15,"#ffffff","normal","Georgia");
  if(logo){const maxW=135,maxH=125,scale=Math.min(maxW/logo.width,maxH/logo.height);ctx.drawImage(logo,1010,20,logo.width*scale,logo.height*scale);}
  else{text("DV",1015,125,82,gold,"bold","Georgia");}
@@ -91,7 +91,7 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  // Average price feature card.
  drawRound(36,595,650,310,22,navy,null);
  drawCircleIcon(ctx,112,680,"$");
- text("AVERAGE PRICE",180,664,36,"#e5b85f","bold","Georgia");
+ text("AVERAGE PRICE",180,664,36,"#9e8556","bold","Georgia");
  text(fmtMoney(data.values.average_price),158,742,62,"#ffffff","normal","Georgia");
  text("Average Selling Price",180,786,24,"#ffffff","normal","Georgia");
  text("Year-over-Year",180,825,23,"#ffffff","normal","Georgia");
@@ -100,7 +100,7 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  // Average days on market card.
  drawRound(704,595,660,310,22,"#ffffff",gold,2);
  drawCircleIcon(ctx,780,680,"◷");
- text("AVERAGE DOM",852,664,36,"#a77a2c","bold","Georgia");
+ text("AVERAGE DOM",852,664,36,"#9e8556","bold","Georgia");
  text(fmtInt(data.values.days_on_market),850,748,70,navy,"normal","Georgia");
  text("Avg. DOM",850,785,25,navy,"normal","Georgia");
  text("(Listing Days on Market)",850,815,20,navy,"normal","Georgia");
@@ -115,12 +115,12 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  ctx.beginPath();ctx.arc(132,1019,82,0,Math.PI*2);ctx.fillStyle="#ffffff";ctx.fill();ctx.lineWidth=5;ctx.strokeStyle=gold;ctx.stroke();
  if(headshot){ctx.save();ctx.beginPath();ctx.arc(132,1019,74,0,Math.PI*2);ctx.clip();const scale=Math.max(148/headshot.width,148/headshot.height);const sw=148/scale,sh=148/scale;ctx.drawImage(headshot,(headshot.width-sw)/2,(headshot.height-sh)/2,sw,sh,58,926,148,148);ctx.restore();}
  else{text((agent.name||"Agent").split(/\s+/).map(x=>x[0]).slice(0,2).join("").toUpperCase(),132,1031,40,navy,"bold","Arial","center");}
- text(agent.name||"Agent",252,1000,39,"#e5b85f","normal","Georgia");
+ text(agent.name||"Agent",252,1000,39,"#9e8556","normal","Georgia");
  text(agent.title||"REALTOR®",252,1032,20,"#ffffff","normal","Georgia");
  text(agent.phone||"",320,1070,19,"#ffffff","normal","Arial");
  text(agent.email||"",650,1070,19,"#ffffff","normal","Arial");
  text("dreamvalleyrealty.ca",1040,1070,19,"#ffffff","normal","Arial");
- text("G U I D I N G   Y O U   H O M E ,   E V E R Y   S T E P   O F   T H E   W A Y .",700,1110,13,"#e5b85f","normal","Georgia","center");
+ text("G U I D I N G   Y O U   H O M E ,   E V E R Y   S T E P   O F   T H E   W A Y .",700,1110,13,"#9e8556","normal","Georgia","center");
 }
 export default function MarketWatchGraphic({agentId,user,adminMode=false}){
  const canvasRef=useRef(null);
@@ -187,7 +187,7 @@ export default function MarketWatchGraphic({agentId,user,adminMode=false}){
  const download=()=>{const canvas=canvasRef.current;if(!canvas)return;canvas.toBlob(blob=>{if(!blob){setError("The image could not be created. Please try again.");return;}const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="Dream-Valley-Market-Watch-"+String(selected.report_period).slice(0,7)+"-"+(agent?.name||"Agent").replace(/[^a-z0-9]+/gi,"-")+".png";a.click();URL.revokeObjectURL(url);setNotice("Your Market Watch graphic has been downloaded.");},"image/png");};
  if(loading)return <section className="panel"><p>Loading your Market Watch graphic workspace…</p></section>;
  return <div className="market-watch-graphic">
-  <section className="panel" style={{background:NAVY,color:WHITE,padding:22,marginBottom:16}}><div style={{color:"#e5b85f",fontSize:12,fontWeight:800,letterSpacing:2}}>DREAM VALLEY REALTY</div><h1 style={{margin:"8px 0 4px",fontSize:26}}>Market Watch Graphic</h1><p style={{margin:0,opacity:.85}}>Create a branded market update with your agent contact details.</p></section>
+  <section className="panel" style={{background:NAVY,color:WHITE,padding:22,marginBottom:16}}><div style={{color:"#9e8556",fontSize:12,fontWeight:800,letterSpacing:2}}>DREAM VALLEY REALTY</div><h1 style={{margin:"8px 0 4px",fontSize:26}}>Market Watch Graphic</h1><p style={{margin:0,opacity:.85}}>Create a branded market update with your agent contact details.</p></section>
   {error&&<div className="notice" role="alert" style={{marginBottom:12,borderColor:"#d97706"}}><AlertCircle size={16}/>{error}</div>}
   {notice&&<div className="notice" role="status" style={{marginBottom:12}}><CheckCircle2 size={16}/>{notice}</div>}
   <section className="panel" style={{marginBottom:14}}>
