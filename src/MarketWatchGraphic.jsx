@@ -25,102 +25,141 @@ function drawBarPair(ctx,x,y,w,h,current,previous,currentLabel,previousLabel,max
  drawText(ctx,previousLabel,b2+barW/2,base+21,12,NAVY,"normal","Arial","center");
 }
 function drawGraphic(canvas,data,agent,headshot,logo){
+ const W=1402,H=1122;
+ canvas.width=W;canvas.height=H;
  const ctx=canvas.getContext("2d");if(!ctx)return;
- const W=1402,H=1122;canvas.width=W;canvas.height=H;
- const navy="#0f2141",gold="#9e8556",cream="#f7f5ef",red="#e12626",green="#16713b";
+ const navy="#0f2141",gold="#9e8556",white="#ffffff",red="#e12626",green="#176b3a",ink="#10233d",muted="#68788a";
  const curLabel=monthLabel(data.report.report_period),prevLabel=data.previous?monthLabel(data.previous.report_period):"Prior year";
- const changeFor=key=>percent(data.values[key],data.previousValues[key]);
- const formatFor=key=>key==="average_price"?fmtMoney:fmtInt;
- const drawRound=(x,y,w,h,r,fill,stroke=gold,lw=2)=>{ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fillStyle=fill;ctx.fill();if(stroke){ctx.lineWidth=lw;ctx.strokeStyle=stroke;ctx.stroke();}};
- const text=(value,x,y,size,color=navy,weight="normal",font="Georgia",align="left")=>drawText(ctx,value,x,y,size,color,weight,font,align);
- const line=(x1,y1,x2,y2,color=gold,width=2)=>{ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();};
- const gradient=ctx.createLinearGradient(0,0,W,H);gradient.addColorStop(0,"#fbfaf6");gradient.addColorStop(1,"#e9edf0");ctx.fillStyle=gradient;ctx.fillRect(0,0,W,H);
- // Navy header with Toronto skyline silhouette.
+ const pct=k=>percent(data.values[k],data.previousValues[k]);
+ const number=v=>fmtInt(v);
+ const money=v=>fmtMoney(v);
+ const rounded=(x,y,w,h,r,fill,stroke=gold,lw=2,shadow=true)=>{
+  ctx.save();if(shadow){ctx.shadowColor="rgba(0,0,0,.17)";ctx.shadowBlur=13;ctx.shadowOffsetY=5;}
+  ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fillStyle=fill;ctx.fill();ctx.restore();
+  if(stroke){ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.lineWidth=lw;ctx.strokeStyle=stroke;ctx.stroke();}
+ };
+ const text=(v,x,y,size,color=ink,weight="normal",font="Georgia",align="left")=>{
+  ctx.save();ctx.font=weight+" "+size+"px "+font;ctx.fillStyle=color;ctx.textAlign=align;ctx.textBaseline="alphabetic";ctx.fillText(String(v??""),x,y);ctx.restore();
+ };
+ const line=(x1,y1,x2,y2,color=gold,width=2)=>{
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();
+ };
+ const circle=(x,y,r,fill,stroke=gold,lw=3)=>{
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=fill;ctx.fill();if(stroke){ctx.lineWidth=lw;ctx.strokeStyle=stroke;ctx.stroke();}
+ };
+ const icon=(kind,cx,cy,r=42)=>{
+  circle(cx,cy,r,navy,gold,3);ctx.save();ctx.strokeStyle=gold;ctx.fillStyle=gold;ctx.lineWidth=4;ctx.lineCap="round";ctx.lineJoin="round";
+  if(kind==="key"){
+   ctx.beginPath();ctx.arc(cx+5,cy-10,13,0,Math.PI*2);ctx.stroke();line(cx-4,cy-1,cx-23,cy+20,gold,6);line(cx-17,cy+13,cx-10,cy+20,gold,5);line(cx-10,cy+6,cx-3,cy+13,gold,5);
+  }else if(kind==="house"){
+   ctx.beginPath();ctx.moveTo(cx-24,cy-5);ctx.lineTo(cx,cy-27);ctx.lineTo(cx+25,cy-5);ctx.moveTo(cx-18,cy-9);ctx.lineTo(cx-18,cy+23);ctx.lineTo(cx+18,cy+23);ctx.lineTo(cx+18,cy-9);ctx.stroke();ctx.strokeRect(cx-7,cy+5,14,18);line(cx+10,cy-20,cx+10,cy-31,gold,4);
+  }else if(kind==="list"){
+   ctx.strokeRect(cx-18,cy-24,36,48);for(let yy=cy-12;yy<=cy+13;yy+=13){circle(cx-9,yy,2.3,gold,null,0);line(cx-2,yy,cx+12,yy,gold,3);}
+  }else if(kind==="dollar"){text("$",cx,cy+17,43,gold,"bold","Georgia","center");}
+  else if(kind==="calendar"){
+   ctx.strokeRect(cx-22,cy-17,44,39);line(cx-22,cy-6,cx+22,cy-6,gold,3);line(cx-11,cy-25,cx-11,cy-12,gold,4);line(cx+11,cy-25,cx+11,cy-12,gold,4);for(let xx of [-10,2,13])for(let yy of [2,12])circle(cx+xx,cy+yy,2,gold,null,0);
+  }
+  ctx.restore();
+ };
+ const drawYoy=(x,y,w,h,key)=>{
+  const p=pct(key),color=p==null?muted:p<0?red:p>0?green:navy;
+  rounded(x,y,w,h,12,white,color,2,false);
+  const label=p==null?"N/A":(p>0?"+":"")+p.toFixed(1)+"%";
+  text(label,x+w/2,y+h*.58,p==null?38:Math.min(45,h*.48),color,"bold","Georgia","center");
+  if(p!=null&&p!==0){
+   const ax=x+w/2+(label.length*11);
+   text(p<0?"▼":"▲",Math.min(x+w-20,ax),y+h*.58,27,color,"bold","Arial","center");
+  }
+  text("YEAR-OVER-YEAR",x+w/2,y+h-13,13,ink,"bold","Georgia","center");
+ };
+ const drawChart=(x,y,w,h,key,compact=false)=>{
+  const cur=data.values[key],prev=data.previousValues[key],isPrice=key==="average_price";
+  const vals=[Number(cur)||0,Number(prev)||0],maxRaw=Math.max(...vals,1);
+  const max=isPrice?Math.ceil(maxRaw/250000)*250000: key==="days_on_market"?Math.ceil(maxRaw/10)*10:Math.ceil(maxRaw/2000)*2000;
+  const left=compact?30:58,right=8,top=8,bottom=compact?35:42,plotX=x+left,plotY=y+top,plotW=w-left-right,base=y+h-bottom,plotH=base-plotY;
+  line(plotX,base,plotX+plotW,base,"#b8c0c9",1);
+  for(let i=0;i<=4;i++){
+   const yy=base-plotH*i/4;line(plotX,yy,plotX+plotW,yy,"#e6e9ed",1);
+   const v=max*i/4;let tick=isPrice?(v===0?"$0":v>=1000000?"$"+(v/1000000).toFixed(v%1000000===0?0:2)+"M":"$"+Math.round(v/1000)+"K"):number(v);
+   if(!isPrice&&v>=1000)tick=Math.round(v/1000)+"K";
+   if(!isPrice&&key==="days_on_market")tick=String(Math.round(v));
+   text(tick,plotX-8,yy+5,compact?11:15,ink,"normal","Arial","right");
+  }
+  const bw=compact?42:64,gap=compact?26:42,total=bw*2+gap,bx1=plotX+(plotW-total)/2,bx2=bx1+bw+gap;
+  const barH=v=>v==null?0:Math.max(2,(Number(v)/max)*plotH);
+  const h1=barH(cur),h2=barH(prev);
+  if(cur!=null){ctx.fillStyle=navy;ctx.fillRect(bx1,base-h1,bw,h1);text(isPrice?money(cur):number(cur),bx1+bw/2,base-h1-8,compact?12:16,ink,"bold","Arial","center");}
+  if(prev!=null){ctx.fillStyle=gold;ctx.fillRect(bx2,base-h2,bw,h2);text(isPrice?money(prev):number(prev),bx2+bw/2,base-h2-8,compact?12:16,ink,"bold","Arial","center");}
+  text(curLabel,bx1+bw/2,base+(compact?18:23),compact?10:14,ink,"normal","Arial","center");
+  text(prevLabel,bx2+bw/2,base+(compact?18:23),compact?10:14,ink,"normal","Arial","center");
+ };
+ // Background and header.
+ const bg=ctx.createLinearGradient(0,0,W,H);bg.addColorStop(0,"#fbfaf7");bg.addColorStop(1,"#e9edf0");ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
  ctx.fillStyle=navy;ctx.fillRect(0,0,W,198);
- ctx.fillStyle="#0d2943";
- const skyline=[[850,132,18,62],[872,112,24,82],[900,145,16,49],[922,98,22,96],[950,126,16,68],[970,82,23,112],[1000,119,19,75],[1025,96,24,98],[1055,135,18,59],[1080,111,25,83],[1110,142,18,52],[1130,119,22,75],[1160,146,18,48]];
- skyline.forEach(([x,y,w,h])=>{ctx.fillRect(x,y,w,h);for(let wy=y+9;wy<y+h-5;wy+=13)for(let wx=x+5;wx<x+w-3;wx+=8){ctx.fillStyle="#29445c";ctx.fillRect(wx,wy,3,4);}ctx.fillStyle="#0d2943";});
- // CN Tower silhouette.
- line(896,48,896,150,"#29445c",3);line(888,79,904,79,"#29445c",3);line(891,64,901,64,"#29445c",2);ctx.beginPath();ctx.moveTo(896,48);ctx.lineTo(891,67);ctx.lineTo(901,67);ctx.closePath();ctx.fillStyle="#29445c";ctx.fill();
- text("MARKET",52,105,76,"#ffffff","bold","Georgia");text("WATCH",350,105,76,"#9e8556","bold","Georgia");
- text(curLabel,198,160,37,"#ffffff","normal","Georgia","center");
- line(54,174,184,174,gold,2);line(455,174,610,174,gold,2);
- text("YEAR-OVER-YEAR SUMMARY",650,116,22,"#9e8556","bold","Georgia");
- text("ALL TRREB AREAS · ALL HOME TYPES",650,145,15,"#ffffff","normal","Georgia");
- if(logo){const maxW=135,maxH=125,scale=Math.min(maxW/logo.width,maxH/logo.height);ctx.drawImage(logo,1010,20,logo.width*scale,logo.height*scale);}
- else{text("DV",1015,125,82,gold,"bold","Georgia");}
- text("DREAM VALLEY",1140,92,27,"#ffffff","normal","Georgia");text("REALTY",1185,124,21,"#ffffff","normal","Georgia");
- // Decorative diagonal edge treatments.
- ctx.fillStyle="#ffffff";ctx.beginPath();ctx.moveTo(0,210);ctx.lineTo(42,255);ctx.lineTo(0,300);ctx.closePath();ctx.fill();
- ctx.fillStyle=gold;ctx.beginPath();ctx.moveTo(1400,760);ctx.lineTo(1400,1050);ctx.lineTo(1160,1050);ctx.closePath();ctx.fill();
- ctx.fillStyle=navy;ctx.beginPath();ctx.moveTo(1400,800);ctx.lineTo(1400,1050);ctx.lineTo(1200,1050);ctx.closePath();ctx.fill();
- ctx.fillStyle=gold;ctx.beginPath();ctx.moveTo(1400,865);ctx.lineTo(1400,1020);ctx.lineTo(1280,1020);ctx.closePath();ctx.fill();
- // chart renderer with paired navy/gold bars and axis labels.
- const chart=(x,y,w,h,key)=>{
-  const cur=data.values[key],prev=data.previousValues[key],fmt=formatFor(key),max=Math.max(Number(cur)||0,Number(prev)||0,1)*1.18;
-  const base=y+h-34,top=y+8,plotH=base-top;
-  line(x+34,base,x+w-8,base,"#9ba5b1",1);
-  for(let i=0;i<=4;i++){const yy=base-(plotH*i/4);line(x+34,yy,x+w-8,yy,"#e1e5e9",1);const tick=max*i/4;let label=key==="average_price"?(tick>=1000000?"$"+(tick/1000000).toFixed(2)+"M":"$"+Math.round(tick/1000)+"K"):tick>=1000?Math.round(tick/1000)+"K":Math.round(tick);text(label,x+26,yy+5,13,"#1c2938","normal","Arial","right");}
-  const bw=58,bx1=x+Math.max(75,(w-2*bw-45)/2),bx2=bx1+bw+45;
-  const bh1=cur==null?0:(Number(cur)/max)*plotH,bh2=prev==null?0:(Number(prev)/max)*plotH;
-  if(cur!=null){ctx.fillStyle=navy;ctx.fillRect(bx1,base-bh1,bw,bh1);text(fmt(cur),bx1+bw/2,base-bh1-10,17,navy,"bold","Arial","center");}
-  if(prev!=null){ctx.fillStyle=gold;ctx.fillRect(bx2,base-bh2,bw,bh2);text(fmt(prev),bx2+bw/2,base-bh2-10,17,navy,"bold","Arial","center");}
-  text(curLabel,bx1+bw/2,base+25,14,navy,"normal","Arial","center");
-  text(prevLabel,bx2+bw/2,base+25,14,navy,"normal","Arial","center");
- };
- const yoy=(x,y,w,key)=>{
-  const pct=changeFor(key),down=pct!=null&&pct<0,up=pct!=null&&pct>0,color=pct==null?"#778392":down?red:up?green:navy;
-  drawRound(x,y,w,104,13,"#fff",color,2);
-  text(pct==null?"N/A":(pct>0?"+":"")+pct.toFixed(1)+"%"+(down?" ▼":up?" ▲":""),x+w/2,y+62,39,color,"bold","Georgia","center");
-  text("YEAR-OVER-YEAR",x+w/2,y+88,14,navy,"bold","Georgia","center");
- };
- const topCards=[
-  {x:38,key:"sales",title:"SOLD",sub:"Units Sold",symbol:"⌂"},
-  {x:485,key:"new_listings",title:"NEW LISTINGS",sub:"New Listings",symbol:"⌂"},
-  {x:932,key:"active_listings",title:"ACTIVE LISTINGS",sub:"Active Listings",symbol:"▤"}
+ // Toronto skyline and CN Tower, in the same header position as the master.
+ const buildings=[[846,137,20,61],[870,112,22,86],[897,143,16,55],[918,102,22,96],[944,126,18,72],[966,78,24,120],[995,117,19,81],[1018,94,25,104],[1048,132,18,66],[1070,108,25,90],[1101,137,18,61],[1122,116,22,82],[1148,143,20,55]];
+ ctx.fillStyle="#102b46";buildings.forEach(([bx,by,bw,bh])=>{ctx.fillRect(bx,by,bw,bh);ctx.fillStyle="#2d4962";for(let yy=by+9;yy<by+bh-5;yy+=13)for(let xx=bx+5;xx<bx+bw-3;xx+=8)ctx.fillRect(xx,yy,3,4);ctx.fillStyle="#102b46";});
+ line(897,49,897,154,"#53677a",3);line(889,79,905,79,"#53677a",3);line(891,65,903,65,"#53677a",2);
+ ctx.beginPath();ctx.moveTo(897,49);ctx.lineTo(892,67);ctx.lineTo(902,67);ctx.closePath();ctx.fillStyle="#53677a";ctx.fill();
+ text("MARKET",53,121,76,white,"normal","Georgia");text("WATCH",356,121,76,gold,"bold","Georgia");
+ text(curLabel,198,166,37,white,"normal","Georgia","center");line(54,154,184,154,gold,2);line(455,154,610,154,gold,2);
+ text("YEAR-OVER-YEAR SUMMARY",650,132,22,gold,"bold","Georgia");text("ALL TRREB AREAS · ALL HOME TYPES",650,160,15,white,"normal","Georgia");
+ if(logo){const scale=Math.min(112/logo.width,118/logo.height);ctx.drawImage(logo,1024,22,logo.width*scale,logo.height*scale);}
+ text("DREAM VALLEY",1140,96,27,white,"normal","Georgia");text("REALTY",1193,126,20,white,"normal","Georgia");
+ // Master card layout: three top cards and two lower cards.
+ const top=[
+  {x:39,w:428,key:"sales",title:"SOLD",sub:"Units Sold",icon:"key",yoyX:61,chartX:224},
+  {x:474,w:406,key:"new_listings",title:"NEW LISTINGS",sub:"New Listings",icon:"house",yoyX:497,chartX:661},
+  {x:887,w:453,key:"active_listings",title:"ACTIVE LISTINGS",sub:"Active Listings",icon:"list",yoyX:914,chartX:1077}
  ];
- topCards.forEach(card=>{
-  drawRound(card.x,210,430,365,22,"#ffffff",gold,2);
-  drawCircleIcon(ctx,card.x+78,270,card.symbol);
-  text(card.title,card.x+150,258,29,navy,"bold","Georgia");
-  text(fmtInt(data.values[card.key]),card.x+150,323,58,navy,"bold","Georgia");
-  text(card.sub,card.x+40,365,22,navy,"normal","Georgia");
-  yoy(card.x+24,410,162,card.key);
-  chart(card.x+190,390,226,160,card.key);
+ top.forEach(c=>{
+  rounded(c.x,198,c.w,368,21,white,gold,2,true);
+  icon(c.icon,c.x+62,255,42);
+  text(c.title,c.x+132,250,29,ink,"bold","Georgia");
+  text(number(data.values[c.key]),c.x+124,312,58,ink,"bold","Georgia");
+  text(c.sub,c.x+38,344,21,ink,"normal","Georgia");
+  drawYoy(c.yoyX,406,c.chartX-c.yoyX-12,100,c.key);
+  drawChart(c.chartX,327,c.x+c.w-c.chartX-12,207,c.key,true);
  });
- // Average price feature card.
- drawRound(36,595,650,310,22,navy,null);
- drawCircleIcon(ctx,112,680,"$");
- text("AVERAGE PRICE",180,664,36,"#9e8556","bold","Georgia");
- text(fmtMoney(data.values.average_price),158,742,62,"#ffffff","normal","Georgia");
- text("Average Selling Price",180,786,24,"#ffffff","normal","Georgia");
- text("Year-over-Year",180,825,23,"#ffffff","normal","Georgia");
- yoy(175,838,220,"average_price");
- chart(405,660,255,205,"average_price");
- // Average days on market card.
- drawRound(704,595,660,310,22,"#ffffff",gold,2);
- drawCircleIcon(ctx,780,680,"◷");
- text("AVERAGE DOM",852,664,36,"#9e8556","bold","Georgia");
- text(fmtInt(data.values.days_on_market),850,748,70,navy,"normal","Georgia");
- text("Avg. DOM",850,785,25,navy,"normal","Georgia");
- text("(Listing Days on Market)",850,815,20,navy,"normal","Georgia");
- text("Year-over-Year",850,854,22,navy,"normal","Georgia");
- yoy(850,866,205,"days_on_market");
- chart(1070,650,270,225,"days_on_market");
- // Source strip.
- drawRound(430,920,540,42,20,"#fff8e8",gold,1);
- text("SOURCE: TRREB MARKET WATCH · "+curLabel.toUpperCase(),700,947,17,navy,"bold","Georgia","center");
- // Footer with agent portrait and contact details.
- ctx.fillStyle=navy;ctx.fillRect(0,950,W,170);ctx.fillStyle=gold;ctx.fillRect(0,948,W,4);
- ctx.beginPath();ctx.arc(132,1019,82,0,Math.PI*2);ctx.fillStyle="#ffffff";ctx.fill();ctx.lineWidth=5;ctx.strokeStyle=gold;ctx.stroke();
- if(headshot){ctx.save();ctx.beginPath();ctx.arc(132,1019,74,0,Math.PI*2);ctx.clip();const scale=Math.max(148/headshot.width,148/headshot.height);const sw=148/scale,sh=148/scale;ctx.drawImage(headshot,(headshot.width-sw)/2,(headshot.height-sh)/2,sw,sh,58,926,148,148);ctx.restore();}
- else{text((agent.name||"Agent").split(/\s+/).map(x=>x[0]).slice(0,2).join("").toUpperCase(),132,1031,40,navy,"bold","Arial","center");}
- text(agent.name||"Agent",252,1000,39,"#9e8556","normal","Georgia");
- text(agent.title||"REALTOR®",252,1032,20,"#ffffff","normal","Georgia");
- text(agent.phone||"",320,1070,19,"#ffffff","normal","Arial");
- text(agent.email||"",650,1070,19,"#ffffff","normal","Arial");
- text("dreamvalleyrealty.ca",1040,1070,19,"#ffffff","normal","Arial");
- text("G U I D I N G   Y O U   H O M E ,   E V E R Y   S T E P   O F   T H E   W A Y .",700,1110,13,"#9e8556","normal","Georgia","center");
+ // Average price panel.
+ rounded(36,578,651,321,22,navy,null,0,true);
+ icon("dollar",116,658,43);
+ text("AVERAGE PRICE",178,637,37,gold,"bold","Georgia");
+ text(money(data.values.average_price),157,695,61,white,"normal","Georgia");
+ text("Average Selling Price",170,739,23,white,"normal","Georgia");
+ text("Year-over-Year",198,772,22,white,"normal","Georgia");
+ drawYoy(170,786,220,70,"average_price");
+ drawChart(430,632,244,246,"average_price",false);
+ // Average DOM panel.
+ rounded(697,578,643,321,22,white,gold,2,true);
+ icon("calendar",765,658,43);
+ text("AVERAGE DOM",846,637,37,gold,"bold","Georgia");
+ text(number(data.values.days_on_market),846,704,70,ink,"normal","Georgia");
+ text("Avg. DOM",846,741,24,ink,"normal","Georgia");
+ text("(Listing Days on Market)",846,770,19,ink,"normal","Georgia");
+ text("Year-over-Year",801,801,21,ink,"normal","Georgia");
+ drawYoy(786,817,168,61,"days_on_market");
+ drawChart(1000,630,315,248,"days_on_market",false);
+ // Source pill and footer. The footer begins below all cards/charts.
+ rounded(437,911,502,31,16,"#fff8e9",gold,1,false);
+ text("SOURCE: TRREB MARKET WATCH · "+curLabel.toUpperCase(),688,932,16,ink,"bold","Georgia","center");
+ ctx.fillStyle=navy;ctx.fillRect(0,948,W,174);ctx.fillStyle=gold;ctx.fillRect(0,946,W,3);
+ // Decorative footer corner.
+ ctx.fillStyle="#f5f0e5";ctx.beginPath();ctx.moveTo(1402,949);ctx.lineTo(1402,1122);ctx.lineTo(1220,1122);ctx.closePath();ctx.fill();
+ ctx.fillStyle=gold;ctx.beginPath();ctx.moveTo(1402,979);ctx.lineTo(1402,1122);ctx.lineTo(1280,1122);ctx.closePath();ctx.fill();
+ ctx.fillStyle=navy;ctx.beginPath();ctx.moveTo(1402,1003);ctx.lineTo(1402,1122);ctx.lineTo(1310,1122);ctx.closePath();ctx.fill();
+ // Agent portrait with a fixed circular crop.
+ circle(141,995,91,white,gold,5);
+ if(headshot){ctx.save();ctx.beginPath();ctx.arc(141,995,83,0,Math.PI*2);ctx.clip();const scale=Math.max(166/headshot.width,166/headshot.height),sw=166/scale,sh=166/scale;ctx.drawImage(headshot,(headshot.width-sw)/2,(headshot.height-sh)/2,sw,sh,58,912,166,166);ctx.restore();}
+ else{text((agent.name||"Agent").split(/\s+/).map(v=>v[0]).slice(0,2).join("").toUpperCase(),141,1008,40,navy,"bold","Arial","center");}
+ const agentName=agent.name||"Agent";
+ text(agentName,252,993,38,gold,"normal","Georgia");
+ text(agent.title||"REALTOR®",252,1024,20,white,"normal","Georgia");
+ // Contact icons and details aligned on one baseline.
+ text("☎",252,1061,23,gold,"normal","Arial");text(agent.phone||"",286,1061,20,white,"normal","Arial");
+ text("✉",610,1061,25,gold,"normal","Arial");text(agent.email||"",650,1061,20,white,"normal","Arial");
+ text("◎",1014,1061,25,gold,"normal","Arial");text("dreamvalleyrealty.ca",1050,1061,20,white,"normal","Arial");
+ text("G U I D I N G   Y O U   H O M E ,   E V E R Y   S T E P   O F   T H E   W A Y .",701,1107,14,gold,"normal","Georgia","center");
 }
 export default function MarketWatchGraphic({agentId,user,adminMode=false}){
  const canvasRef=useRef(null);
