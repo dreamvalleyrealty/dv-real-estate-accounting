@@ -22,7 +22,7 @@ function parseRows(pageLines,reportPeriod){
  };
  for(const page of pageLines){
   const pageText=page.lines.join(" ");
-  if(!/Dollar\\s+Volume/i.test(pageText)||!/Average\\s+Price/i.test(pageText)||!/Median\\s+Price/i.test(pageText)||!/New\\s+Listings/i.test(pageText))continue;
+  if(!/Dollar\s+Volume/i.test(pageText)||!/Average\s+Price/i.test(pageText)||!/Median\s+Price/i.test(pageText)||!/New\s+Listings/i.test(pageText))continue;
   const propertyType=propertyTypeFrom(pageText);
   for(const line of page.lines){
    const match=line.match(/^\s*(.+?)\s{2,}(?=\$?[\d,])/);
