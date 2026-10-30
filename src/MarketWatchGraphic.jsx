@@ -129,7 +129,8 @@ export default function MarketWatchGraphic({agentId,user,adminMode=false}){
   if(!supabase){setError("Database connection is not configured.");setLoading(false);return;}
   setLoading(true);setError("");
   try{
-   let reportQuery=supabase.from("dv_property_market_reports").select("id,report_period,status").neq("report_period","2026-03-01");\n   if(!adminMode)reportQuery=reportQuery.eq("status","APPROVED");\n   const {data:publishedReports,error:publishedError}=await reportQuery;
+   let reportQuery=supabase.from("dv_property_market_reports").select("id,report_period,status").neq("report_period","2026-03-01");
+   if(!adminMode)reportQuery=reportQuery.eq("status","APPROVED");\n   const {data:publishedReports,error:publishedError}=await reportQuery;
    if(publishedError)throw publishedError;
    const visibleIds=(publishedReports||[]).map(r=>r.id);
    setPublishedIds(visibleIds);
