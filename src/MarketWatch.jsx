@@ -3,7 +3,7 @@ import {supabase} from "./lib/supabase";
 import {extractMarketWatchPdf} from "./marketWatchPdfExtractor";
 import {AlertCircle,CheckCircle2,FileText,RefreshCw,Upload,ExternalLink,ShieldAlert,Eye,Trash2,RotateCcw} from "lucide-react";
 
-const MANAGEMENT_ROLES=["SUPERADMIN","ADMIN","BROKER","MANAGEMENT","MANAGER"];
+const MANAGEMENT_ROLES=["SUPERADMIN","ADMIN","BROKER","BROKER_OF_RECORD","BROKER OF RECORD","BROKER-OF-RECORD","MANAGEMENT","MANAGER","OWNER"];
 const money=value=>value==null||value===""?"—":new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",maximumFractionDigits:0}).format(Number(value));
 const monthLabel=value=>value?new Date(value+"T00:00:00").toLocaleDateString("en-CA",{month:"long",year:"numeric"}):"—";
 
