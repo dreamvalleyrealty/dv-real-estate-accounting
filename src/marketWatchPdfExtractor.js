@@ -60,7 +60,7 @@ export async function extractMarketWatchPdf(file,expectedPeriod){
   items.sort((a,b)=>b.y-a.y||a.x-b.x);
   const clusters=[];
   for(const item of items){
-   let cluster=clusters.find(row=>Math.abs(row.y-item.y)<=2.5);
+   let cluster=clusters.find(row=>Math.abs(row.y-item.y)<=8);
    if(!cluster){cluster={y:item.y,items:[]};clusters.push(cluster);}
    cluster.items.push(item);
   }
@@ -73,8 +73,10 @@ export async function extractMarketWatchPdf(file,expectedPeriod){
  const detected=fileMatch?"20"+fileMatch[1]+"-"+fileMatch[2]+"-01":monthLine?new Date(monthLine+" 1").toISOString().slice(0,7)+"-01":null;
  if(!detected)throw new Error("Could not identify the report month from the PDF cover or filename.");
  if(detected.slice(0,7)!==expectedPeriod.slice(0,7))throw new Error("Report month mismatch. Selected "+expectedPeriod.slice(0,7)+" but PDF indicates "+detected.slice(0,7)+". Correct the report month or upload the matching PDF.");
+ const tablePages=pageLines.filter(p=>{const t=p.lines.join(" ");return /Dollar\\s+Volume/i.test(t)&&/Average\\s+Price/i.test(t)&&/Median\\s+Price/i.test(t)&&/New\\s+Listings/i.test(t);}).length;
+ const candidateRows=pageLines.reduce((sum,p)=>sum+p.lines.filter(line=>/^\\s*.+?\\s{2,}(?=\\$?[\\d,])/.test(line)).length,0);
  const rows=parseRows(pageLines,expectedPeriod);
  const coverText=pageLines.slice(0,4).flatMap(p=>p.lines).join(" ");
  const headline=coverText.match(/(\d[\d,]*)\s+(?:Sales|Homes Sold)[\s\S]{0,100}?(\$?\d[\d,]*)/i);
- return {pages:pdf.numPages,text:sanitize(fullText),rows,detectedMonth:detected,summary:{cover_text:coverText,extracted_pages:pdf.numPages,extracted_rows:rows.length,headline_match:headline?headline[0]:null}};
+ return {pages:pdf.numPages,text:sanitize(fullText),rows,detectedMonth:detected,summary:{cover_text:coverText,extracted_pages:pdf.numPages,extracted_rows:rows.length,table_pages:tablePages,candidate_rows:candidateRows,headline_match:headline?headline[0]:null}};
 }
