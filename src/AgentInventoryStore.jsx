@@ -10,16 +10,17 @@ export default function AgentInventoryStore({user,agentId}){
  const [items,setItems]=useState([]),[branches,setBranches]=useState([]),[branchId,setBranchId]=useState(""),[stock,setStock]=useState([]),[cart,setCart]=useState({}),[borrowCart,setBorrowCart]=useState({}),[tab,setTab]=useState("SHOP"),[orders,setOrders]=useState([]),[requests,setRequests]=useState([]),[pickup,setPickup]=useState(dateNow()),[due,setDue]=useState(""),[notes,setNotes]=useState(""),[payment,setPayment]=useState("SQUARE"),[busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState("");
  const load=useCallback(async()=>{
   if(!supabase)return;
-  const [i,b,s,o,r]=await Promise.all([
+  const [i,b,s,o,r,a]=await Promise.all([
    supabase.from("dv_accounting_inventory_items").select("*").eq("is_active",true).order("item_name"),
    supabase.from("dv_accounting_branches").select("id,name").eq("active",true).order("name"),
    supabase.from("dv_accounting_inventory_branch_stock").select("*"),
    supabase.from("dv_accounting_inventory_orders").select("*,items:dv_accounting_inventory_order_items(*)").order("created_at",{ascending:false}).limit(50),
-   supabase.from("dv_accounting_inventory_borrow_requests").select("*,items:dv_accounting_inventory_borrow_request_items(*)").order("created_at",{ascending:false}).limit(50)
+   supabase.from("dv_accounting_inventory_borrow_requests").select("*,items:dv_accounting_inventory_borrow_request_items(*)").order("created_at",{ascending:false}).limit(50),
+   supabase.from("dv_accounting_agents").select("branch_id").eq("id",agentId).maybeSingle()
   ]);
-  const bad=[i,b,s,o,r].find(x=>x.error);if(bad)throw bad.error;
+  const bad=[i,b,s,o,r,a].find(x=>x.error);if(bad)throw bad.error;
   setItems(i.data||[]);setBranches(b.data||[]);setStock(s.data||[]);setOrders(o.data||[]);setRequests(r.data||[]);
-  setBranchId(v=>v||((b.data||[]).find(x=>x.id)?.id)||"");
+  setBranchId(v=>v||a.data?.branch_id||((b.data||[]).find(x=>x.id)?.id)||"");
  },[]);
  useEffect(()=>{load().catch(e=>setError(e.message))},[load]);
  const available=item=>{const row=stock.find(x=>x.item_id===item.id&&x.branch_id===branchId);return Number(row?row.quantity:item.stock_quantity||0)};
