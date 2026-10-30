@@ -27,15 +27,15 @@ function extractMarketWatchText(text){
 }
 function parseMarketWatchDetailRows(pageLines,reportPeriod){
  const rows=[];
- const numberPattern=/\\$?[\\d,]+(?:\\.\\d+)?%?/g;
+ const numberPattern=/\$?[\d,]+(?:\.\d+)?%?/g;
  for(const page of pageLines){
   const pageText=page.lines.join(" ");
-  if(!/Sales\\s+Dollar Volume\\s+Average Price\\s+Median Price\\s+New Listings/i.test(pageText))continue;
-  const titleMatch=pageText.match(/(All Home types|Detached|Semi-Detached|Townhouse|Condo Townhouse|Condo Apartment|Condo Apt|Att\\/Row\\/Twnhouse),?\\s+[A-Za-z]+\\s+20\\d{2}/i);
+  if(!/Sales\s+Dollar Volume\s+Average Price\s+Median Price\s+New Listings/i.test(pageText))continue;
+  const titleMatch=pageText.match(/(All Home types|Detached|Semi-Detached|Townhouse|Condo Townhouse|Condo Apartment|Condo Apt|Att\/Row\/Twnhouse),?\s+[A-Za-z]+\s+20\d{2}/i);
   const rawTitle=titleMatch?.[1]||"ALL";
-  const title=/All Home types/i.test(rawTitle)?"ALL":/Condo Apt/i.test(rawTitle)?"Condo Apartment":/Att\\/Row\\/Twnhouse/i.test(rawTitle)?"Freehold Townhouse":rawTitle;
+  const title=/All Home types/i.test(rawTitle)?"ALL":/Condo Apt/i.test(rawTitle)?"Condo Apartment":/Att\/Row\/Twnhouse/i.test(rawTitle)?"Freehold Townhouse":rawTitle;
   for(const line of page.lines){
-   const match=line.match(/^\\s*(Toronto\\s+(?:[WCE]\\d{2}|West|Central|East)|City of Toronto|Mississauga|Brampton|Markham|Richmond Hill|Vaughan|Pickering|Ajax|Whitby|Oshawa|Oakville|Burlington|Milton|All TRREB Areas)\\s+(.*)$/i);
+   const match=line.match(/^\s*(Toronto\s+(?:[WCE]\d{2}|West|Central|East)|City of Toronto|Mississauga|Brampton|Markham|Richmond Hill|Vaughan|Pickering|Ajax|Whitby|Oshawa|Oakville|Burlington|Milton|All TRREB Areas)\s+(.*)$/i);
    if(!match)continue;
    const geography=match[1].trim();
    if(/^All TRREB Areas$/i.test(geography))continue;
@@ -43,7 +43,7 @@ function parseMarketWatchDetailRows(pageLines,reportPeriod){
    if(tokens.length!==11)continue;
    const n=tokens.map(v=>Number(v.replace(/[$,%]/g,"").replace(/,/g,"")));
    if(n.some(v=>!Number.isFinite(v)))continue;
-   const community=/^Toronto\\s+[WCE]\\d{2}$/i.test(geography);
+   const community=/^Toronto\s+[WCE]\d{2}$/i.test(geography);
    rows.push({report_period:reportPeriod,geography_level:community?"COMMUNITY":"MUNICIPALITY",geography_name:geography,geography_parent:community?"Toronto":null,property_type:title,metric_values:{sales:n[0],dollar_volume:n[1],average_price:n[2],median_price:n[3],new_listings:n[4],snlr:n[5],active_listings:n[6],months_inventory:n[7],sale_to_list_ratio:n[8],days_on_market:n[9],property_days_on_market:n[10]},source_page:page.page,source_table:title,extraction_method:"PDF_TEXT_LAYOUT",review_status:"PENDING"});
   }
  }
