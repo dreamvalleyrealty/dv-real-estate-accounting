@@ -72,8 +72,9 @@ export default function MarketWatch({user,role="AGENT"}){
   if(!window.confirm("Publish "+monthLabel(report.report_period)+" to agent Market Watch?"))return;
   setBusy(true);setError("");setNotice("");
   try{
-   const {error}=await supabase.from("dv_property_market_reports").update({status:"APPROVED",approved_by:user?.id,approved_at:new Date().toISOString()}).eq("id",report.id);
+   const {data:published,error}=await supabase.from("dv_property_market_reports").update({status:"APPROVED",approved_by:user?.id,approved_at:new Date().toISOString()}).eq("id",report.id).select("id,status").maybeSingle();
    if(error)throw error;
+   if(!published||published.status!=="APPROVED")throw new Error("The database did not confirm publication. Your account may not have permission to publish this report.");
    setNotice("Report published to agent Market Watch.");
    await load();
   }catch(e){setError("Could not publish the report: "+(e.message||String(e)));}
