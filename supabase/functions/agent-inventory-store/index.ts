@@ -25,6 +25,22 @@ Deno.serve(async (req: Request) => {
     if (agentError || !agent) return json({ error: "Your login is not linked to an active agent profile." }, 403);
     const body = await req.json();
     const action = body.action;
+    if (action === "cancel_borrow_request") {
+      const requestId = String(body.request_id || "");
+      if (!requestId) return json({ error: "Borrowing request not found." }, 400);
+      const { data: request, error: requestError } = await db.from("dv_accounting_inventory_borrow_requests")
+        .select("id,request_number,status")
+        .eq("id", requestId).eq("agent_id", agent.id).maybeSingle();
+      if (requestError || !request) return json({ error: "Borrowing request not found." }, 404);
+      if (!["PENDING", "APPROVED"].includes(request.status)) {
+        return json({ error: "This request can only be cancelled before the item is picked up." }, 409);
+      }
+      const { error: cancelError } = await db.from("dv_accounting_inventory_borrow_requests")
+        .update({ status: "CANCELLED", updated_at: new Date().toISOString() })
+        .eq("id", request.id).eq("agent_id", agent.id).in("status", ["PENDING", "APPROVED"]);
+      if (cancelError) throw cancelError;
+      return json({ ok: true, request_number: request.request_number, message: "Borrowing request cancelled. Reserved stock is now available again." });
+    }
     if (action === "submit_interac_reference") {
       const orderId = String(body.order_id || "");
       const reference = String(body.interac_reference || "").trim();
@@ -80,7 +96,7 @@ Deno.serve(async (req: Request) => {
         }
         const { data: approvedRows, error: reservedError } = await db.from("dv_accounting_inventory_borrow_requests")
           .select("id,items:dv_accounting_inventory_borrow_request_items!inner(quantity,item_id)")
-          .eq("branch_id", branchId).eq("status", "APPROVED")
+          .eq("branch_id", branchId).in("status", ["PENDING", "APPROVED"])
           .eq("items.item_id", item.id);
         if (reservedError) throw reservedError;
         const reserved = (approvedRows || []).reduce((sum: number, row: any) =>
