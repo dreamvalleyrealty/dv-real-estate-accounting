@@ -92,7 +92,18 @@ export async function extractMarketWatchPdf(file,expectedPeriod){
  const tablePages=pageLines.filter(p=>{const items=(p.visualRows||[]).flatMap(row=>row.items);const words=items.map(item=>item.text).join(" ").toLowerCase().match(/[a-z]+/g)||[];const set=new Set(words);const header=["dollar","volume","average","price","median","new","listings"].every(word=>set.has(word));const numeric=(p.visualRows||[]).filter(row=>row.items.some(item=>item.x<190&&item.text.trim())&&((row.items.filter(item=>item.x>=190).map(item=>item.text).join(" ").match(numberPattern)||[]).length===8||(row.items.filter(item=>item.x>=190).map(item=>item.text).join(" ").match(numberPattern)||[]).length===11)).length;return header||numeric>=5;}).length;
  const candidateRows=pageLines.reduce((sum,p)=>sum+p.lines.filter(line=>/^\s*.+?\s{2,}(?=\$?[\d,])/.test(line)).length,0);
  const rows=parseRows(pageLines,expectedPeriod);
+ const geometryDiagnostics=pageLines.filter(p=>p.page>=3&&p.page<=5).map(p=>{
+  const sample=(p.visualRows||[]).filter(row=>row.items.some(item=>item.x<190&&item.text.trim())).slice(0,8).map(row=>{
+   const left=row.items.filter(item=>item.x<190).map(item=>item.text.trim()).filter(Boolean);
+   const right=row.items.filter(item=>item.x>=190).map(item=>item.text.trim()).filter(Boolean);
+   const joined=right.join(" ");
+   return {y:Number(row.y.toFixed(2)),left:left.join(" "),right:joined.slice(0,180),numeric_tokens:(joined.match(numberPattern)||[]).length,left_max_x:Number(Math.max(-1,...row.items.filter(item=>item.x<190).map(item=>item.x)).toFixed(2)),right_min_x:Number(Math.min(99999,...row.items.filter(item=>item.x>=190).map(item=>item.x)).toFixed(2))};
+  });
+  const counts={};
+  for(const row of p.visualRows||[]){const left=row.items.filter(item=>item.x<190&&item.text.trim()).length;const right=row.items.filter(item=>item.x>=190).map(item=>item.text).join(" ");const n=(right.match(numberPattern)||[]).length;if(left&&n)counts[n]=(counts[n]||0)+1;}
+  return {page:p.page,visual_rows:p.visualRows?.length||0,token_count_distribution:counts,sample};
+ });
  const coverText=pageLines.slice(0,4).flatMap(p=>p.lines).join(" ");
  const headline=coverText.match(/(\d[\d,]*)\s+(?:Sales|Homes Sold)[\s\S]{0,100}?(\$?\d[\d,]*)/i);
- return {pages:pdf.numPages,text:sanitize(fullText),rows,detectedMonth:detected,summary:{cover_text:coverText,extracted_pages:pdf.numPages,extracted_rows:rows.length,table_pages:tablePages,candidate_rows:candidateRows,headline_match:headline?headline[0]:null}};
+ return {pages:pdf.numPages,text:sanitize(fullText),rows,detectedMonth:detected,summary:{cover_text:coverText,extracted_pages:pdf.numPages,extracted_rows:rows.length,table_pages:tablePages,candidate_rows:candidateRows,headline_match:headline?headline[0]:null,geometry_diagnostics:geometryDiagnostics}};
 }
