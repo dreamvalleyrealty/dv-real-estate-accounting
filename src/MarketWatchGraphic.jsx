@@ -25,7 +25,7 @@ function drawBarPair(ctx,x,y,w,h,current,previous,currentLabel,previousLabel,max
  drawText(ctx,previousLabel,b2+barW/2,base+21,12,NAVY,"normal","Arial","center");
 }
 function drawGraphic(canvas,data,agent,headshot,logo){
- const W=1402,H=1122;
+ const W=1403,H=1121;
  canvas.width=W;canvas.height=H;
  const ctx=canvas.getContext("2d");if(!ctx)return;
  const navy="#0f2141",gold="#9e8556",white="#ffffff",red="#e12626",green="#176b3a",ink="#10233d",muted="#68788a";
@@ -68,12 +68,9 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  const drawYoy=(x,y,w,h,key)=>{
   const p=pct(key),color=p==null?muted:p<0?red:p>0?green:navy;
   rounded(x,y,w,h,12,white,color,2,false);
-  const label=p==null?"N/A":(p>0?"+":"")+p.toFixed(1)+"%";
-  text(label,x+w/2,y+h*.58,p==null?38:Math.min(45,h*.48),color,"bold","Georgia","center");
-  if(p!=null&&p!==0){
-   const ax=x+w/2+(label.length*11);
-   text(p<0?"▼":"▲",Math.min(x+w-20,ax),y+h*.58,27,color,"bold","Arial","center");
-  }
+  const label=p==null?"N/A":(p>0?"+":"")+p.toFixed(1)+"%"+(p<0?" ▼":p>0?" ▲":"");
+  const labelSize=p==null?36:Math.min(39,h*.48);
+  text(label,x+w/2,y+h*.57,labelSize,color,"bold","Georgia","center");
   text("YEAR-OVER-YEAR",x+w/2,y+h-13,13,ink,"bold","Georgia","center");
  };
  const drawChart=(x,y,w,h,key,compact=false)=>{
@@ -114,7 +111,7 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  ctx.beginPath();ctx.moveTo(897,49);ctx.lineTo(892,67);ctx.lineTo(902,67);ctx.closePath();ctx.fillStyle="#53677a";ctx.fill();
  ctx.save();ctx.font="normal 76px Georgia";const marketWidth=ctx.measureText("MARKET").width;ctx.restore();
  text("MARKET",53,121,72,white,"normal","Georgia");text("WATCH",53+marketWidth+14,121,72,gold,"bold","Georgia");
- text(curLabel,230,166,34,white,"normal","Georgia","center");line(54,154,184,154,gold,2);line(455,154,612,154,gold,2);
+ text(curLabel,333,166,34,white,"normal","Georgia","center");line(54,154,184,154,gold,2);line(455,154,612,154,gold,2);
  text("YEAR-OVER-YEAR SUMMARY",735,132,21,gold,"bold","Georgia");text("ALL TRREB AREAS · ALL HOME TYPES",735,160,14,white,"normal","Georgia");
  if(logo){const scale=Math.min(112/logo.width,118/logo.height);ctx.drawImage(logo,1024,22,logo.width*scale,logo.height*scale);}
  text("DREAM VALLEY",1140,96,27,white,"normal","Georgia");text("REALTY",1193,126,20,white,"normal","Georgia");
@@ -137,11 +134,11 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  rounded(36,578,651,321,22,navy,null,0,true);
  icon("dollar",116,658,43);
  text("AVERAGE PRICE",178,637,36,gold,"bold","Georgia");
- text(money(data.values.average_price),157,695,58,white,"normal","Georgia");
+ text(money(data.values.average_price),157,695,48,white,"normal","Georgia");
  text("Average Selling Price",170,739,23,white,"normal","Georgia");
  text("Year-over-Year",198,772,22,white,"normal","Georgia");
  drawYoy(170,786,220,70,"average_price");
- drawChart(405,630,270,250,"average_price",false);
+ drawChart(425,630,250,250,"average_price",false);
  // Average DOM panel.
  rounded(697,578,643,321,22,white,gold,2,true);
  icon("calendar",765,658,43);
@@ -265,7 +262,7 @@ export default function MarketWatchGraphic({agentId,user,adminMode=false}){
     <div className="actions" style={{alignItems:"end"}}><button type="button" className="primary" disabled={savingMetrics} onClick={async()=>{setSavingMetrics(true);setError("");setNotice("");try{const next={...(currentRow.metric_values||{})};for(const key of Object.keys(metricDraft)){const raw=metricDraft[key];if(raw===""||!Number.isFinite(Number(raw))||Number(raw)<0)throw new Error("Enter a valid non-negative value for every figure.");next[key]=Number(raw);}const {data,error}=await supabase.from("dv_property_market_stat_rows").update({metric_values:next}).eq("id",currentRow.id).select("id").maybeSingle();if(error)throw error;if(!data)throw new Error("The database did not confirm the statistics update. Check your management permissions.");setAllRows(prev=>prev.map(row=>row.id===currentRow.id?{...row,metric_values:next}:row));setEditingMetrics(false);setNotice("Monthly GTA summary figures saved.");}catch(e){setError(e.message||"Could not save monthly figures.");}finally{setSavingMetrics(false);}}}>Save figures</button></div>
    </div>}
   </section>}
-  <section className="panel"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:12}}><div><h2 style={{margin:0}}>Graphic Preview</h2><p className="muted" style={{margin:"4px 0 0"}}>1400 × 1120 px · PNG format</p></div><ImageIcon size={22} color={GOLD}/></div>
+  <section className="panel"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:12}}><div><h2 style={{margin:0}}>Graphic Preview</h2><p className="muted" style={{margin:"4px 0 0"}}>1403 × 1121 px · PNG format</p></div><ImageIcon size={22} color={GOLD}/></div>
    {canRender?<div style={{overflowX:"auto",background:"#e9edf0",padding:10,borderRadius:10}}>
     {adminMode&&referenceTestPreview&&<p className="muted" style={{textAlign:"center",margin:"0 0 8px"}}>Reference test figures preview — values are not saved to the database.</p>}<canvas ref={canvasRef} style={{display:"block",width:"100%",height:"auto",maxWidth:1100,margin:"0 auto",background:"#e9edf0"}}/></div>:<div className="notice">Select an approved report with complete GTA summary figures to preview the graphic.</div>}
   </section>
