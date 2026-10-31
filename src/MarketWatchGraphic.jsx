@@ -97,7 +97,7 @@ function drawGraphic(canvas,data,agent,headshot,logo){
   const barH=v=>v==null?0:Math.max(2,(Number(v)/max)*plotH);
   const h1=barH(cur),h2=barH(prev);
   const valueLabel=v=>isPrice?money(v):number(v);
-  if(cur!=null){ctx.fillStyle=navy;ctx.fillRect(bx1,base-h1,bw,h1);text(valueLabel(cur),bx1+bw/2,base-h1-7,compact?10:isPrice?11:14,ink,"bold","Arial","center");}
+  if(cur!=null){if(isPrice){ctx.fillStyle="#f5f0e5";ctx.fillRect(bx1,base-h1,bw,h1);ctx.strokeStyle="#ffffff";ctx.lineWidth=2;ctx.strokeRect(bx1,base-h1,bw,h1);}else{ctx.fillStyle=navy;ctx.fillRect(bx1,base-h1,bw,h1);}text(valueLabel(cur),bx1+bw/2,base-h1-7,compact?10:isPrice?11:14,ink,"bold","Arial","center");}
   if(prev!=null){ctx.fillStyle=gold;ctx.fillRect(bx2,base-h2,bw,h2);text(valueLabel(prev),bx2+bw/2,base-h2-7,compact?10:isPrice?10:14,ink,"bold","Arial","center");}
   const labelSize=compact?9:10;
   text(compact?compactCurLabel:chartCurLabel,bx1+bw/2,base+(compact?17:21),labelSize,ink,"normal","Arial","center");
@@ -115,7 +115,7 @@ function drawGraphic(canvas,data,agent,headshot,logo){
  ctx.save();ctx.font="normal 76px Georgia";const marketWidth=ctx.measureText("MARKET").width;ctx.restore();
  text("MARKET",53,121,72,white,"normal","Georgia");text("WATCH",53+marketWidth+14,121,72,gold,"bold","Georgia");
  text(curLabel,230,166,34,white,"normal","Georgia","center");line(54,154,184,154,gold,2);line(455,154,612,154,gold,2);
- text("YEAR-OVER-YEAR SUMMARY",700,132,21,gold,"bold","Georgia");text("ALL TRREB AREAS · ALL HOME TYPES",700,160,14,white,"normal","Georgia");
+ text("YEAR-OVER-YEAR SUMMARY",735,132,21,gold,"bold","Georgia");text("ALL TRREB AREAS · ALL HOME TYPES",735,160,14,white,"normal","Georgia");
  if(logo){const scale=Math.min(112/logo.width,118/logo.height);ctx.drawImage(logo,1024,22,logo.width*scale,logo.height*scale);}
  text("DREAM VALLEY",1140,96,27,white,"normal","Georgia");text("REALTY",1193,126,20,white,"normal","Georgia");
  // Master card layout: three top cards and two lower cards.
