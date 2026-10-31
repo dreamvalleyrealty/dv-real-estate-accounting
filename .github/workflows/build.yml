@@ -1,7 +1,7 @@
 name: Build and Version Check
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "accounting-upgrade-dev"]
   pull_request:
     branches: ["main"]
 jobs:
