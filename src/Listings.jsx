@@ -127,6 +127,11 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
    setSelected(saved);setAssignedAgentId(saved.agent_id||targetAgentId);setAdditionalAgentIds(Array.isArray(saved.additional_agent_ids)?saved.additional_agent_ids.filter(id=>id!==saved.agent_id):[]);setForm({...blank,...saved,...splitStreetAddress(saved.property_address,saved.street_number,saved.street_name)});setNewListing(false);
    try{window.localStorage.removeItem(localDraftKey)}catch{}
    setMessage(submit?(missingRequiredDocuments.length?"Listing submitted for admin review with your missing-document explanation.":"Listing paperwork submitted for admin review."):(regularSave?"Listing saved.":"Listing draft saved."));if(submit){setSubmissionReason("");setMissingRequiredDocuments([])}
+   if(submit && String(selected?.status||"").toUpperCase() !== "SUBMITTED"){
+    supabase.functions.invoke("admin-review-notify",{body:{type:"LISTING",submissionId:saved.id}})
+     .then(({error:notifyError})=>{if(notifyError)console.warn("Listing review notification failed:",notifyError.message)})
+     .catch(notifyError=>console.warn("Listing review notification failed:",notifyError?.message||notifyError));
+   }
    await load();
    await loadDocs(saved.id);
    return saved;
