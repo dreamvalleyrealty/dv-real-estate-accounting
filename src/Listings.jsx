@@ -447,9 +447,9 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
   if(!window.confirm("Cancel this listing submission? It will return to your editable listings so you can make changes and submit it again."))return;
   setBusy(true);setError("");setMessage("");
   try{
-   const {data,error:e}=await supabase.from("dv_accounting_listing_submissions").update({status:"CANCELLED",updated_at:new Date().toISOString()}).eq("id",selected.id).eq("agent_id",agentId).eq("status","SUBMITTED").select().single();
+   const {data,error:e}=await supabase.from("dv_accounting_listing_submissions").update({status:"DRAFT",updated_at:new Date().toISOString()}).eq("id",selected.id).eq("agent_id",agentId).eq("status","SUBMITTED").select().single();
    if(e)throw e;if(!data)throw new Error("This listing is no longer awaiting review. Refresh the page and try again.");
-   setSelected(data);setMessage("Submission cancelled. You can now edit the listing and submit it again.");await load();
+   setSelected(data);setMessage("Submission cancelled and moved to Draft Listings. You can edit it and submit it again.");await load();
   }catch(e){setError(e?.message||"Could not cancel the listing submission.");}
   finally{setBusy(false)}
  }
