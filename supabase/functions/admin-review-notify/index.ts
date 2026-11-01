@@ -86,7 +86,7 @@ Deno.serve(async(req)=>{
     }else{
      const sid=Deno.env.get("TWILIO_ACCOUNT_SID"),token=Deno.env.get("TWILIO_AUTH_TOKEN"),fromNumber=Deno.env.get("TWILIO_FROM_NUMBER");
      if(!sid||!token||!fromNumber)throw new Error("Twilio is not configured.");
-     const sms=renderTemplate(template?.sms_body||"Dream Valley Realty: {{document_name}} submitted by {{agent_name}}. {{property_address}}. Review: {{app_url}}");
+     let sms=renderTemplate(template?.sms_body||"Dream Valley Realty: {{document_name}} submitted by {{agent_name}}. {{property_address}}.");if(!sms.includes(reviewUrl))sms=[sms.trim(),"Review: "+reviewUrl].filter(Boolean).join(" ");
      const sr=await fetch("https://api.twilio.com/2010-04-01/Accounts/"+sid+"/Messages.json",{method:"POST",headers:{Authorization:"Basic "+btoa(sid+":"+token),"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({To:recipient,From:fromNumber,Body:sms})});
      const sj=await sr.json().catch(()=>({}));if(!sr.ok)throw new Error("Twilio rejected SMS (HTTP "+sr.status+"): "+String(sj.message||"").slice(0,180));providerId=sj.sid||null;
     }
