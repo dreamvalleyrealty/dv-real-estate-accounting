@@ -75,10 +75,10 @@ function parseMarketWatchDetailRows(pageLines,reportPeriod){
 }
 function downloadPdf(title,subtitle,lines,agentName){
  const d=new jsPDF({unit:"mm",format:"a4"}),w=d.internal.pageSize.getWidth();
- d.setFillColor(15,33,65);d.rect(0,0,w,34,"F");d.setTextColor(255,255,255);d.setFontSize(17);safeText("DREAM VALLEY REALTY",14,14);d.setFontSize(10);safeText(title,14,23);d.setFontSize(9);safeText(subtitle,14,29);
+ d.setFillColor(15,33,65);d.rect(0,0,w,34,"F");d.setTextColor(255,255,255);d.setFontSize(17);d.text("DREAM VALLEY REALTY",14,14);d.setFontSize(10);d.text(title,14,23);d.setFontSize(9);d.text(subtitle,14,29);
  let y=45;d.setTextColor(25,35,50);d.setFontSize(10);
- for(const line of lines){if(y>276){d.addPage();y=18;}const wrapped=d.splitTextToSize(String(line),w-28);safeText(wrapped,14,y);y+=wrapped.length*5+3;}
- y=Math.min(y+6,280);d.setFontSize(9);d.setTextColor(90);safeText("Prepared by "+(agentName||"Dream Valley Realty Agent"),14,y);safeText("For discussion purposes only. Verify all source data before relying on this report.",14,y+6);
+ for(const line of lines){if(y>276){d.addPage();y=18;}const wrapped=d.splitTextToSize(String(line),w-28);d.text(wrapped,14,y);y+=wrapped.length*5+3;}
+ y=Math.min(y+6,280);d.setFontSize(9);d.setTextColor(90);d.text("Prepared by "+(agentName||"Dream Valley Realty Agent"),14,y);d.text("For discussion purposes only. Verify all source data before relying on this report.",14,y+6);
  d.save(title.toLowerCase().replace(/[^a-z0-9]+/g,"-")+".pdf");
 }
 export default function PropertyStats({user,role="AGENT",agentId=null,agentName="",cmaOnly=false}){
