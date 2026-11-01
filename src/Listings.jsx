@@ -253,6 +253,10 @@ export default function Listings({user,agentId,adminMode=false,canDeleteDocument
   if(e){setError("Could not update document review status: "+e.message);setBusy(false);return}
   setDocs(old=>old.map(item=>item.id===doc.id?data:item));
   if(previewDocument?.id===doc.id)setPreviewDocument(data);
+  if(["APPROVED","NOT_APPROVED","REJECTED","MISMATCH"].includes(String(status||"").toUpperCase())){
+   const normalized=String(status).toUpperCase()==="APPROVED"?"APPROVED":"NOT_APPROVED";
+   supabase.functions.invoke("agent-document-review-notify",{body:{type:"LISTING",submissionId:selected?.id,documentId:doc.id,status:normalized,documentName:data.document_name||data.document_type||"Listing document",note:data.review_note||data.admin_note||""}}).catch(()=>{});
+  }
   const approvedDocumentType=String(data.document_type||"").trim().toUpperCase();
   const approvedRequirement=requirements.find(item=>String(item.code||"").trim().toUpperCase()===approvedDocumentType);
   const isListingCancellationDocument=/CANCEL(LATION|LED|LING)/i.test(approvedDocumentType)||/CANCEL(LATION|LED|LING)/i.test(String(approvedRequirement?.label||""))||/CANCEL(LATION|LED|LING)/i.test(String(data.document_name||""));
