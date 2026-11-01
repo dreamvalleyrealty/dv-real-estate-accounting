@@ -384,6 +384,11 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    setSelected(row);setAgentCreating(false);if(adminMode&&submit)setAdminCreating(false);setSubmissions(old=>[row,...old.filter(x=>x.id!==row.id)]);
    let listingDocumentResult={copied:0,failed:0};if(payload.listing_id){try{listingDocumentResult=await syncListingDocumentsToTrade(row.id,payload.listing_id)}catch(err){listingDocumentResult={copied:0,failed:1};console.warn("Could not sync listing documents to trade:",err?.message||err)}}
    setMessage(listingDocumentResult.failed?"Trade saved, but "+listingDocumentResult.failed+" listing document(s) could not be copied. Re-save the draft or ask an administrator to check storage permissions.":listingDocumentResult.copied?listingDocumentResult.copied+" listing document(s) copied into Trade Documents. "+(submit?"Trade submitted for admin review. A linked accounting transaction has been created as a DRAFT. Documents remain pending admin approval; commission payout stays blocked until required paperwork is approved.":"Draft saved."):submit?"Trade submitted for admin review. A linked accounting transaction has been created as a DRAFT. Documents remain pending admin approval; commission payout stays blocked until required paperwork is approved.":(form.property_address.trim()?"Draft saved.":"Draft created. Upload your documents first; extracted details will appear here for you to review."));
+   if(submit && String(selected?.status||"").toUpperCase() !== "SUBMITTED"){
+    supabase.functions.invoke("admin-review-notify",{body:{type:"TRADE",submissionId:row.id}})
+     .then(({error:notifyError})=>{if(notifyError)console.warn("Trade review notification failed:",notifyError.message)})
+     .catch(notifyError=>console.warn("Trade review notification failed:",notifyError?.message||notifyError));
+   }
    setBusy(false);draftWriteLock.current=false;await loadDocs(row.id);await load();return row;
  }
  async function ensureDraftForUpload(){
