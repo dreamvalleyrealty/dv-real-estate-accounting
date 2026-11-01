@@ -771,6 +771,10 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      if(e)throw e;
      if(!data)throw new Error("No document was updated. Refresh and check administrator permissions.");
      setDocs(current=>current.map(d=>d.id===doc.id?data:d));
+     if(["MATCH","APPROVED","MISMATCH","REJECTED","NOT_APPROVED","NOT APPROVED"].includes(String(match_status||"").toUpperCase())){
+       const normalized=["MATCH","APPROVED"].includes(String(match_status).toUpperCase())?"APPROVED":"NOT_APPROVED";
+       supabase.functions.invoke("agent-document-review-notify",{body:{type:"TRADE",submissionId:selected?.id,documentId:doc.id,status:normalized,documentName:data.document_name||data.document_type||"Trade document",note:data.match_notes||""}}).catch(()=>{});
+     }
      setMessage(match_status==="MISMATCH"?"Document marked Not approved and saved. Use Send to Agent for Update only when you want to notify the agent about the required correction.":match_status==="PENDING"?"Document review set to Pending and saved.":"Document approved and saved.");
      await Promise.all([loadDocs(selected?.id),load()]);
    }catch(e){setError("Could not "+(match_status==="MISMATCH"?"mark the document not approved":match_status==="PENDING"?"set the document to pending":"approve")+" document: "+(e?.message||String(e)));}
