@@ -14,6 +14,7 @@ create table if not exists public.dv_accounting_trust_account_instructions (
 );
 alter table public.dv_accounting_trust_account_instructions enable row level security;
 revoke all on public.dv_accounting_trust_account_instructions from anon, authenticated;
+grant all on public.dv_accounting_trust_account_instructions to service_role;
 
 create table if not exists public.dv_accounting_trust_info_email_log (
   id uuid primary key default gen_random_uuid(),
@@ -48,4 +49,5 @@ create index if not exists dv_accounting_trust_info_email_log_sender_idx
  on public.dv_accounting_trust_info_email_log(sent_by,created_at desc);
 alter table public.dv_accounting_trust_info_email_log enable row level security;
 revoke all on public.dv_accounting_trust_info_email_log from anon, authenticated;
+grant all on public.dv_accounting_trust_info_email_log to service_role;
 -- The audit history is returned only by a service-role Edge Function after role checks.
