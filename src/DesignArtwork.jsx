@@ -27,43 +27,59 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
     ctx.fillStyle=navy;ctx.fillRect(0,0,w,h);ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.075)+"px Arial";ctx.textAlign="center";ctx.fillText(occasion.toUpperCase(),w/2,h*.32);
     ctx.fillStyle="#fff";ctx.font=Math.round(w*.045)+"px Arial";wrap(ctx,greeting,w*.12,h*.43,w*.76,w*.065,5);
    }else{
-    // Rebuild the property layout to follow the approved Dream Valley reference.
-    const footerY=h*.81,brandBottom=h*.295,gridTop=h*.39,gridBottom=footerY,footerH=h-footerY;
-    const brandEdgeTop=w*.30,brandEdgeBottom=w*.425,photoLeft=w*.30,gridLeft=w*.47;
-    // Main hero image fills the upper-right area.
-    if(pics[0])crop(pics[0],photoLeft,0,w-photoLeft,gridTop);else{ctx.fillStyle="#e8ebef";ctx.fillRect(photoLeft,0,w-photoLeft,gridTop)}
-    // Navy brand panel with the angled right edge from the reference.
-    ctx.fillStyle=navy;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(brandEdgeTop,0);ctx.lineTo(brandEdgeBottom,brandBottom);ctx.lineTo(0,brandBottom);ctx.closePath();ctx.fill();
-    // DV house mark and wordmark, positioned inside the navy panel.
-    const cx=w*.158,logoW=w*.115,logoH=h*.145,logoX=cx-logoW/2,logoY=h*.045;
-    if(brandLogo)ctx.drawImage(brandLogo,logoX,logoY,logoW,logoH);
-    ctx.fillStyle="#fff";ctx.font="bold "+Math.round(w*.043)+"px Arial";ctx.fillText("DREAM VALLEY",cx,h*.212);
-    ctx.fillStyle=gold;ctx.font=Math.round(w*.025)+"px Arial";ctx.fillText("REALTY INC.",cx,h*.244);
-    ctx.fillStyle="#fff";ctx.font=Math.round(w*.021)+"px Arial";ctx.fillText("Brokerage",cx,h*.271);
-    // Gold listing banner with angled right edge.
-    const ribbonY=h*.295,ribbonH=h*.132;
-    ctx.fillStyle=isMinimal?navy:gold;ctx.beginPath();ctx.moveTo(0,ribbonY);ctx.lineTo(w*.51,ribbonY);ctx.lineTo(w*.465,ribbonY+ribbonH);ctx.lineTo(0,ribbonY+ribbonH);ctx.closePath();ctx.fill();
-    ctx.fillStyle="#fff";ctx.textAlign="left";ctx.font="900 "+Math.round(w*.083)+"px Arial";
-    ctx.fillText(status==="For Sale"?"JUST LISTED":status==="Open House"?"OPEN HOUSE":status==="Leased"?"JUST LEASED":status==="Sold"?"JUST SOLD":status.toUpperCase(),w*.035,ribbonY+ribbonH*.73);
-    // Navy representation strip immediately below the banner.
-    ctx.fillStyle=isMinimal?gold:navy;ctx.fillRect(0,ribbonY+ribbonH,w*.48,h*.052);
-    ctx.fillStyle="#fff";ctx.font="bold "+Math.round(w*.027)+"px Arial";ctx.fillText(representation,w*.04,ribbonY+ribbonH+h*.036);
-    // Four supporting photos in a 2 x 2 grid on the right.
-    const cellW=(w-gridLeft)/2,cellH=(gridBottom-gridTop)/2;
-    for(let i=1;i<5;i++){const gx=gridLeft+((i-1)%2)*cellW,gy=gridTop+Math.floor((i-1)/2)*cellH;if(pics[i])crop(pics[i],gx,gy,cellW-3,cellH-3);else{ctx.fillStyle="#e8ebef";ctx.fillRect(gx,gy,cellW-3,cellH-3)}}
-    // Property facts and address stay in the left information column.
-    ctx.fillStyle="#fff";ctx.fillRect(0,ribbonY+ribbonH+h*.052,gridLeft,footerY-(ribbonY+ribbonH+h*.052));
+    const s=w/1080,story=format==="story",portrait=format==="portrait",landscape=format==="landscape";
+    const text=(value,x,y,size,color="#0f2141",weight="normal",align="left")=>{ctx.fillStyle=color;ctx.font=weight+" "+Math.round(size*s)+"px Arial";ctx.textAlign=align;ctx.fillText(String(value||""),x*s,y*s)};
+    const photo=(im,x,y,pw,ph)=>{if(im)crop(im,x*s,y*s,pw*s,ph*s);else{ctx.fillStyle="#e8ebef";ctx.fillRect(x*s,y*s,pw*s,ph*s)}};
+    const logo=(x,y,width)=>{if(brandLogo)ctx.drawImage(brandLogo,x*s,y*s,width*s,width*1.20*s)};
+    const title=status==="For Sale"?"JUST LISTED":status==="Open House"?"OPEN HOUSE":status==="Leased"?"JUST LEASED":status==="Sold"?"JUST SOLD":status.toUpperCase();
+    const addr=address||"PROPERTY ADDRESS",cityLine=[selected?.city,selected?.province,selected?.postal_code].filter(Boolean).join(", "),price=customPrice||(selected?.listing_price?money(selected.listing_price):"Contact for price");
     const specs=[[beds||"—","BEDS"],[baths||"—","BATHS"],[parking||"—","PARKING"],[sqft||"—","SQ FT"]];
-    const sy=h*.548,sw=gridLeft/4;
-    specs.forEach((v,i)=>{const x=i*sw+sw/2;ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.047)+"px Arial";ctx.textAlign="center";ctx.fillText(v[0],x,sy);ctx.fillStyle=navy;ctx.font="bold "+Math.round(w*.019)+"px Arial";ctx.fillText(v[1],x,sy+h*.029);if(i){ctx.strokeStyle="#d0d5dd";ctx.beginPath();ctx.moveTo(i*sw,sy-h*.035);ctx.lineTo(i*sw,sy+h*.045);ctx.stroke()}});
-    const infoY=h*.62;ctx.textAlign="left";ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.031)+"px Arial";wrap(ctx,address||"PROPERTY ADDRESS",w*.035,infoY,gridLeft-w*.07,h*.038,2);
-    ctx.fillStyle=navy;ctx.font="bold "+Math.round(w*.027)+"px Arial";ctx.fillText([selected?.city,selected?.province,selected?.postal_code].filter(Boolean).join(", "),w*.035,infoY+h*.071);
-    ctx.font=Math.round(w*.024)+"px Arial";ctx.fillText("MLS # "+(selected?.mls_number||"—"),w*.035,infoY+h*.112);
-    const price=customPrice||(selected?.listing_price?money(selected.listing_price):"");
-    ctx.fillStyle=isMinimal?navy:gold;ctx.fillRect(0,h*.73,gridLeft,h*.08);
-    ctx.fillStyle="#fff";ctx.font="bold "+Math.round(w*.026)+"px Arial";ctx.fillText(status==="Leased"?"LEASED FOR":status==="Sold"?"SOLD FOR":"LISTED AT",w*.035,h*.758);
-    ctx.font="bold "+Math.round(w*.045)+"px Arial";ctx.fillText(price||"Contact for price",w*.035,h*.795);
-
+    if(landscape){
+      // Wide layout: brand/title at left, hero image at right, details and gallery below.
+      const foot=530,heroX=440;
+      photo(pics[0],heroX,0,640,220);
+      ctx.fillStyle=navy;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(390,0);ctx.lineTo(455,220);ctx.lineTo(0,220);ctx.closePath();ctx.fill();
+      logo(55,28,92);text("DREAM VALLEY",170,82,34,"#fff","bold");text("REALTY INC.",170,111,22,gold);text("Brokerage",170,139,18,"#fff");
+      ctx.fillStyle=gold;ctx.fillRect(0,220,590,90);text(title,35,284,65,"#fff","900");
+      ctx.fillStyle=navy;ctx.fillRect(0,310,590,36);text(representation,35,336,20,"#fff","bold");
+      ctx.fillStyle="#fff";ctx.fillRect(0,346,590,184);
+      const sw=590/4;specs.forEach((v,i)=>{text(v[0],i*sw+sw/2,393,34,gold,"bold","center");text(v[1],i*sw+sw/2,419,16,navy,"bold","center");if(i){ctx.strokeStyle="#d0d5dd";ctx.beginPath();ctx.moveTo(i*sw,365);ctx.lineTo(i*sw,430);ctx.stroke()}});
+      text(addr,35,459,22,gold,"bold");text(cityLine,35,485,18,navy,"bold");text("MLS # "+(selected?.mls_number||"—"),35,510,16,navy);
+      photo(pics[1],590,220,305,155);photo(pics[2],897,220,303,155);photo(pics[3],590,377,305,153);photo(pics[4],897,377,303,153);
+      ctx.fillStyle=gold;ctx.fillRect(0,530,590,100);text(status==="Leased"?"LEASED FOR":status==="Sold"?"SOLD FOR":"LISTED AT",35,558,19,"#fff","bold");text(price,35,611,38,"#fff","bold");
+    }else if(portrait||story){
+      // Tall formats use a vertical reading order rather than stretching the square artwork.
+      const tallH=story?1920:1350,head=story?235:190,ribbon=story?130:105,hero=story?390:260,details=story?300:235,gallery=story?620:390,foot=story?245:170;
+      const ribbonY=head,heroY=head+ribbon,detailsY=heroY+hero,galleryY=detailsY+details,footY=tallH-foot;
+      ctx.fillStyle=navy;ctx.fillRect(0,0,w,head*s);
+      photo(pics[0],w*.36,0,w*.64,head);
+      ctx.fillStyle=navy;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(w*.39,0);ctx.lineTo(w*.48,head*s);ctx.lineTo(0,head*s);ctx.closePath();ctx.fill();
+      logo(42,story?22:14,story?94:78);text("DREAM VALLEY",170,story?82:68,34,"#fff","bold");text("REALTY INC.",170,story?112:94,22,gold);text("Brokerage",170,story?140:118,18,"#fff");
+      ctx.fillStyle=gold;ctx.fillRect(0,ribbonY*s,w,ribbon*s);text(title,36,ribbonY+(story?94:76),story?74:64,"#fff","900");
+      photo(pics[0],0,heroY,w,hero);
+      // Property facts and address in a clear full-width panel.
+      ctx.fillStyle="#fff";ctx.fillRect(0,detailsY*s,w,details*s);
+      const sw=w/4;specs.forEach((v,i)=>{text(v[0],i*sw+sw/2,detailsY+55,34,gold,"bold","center");text(v[1],i*sw+sw/2,detailsY+82,16,navy,"bold","center");if(i){ctx.strokeStyle="#d0d5dd";ctx.beginPath();ctx.moveTo(i*sw,detailsY+25);ctx.lineTo(i*sw,detailsY+96);ctx.stroke()}});
+      text(addr,38,detailsY+137,26,gold,"bold");text(cityLine,38,detailsY+174,21,navy,"bold");text("MLS # "+(selected?.mls_number||"—"),38,detailsY+210,18,navy);
+      ctx.fillStyle=gold;ctx.fillRect(0,(galleryY+gallery-80)*s,w,80*s);text(status==="Leased"?"LEASED FOR":status==="Sold"?"SOLD FOR":"LISTED AT",38,galleryY+gallery-52,18,"#fff","bold");text(price,38,galleryY+gallery-12,34,"#fff","bold");
+      const gap=4,cellW=(w-gap)/2,cellH=(gallery-90-gap)/2;
+      photo(pics[1],0,galleryY,cellW,cellH);photo(pics[2],cellW+gap,galleryY,cellW,cellH);photo(pics[3],0,galleryY+cellH+gap,cellW,cellH);photo(pics[4],cellW+gap,galleryY+cellH+gap,cellW,cellH);
+      // Footer is drawn below gallery; all coordinates remain within the selected artboard.
+    }else{
+      // Square layout based on the original approved reference.
+      const footerY=875,brandBottom=318,gridTop=420,gridLeft=508;
+      photo(pics[0],350,0,730,420);
+      ctx.fillStyle=navy;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(325,0);ctx.lineTo(458,brandBottom);ctx.lineTo(0,brandBottom);ctx.closePath();ctx.fill();
+      logo(74,55,118);text("DREAM VALLEY",172,226,40,"#fff","bold");text("REALTY INC.",172,260,25,gold);text("Brokerage",172,292,20,"#fff");
+      ctx.fillStyle=gold;ctx.beginPath();ctx.moveTo(0,brandBottom);ctx.lineTo(550,brandBottom);ctx.lineTo(505,460);ctx.lineTo(0,460);ctx.closePath();ctx.fill();text(title,38,420,82,"#fff","900");
+      ctx.fillStyle=navy;ctx.fillRect(0,460,508,56);text(representation,42,500,26,"#fff","bold");
+      ctx.fillStyle="#fff";ctx.fillRect(0,516,508,359);
+      const sw=127;specs.forEach((v,i)=>{text(v[0],i*sw+sw/2,590,48,gold,"bold","center");text(v[1],i*sw+sw/2,626,21,navy,"bold","center");if(i){ctx.strokeStyle="#d0d5dd";ctx.beginPath();ctx.moveTo(i*sw,555);ctx.lineTo(i*sw,640);ctx.stroke()}});
+      text(addr,38,690,32,gold,"bold");text(cityLine,38,744,27,navy,"bold");text("MLS # "+(selected?.mls_number||"—"),38,790,24,navy);
+      ctx.fillStyle=gold;ctx.fillRect(0,788,508,87);text(status==="Leased"?"LEASED FOR":status==="Sold"?"SOLD FOR":"LISTED AT",38,820,26,"#fff","bold");text(price,38,864,42,"#fff","bold");
+      const cellW=(w-gridLeft)/2,cellH=(footerY-gridTop)/2;photo(pics[1],gridLeft,gridTop,cellW-3,cellH-3);photo(pics[2],gridLeft+cellW,gridTop,cellW-3,cellH-3);photo(pics[3],gridLeft,gridTop+cellH,cellW-3,cellH-3);photo(pics[4],gridLeft+cellW,gridTop+cellH,cellW-3,cellH-3);
+    }
+   }
    }
    const footerY=isProperty?h*.81:h*.83;ctx.fillStyle=navy;ctx.fillRect(0,footerY,w,h-footerY);
    const avatarSize=(h-footerY)*.78,ax=pad,ay=footerY+(h-footerY-avatarSize)/2;
