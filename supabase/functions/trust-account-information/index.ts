@@ -91,16 +91,35 @@ async function requireActor(req: Request, admin: any, supabaseUrl: string, anonK
 
   const metadataRole = String(user.app_metadata?.role || user.app_metadata?.user_role || "").toUpperCase();
   const profileRole = String(profile?.role || "").toUpperCase();
-  const isAdmin = ["SUPERADMIN","ADMIN"].includes(profileRole || metadataRole);
+  const roleCandidate = profileRole || metadataRole || "STAFF";
+  const isAdmin = ["SUPERADMIN","ADMIN"].includes(roleCandidate);
   const email = String(user.email || "").trim().toLowerCase();
-  const { data: linkedAgent, error: agentError } = await admin.from("dv_accounting_agents")
-    .select("id,user_id,email,active").eq("user_id", user.id).maybeSingle();
-  if (agentError) throw new Error("Could not verify the linked agent record.");
+  let linkedAgent: any = null;
+  const metadataAgentId = String(user.app_metadata?.agent_id || user.user_metadata?.agent_id || "").trim();
+  if (metadataAgentId) {
+    const { data, error: agentError } = await admin.from("dv_accounting_agents")
+      .select("id,user_id,email,active").eq("id", metadataAgentId).maybeSingle();
+    if (agentError) throw new Error("Could not verify the linked agent record.");
+    if (data) linkedAgent = data;
+  }
+  if (!linkedAgent) {
+    const { data, error: agentError } = await admin.from("dv_accounting_agents")
+      .select("id,user_id,email,active").eq("user_id", user.id).maybeSingle();
+    if (agentError) throw new Error("Could not verify the linked agent record.");
+    if (data) linkedAgent = data;
+  }
+  if (!linkedAgent && email) {
+    const { data, error: agentError } = await admin.from("dv_accounting_agents")
+      .select("id,user_id,email,active").ilike("email", email).limit(2);
+    if (agentError) throw new Error("Could not verify the linked agent record.");
+    if (data?.length === 1) linkedAgent = data[0];
+  }
   const isLinkedAgent = !!linkedAgent
     && linkedAgent.active !== false
-    && String(linkedAgent.user_id || "") === user.id
+    && (!linkedAgent.user_id || String(linkedAgent.user_id) === user.id)
     && String(linkedAgent.email || "").trim().toLowerCase() === email;
-  const role = isAdmin ? (profileRole || metadataRole) : isLinkedAgent ? "AGENT" : (profileRole || metadataRole || "STAFF");
+  // An AGENT role alone is insufficient; it must be backed by the matching agent record.
+  const role = isAdmin ? roleCandidate : isLinkedAgent ? "AGENT" : roleCandidate === "AGENT" ? "STAFF" : roleCandidate;
   return { user, role };
 }
 Deno.serve(async (req: Request) => {
