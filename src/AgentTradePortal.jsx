@@ -443,7 +443,9 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
   const partyEmail=emails.join(", ")||String(form[side+"_email"]||"").trim();
   const partyPhone=phones.join(", ")||String(form[side+"_phone"]||"").trim();
   const senderMode=adminMode?"admin":"agent";
-  const fromEmail=adminMode?"admin@dvrealty.ca":String(user?.email||representingAgent?.email||"").trim();
+  const {data:authData,error:authError}=await supabase.auth.getUser();
+  const fromEmail=adminMode?"admin@dvrealty.ca":String(authData?.user?.email||"").trim();
+  if(authError)throw new Error("Could not verify your signed-in email. Please sign in again.");
   if(!fromEmail){setLawyerShareError("Your agent email address is not available. Please sign in again or contact the administrator.");return}
   const escapeHtml=value=>String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
   setLawyerShareBusy(true);setLawyerShareError("");setError("");setMessage("");
