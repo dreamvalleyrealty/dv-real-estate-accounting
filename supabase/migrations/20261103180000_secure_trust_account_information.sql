@@ -1,5 +1,7 @@
--- Secure banking instructions are stored separately from the day-to-day bank ledger.
--- Full account numbers are never exposed through authenticated table access.
+-- Secure trust-account information sharing.
+-- Full bank instructions are encrypted by the Edge Function before storage.
+-- Never add a public/authenticated SELECT policy to the instruction table.
+
 create table if not exists public.dv_accounting_trust_account_instructions (
   account_type text primary key check (account_type in ('REAL_ESTATE_TRUST','COMMISSION_TRUST')),
   institution text not null,
@@ -54,7 +56,6 @@ create policy "Trust information history sender or admin"
    sent_by = auth.uid()
    or public.dv_accounting_current_user_role() in ('SUPERADMIN','ADMIN')
  );
-
 create or replace function public.dv_accounting_store_trust_account_instruction(
  p_account_type text,
  p_institution text,
