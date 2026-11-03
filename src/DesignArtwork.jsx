@@ -17,7 +17,7 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
  function draw(){
   const c=canvasRef.current;if(!c)return;
   const ctx=c.getContext("2d"),w=currentFormat.w,h=currentFormat.h;c.width=w;c.height=h;
-  const isProperty=mode==="property",pad=w*.045,scale=w/1080;
+  const isProperty=mode==="property",pad=w*.045,scale=w/1080,isMinimal=template==="minimal";
   const loadImg=src=>new Promise(resolve=>{if(!src)return resolve(null);const im=new Image();im.onload=()=>resolve(im);im.onerror=()=>resolve(null);im.src=src});
   const crop=(im,x,y,cw,ch)=>{if(!im)return;const s=Math.max(cw/im.width,ch/im.height),sw=cw/s,sh=ch/s;ctx.drawImage(im,(im.width-sw)/2,(im.height-sh)/2,sw,sh,x,y,cw,ch)};
   const render=async()=>{
@@ -35,9 +35,9 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
     ctx.fillStyle=gold;ctx.font=Math.round(w*.025)+"px Arial";ctx.fillText("REALTY INC.",leftW*.5,headerH*.76);
     ctx.fillStyle="#fff";ctx.font=Math.round(w*.022)+"px Arial";ctx.fillText("Brokerage",leftW*.5,headerH*.86);
     crop(pics[0],leftW,0,rightW,headerH);
-    const ribbonY=headerH*.76,ribbonH=h*.105;ctx.fillStyle=gold;ctx.fillRect(0,ribbonY,w*.52,ribbonH);
-    ctx.fillStyle="#fff";ctx.textAlign="left";ctx.font="900 "+Math.round(w*.083)+"px Arial";ctx.fillText(status==="For Sale"?"JUST LISTED":status.toUpperCase(),w*.035,ribbonY+ribbonH*.72);
-    ctx.fillStyle=navy;ctx.fillRect(0,ribbonY+ribbonH,w*.48,h*.052);
+    const ribbonY=headerH*.76,ribbonH=h*.105;ctx.fillStyle=isMinimal?navy:gold;ctx.fillRect(0,ribbonY,w*.52,ribbonH);
+    ctx.fillStyle="#fff";ctx.textAlign="left";ctx.font="900 "+Math.round(w*.083)+"px Arial";ctx.fillText(status==="For Sale"?"JUST LISTED":status==="Open House"?"OPEN HOUSE":status==="Leased"?"JUST LEASED":status==="Sold"?"JUST SOLD":status.toUpperCase(),w*.035,ribbonY+ribbonH*.72);
+    ctx.fillStyle=isMinimal?gold:navy;ctx.fillRect(0,ribbonY+ribbonH,w*.48,h*.052);
     ctx.fillStyle="#fff";ctx.font="bold "+Math.round(w*.027)+"px Arial";ctx.fillText(representation,w*.04,ribbonY+ribbonH+h*.036);
     const gridY=headerH+ribbonH+h*.052,gridH=photoH-ribbonH-h*.052,cellW=rightW/2,cellH=gridH/2;
     for(let i=1;i<5;i++){const gx=leftW+((i-1)%2)*cellW,gy=gridY+Math.floor((i-1)/2)*cellH;crop(pics[i],gx,gy,cellW-3,cellH-3)}
@@ -48,7 +48,7 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
     const infoY=sy+h*.085;ctx.textAlign="left";ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.031)+"px Arial";wrap(ctx,address||"PROPERTY ADDRESS",w*.035,infoY,leftW-w*.07,h*.038,2);
     ctx.fillStyle=navy;ctx.font="bold "+Math.round(w*.027)+"px Arial";ctx.fillText([selected?.city,selected?.province,selected?.postal_code].filter(Boolean).join(", "),w*.035,infoY+h*.071);
     ctx.font=Math.round(w*.024)+"px Arial";ctx.fillText("MLS # "+(selected?.mls_number||"—"),w*.035,infoY+h*.112);
-    const price=customPrice||(selected?.listing_price?money(selected.listing_price):"");ctx.fillStyle=gold;ctx.fillRect(0,h-footerH-h*.035,leftW,h*.075);
+    const price=customPrice||(selected?.listing_price?money(selected.listing_price):"");ctx.fillStyle=isMinimal?navy:gold;ctx.fillRect(0,h-footerH-h*.035,leftW,h*.075);
     ctx.fillStyle="#fff";ctx.font="bold "+Math.round(w*.026)+"px Arial";ctx.fillText(status==="Leased"?"LEASED FOR":status==="Sold"?"SOLD FOR":"LISTED AT",w*.035,h-footerH-h*.008);
     ctx.font="bold "+Math.round(w*.045)+"px Arial";ctx.fillText(price||"Contact for price",w*.035,h-footerH+h*.027);
    }
@@ -63,8 +63,8 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
   render();
  }
  function wrap(ctx,text,x,y,maxWidth,lineHeight,maxLines){const words=String(text||"").split(/\s+/);let line="",n=0;for(const word of words){const test=line?line+" "+word:word;if(ctx.measureText(test).width>maxWidth&&line){ctx.fillText(line,x,y);line=word;y+=lineHeight;n++;if(n>=maxLines)return}else line=test}if(line)ctx.fillText(line,x,y)}
- useEffect(()=>{draw()},[selected,photos,previewUrls,format,status,template,occasion,greeting,customAddress,customPrice,beds,baths,parking,sqft,representation,headshot,agent]);
- async function download(){const c=canvasRef.current;if(!c)return;setBusy(true);try{await new Promise(resolve=>c.toBlob(blob=>{if(!blob)throw new Error("Could not create artwork");const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="dream-valley-"+(mode==="property"?"property":"occasion")+"-"+Date.now()+".png";a.click();URL.revokeObjectURL(url);resolve()}, "image/png"));setMessage("Artwork downloaded. Property photos were used only in this browser and were not uploaded.");setError("")}catch(e){setError(e.message||String(e))}finally{setBusy(false)}}
+ useEffect(()=>{draw()},[mode,selected,photos,previewUrls,format,status,template,occasion,greeting,customAddress,customPrice,beds,baths,parking,sqft,representation,headshot,agent]);
+ async function download(){const c=canvasRef.current;if(!c)return;setBusy(true);try{await draw();const blob=await new Promise((resolve,reject)=>c.toBlob(value=>value?resolve(value):reject(new Error("Could not create artwork")),"image/png"));const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="dream-valley-"+(mode==="property"?"property":"occasion")+"-"+Date.now()+".png";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);setMessage("Artwork downloaded. Property photos were used only in this browser and were not uploaded.");setError("")}catch(e){setError(e.message||String(e))}finally{setBusy(false)}}
  function addPhotos(files){const accepted=Array.from(files||[]).filter(f=>f.type.startsWith("image/")).slice(0,5);setPhotos(accepted)}
  return <div style={{color:"#172b4d"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:16}}><div><h2 style={{margin:"0 0 4px",display:"flex",alignItems:"center",gap:8}}><Palette color={gold}/> Design &amp; Artwork</h2><p style={{margin:0,color:"#667085"}}>Create branded property marketing and occasion artwork.</p></div><span style={{fontSize:12,color:"#667085"}}>Dream Valley Realty</span></div>
  <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}><button className={mode==="property"?"primary":"secondary"} onClick={()=>setMode("property")}><Home size={15}/> Property Design</button><button className={mode==="occasion"?"primary":"secondary"} onClick={()=>setMode("occasion")}><Gift size={15}/> Occasion Artwork</button></div>
