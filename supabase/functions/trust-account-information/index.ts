@@ -183,13 +183,12 @@ Deno.serve(async (req: Request) => {
         const accountNumber = String(row.account_number || "").trim();
         if (!institution || !transit || !accountName) return json({ error: "Complete the institution, transit number, and account name for both trust accounts." }, 400);
         if (!/^\d{5}$/.test(transit)) return json({ error: "Enter a five-digit transit number." }, 400);
-        // An empty account number means leave the previously encrypted value unchanged.
         if (accountNumber) {
           if (!/^\d{5,20}$/.test(accountNumber)) return json({ error: "Enter an account number containing 5–20 digits." }, 400);
           const cipher = await encrypt(accountNumber, encryptionSecret);
           const { error } = await admin.rpc("dv_accounting_store_trust_account_instruction", {
             p_account_type: type, p_institution: institution, p_transit_number: transit,
-            p_account_number_ciphertext: Array.from(cipher), p_account_name: accountName,
+            p_account_number_ciphertext: "\\x" + bytesToHex(cipher), p_account_name: accountName,
             p_bank_address: String(row.bank_address || "").trim() || null,
           });
           if (error) throw error;
