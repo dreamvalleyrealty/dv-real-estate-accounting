@@ -130,8 +130,8 @@ Deno.serve(async (req: Request) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const encryptionSecret = Deno.env.get("TRUST_ACCOUNT_ENCRYPTION_KEY");
   const publicAppUrl = Deno.env.get("TRUST_ACCOUNT_PUBLIC_URL") || Deno.env.get("APP_URL");
-  if (!supabaseUrl || !anonKey || !serviceKey || !encryptionSecret || !publicAppUrl) {
-    return json({ error: "Secure trust account service is not fully configured. Set TRUST_ACCOUNT_ENCRYPTION_KEY and TRUST_ACCOUNT_PUBLIC_URL." }, 503);
+  if (!supabaseUrl || !anonKey || !serviceKey || !encryptionSecret || encryptionSecret.length < 32 || !publicAppUrl) {
+    return json({ error: "Secure trust account service is not fully configured. Set TRUST_ACCOUNT_ENCRYPTION_KEY (at least 32 characters) and TRUST_ACCOUNT_PUBLIC_URL." }, 503);
   }
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
   let body: any;
@@ -174,7 +174,7 @@ Deno.serve(async (req: Request) => {
           await sendZoho(admin, log.recipient_email, "Your Dream Valley Realty verification code", otpHtml);
           return json({ ok: true, message: "A verification code has been sent to the email address this link was issued to." });
         } catch (sendError) {
-          await admin.from("dv_accounting_trust_info_email_log").update({ otp_hash: null, otp_expires_at: null }).eq("id", log.id);
+          await admin.from("dv_accounting_trust_info_email_log").update({ otp_hash: null, otp_expires_at: null, otp_sent_at: null }).eq("id", log.id);
           throw sendError;
         }
       }
