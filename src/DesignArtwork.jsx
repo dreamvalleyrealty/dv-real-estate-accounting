@@ -23,6 +23,7 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
   const render=async()=>{
    const pics=await Promise.all(previewUrls.map(loadImg)),avatar=await loadImg(headshot),brandLogo=await loadImg("/dv-logo.svg");
    ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);
+   let propertyFooterY=h*.81;
    if(!isProperty){
     ctx.fillStyle=navy;ctx.fillRect(0,0,w,h);ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.075)+"px Arial";ctx.textAlign="center";ctx.fillText(occasion.toUpperCase(),w/2,h*.32);
     ctx.fillStyle="#fff";ctx.font=Math.round(w*.045)+"px Arial";wrap(ctx,greeting,w*.12,h*.43,w*.76,w*.065,5);
@@ -36,7 +37,7 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
     const specs=[[beds||"—","BEDS"],[baths||"—","BATHS"],[parking||"—","PARKING"],[sqft||"—","SQ FT"]];
     if(landscape){
       // Wide layout: brand/title at left, hero image at right, details and gallery below.
-      const foot=530,heroX=440;
+      const foot=530,heroX=440;propertyFooterY=530;
       photo(pics[0],heroX,0,640,220);
       ctx.fillStyle=navy;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(390,0);ctx.lineTo(455,220);ctx.lineTo(0,220);ctx.closePath();ctx.fill();
       logo(55,28,92);text("DREAM VALLEY",170,82,34,"#fff","bold");text("REALTY INC.",170,111,22,gold);text("Brokerage",170,139,18,"#fff");
@@ -49,8 +50,8 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
       ctx.fillStyle=gold;ctx.fillRect(0,530,590,100);text(status==="Leased"?"LEASED FOR":status==="Sold"?"SOLD FOR":"LISTED AT",35,558,19,"#fff","bold");text(price,35,611,38,"#fff","bold");
     }else if(portrait||story){
       // Tall formats use a vertical reading order rather than stretching the square artwork.
-      const tallH=story?1920:1350,head=story?235:190,ribbon=story?130:105,hero=story?390:260,details=story?300:235,gallery=story?620:390,foot=story?245:170;
-      const ribbonY=head,heroY=head+ribbon,detailsY=heroY+hero,galleryY=detailsY+details,footY=tallH-foot;
+      const tallH=1920===h?1920:1350,head=story?235:190,ribbon=story?130:105,hero=story?390:260,details=story?300:235,gallery=story?620:390,foot=story?245:170;
+      const ribbonY=head,heroY=head+ribbon,detailsY=heroY+hero,galleryY=detailsY+details,footY=tallH-foot;propertyFooterY=footY;
       ctx.fillStyle=navy;ctx.fillRect(0,0,w,head*s);
       photo(pics[0],w*.36,0,w*.64,head);
       ctx.fillStyle=navy;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(w*.39,0);ctx.lineTo(w*.48,head*s);ctx.lineTo(0,head*s);ctx.closePath();ctx.fill();
@@ -67,7 +68,7 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
       // Footer is drawn below gallery; all coordinates remain within the selected artboard.
     }else{
       // Square layout based on the original approved reference.
-      const footerY=875,brandBottom=318,gridTop=420,gridLeft=508;
+      const footerY=875,brandBottom=318,gridTop=420,gridLeft=508;propertyFooterY=footerY;
       photo(pics[0],350,0,730,420);
       ctx.fillStyle=navy;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(325,0);ctx.lineTo(458,brandBottom);ctx.lineTo(0,brandBottom);ctx.closePath();ctx.fill();
       logo(74,55,118);text("DREAM VALLEY",172,226,40,"#fff","bold");text("REALTY INC.",172,260,25,gold);text("Brokerage",172,292,20,"#fff");
@@ -81,7 +82,7 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
     }
    }
    }
-   const footerY=isProperty?h*.81:h*.83;ctx.fillStyle=navy;ctx.fillRect(0,footerY,w,h-footerY);
+   const footerY=isProperty?propertyFooterY:h*.83;ctx.fillStyle=navy;ctx.fillRect(0,footerY,w,h-footerY);
    const avatarSize=(h-footerY)*.78,ax=pad,ay=footerY+(h-footerY-avatarSize)/2;
    if(avatar){ctx.save();ctx.beginPath();ctx.arc(ax+avatarSize/2,ay+avatarSize/2,avatarSize/2,0,Math.PI*2);ctx.clip();ctx.drawImage(avatar,ax,ay,avatarSize,avatarSize);ctx.restore();ctx.strokeStyle=gold;ctx.lineWidth=Math.max(3,scale*6);ctx.beginPath();ctx.arc(ax+avatarSize/2,ay+avatarSize/2,avatarSize/2,0,Math.PI*2);ctx.stroke()}
    const tx=ax+avatarSize+pad*.55;ctx.textAlign="left";ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.036)+"px Arial";ctx.fillText([agent?.first_name,agent?.last_name].filter(Boolean).join(" ")||"YOUR NAME",tx,ay+avatarSize*.35);
