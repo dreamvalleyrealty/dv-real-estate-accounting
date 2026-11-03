@@ -85,7 +85,6 @@ async function requireActor(req: Request, admin: any, supabaseUrl: string, anonK
   const callerClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authorization } }, auth: { persistSession: false } });
   const { data: { user }, error } = await callerClient.auth.getUser();
   if (error || !user) throw new Error("Your session could not be verified. Please sign in again.");
-  const { data: role, error: roleError } = await admin.rpc("dv_accounting_current_user_role", { }, { } as any).then(async () => ({ data: null, error: null })).catch(() => ({data:null,error:null}));
   // Resolve the role for the caller via the authenticated client; never trust client-supplied role data.
   const { data: actualRole, error: actualRoleError } = await callerClient.rpc("dv_accounting_current_user_role");
   if (actualRoleError) throw new Error("Could not verify your access role.");
@@ -113,7 +112,6 @@ Deno.serve(async (req: Request) => {
       const tokenHash = await sha256(token);
       const { data: log, error } = await admin.from("dv_accounting_trust_info_email_log").select("*").eq("token_hash", tokenHash).maybeSingle();
       if (error || !log || new Date(log.link_expires_at).getTime() <= Date.now() || ["REVOKED","EXPIRED","FAILED"].includes(log.status)) return json({ error: "This secure link is invalid or expired." }, 410);
-      const { data: settings } = await admin.from("dv_accounting_private_integrations").select("secret_payload").eq("integration_key", "zoho_mail").maybeSingle();
       if (action === "verify_otp") {
         const otp = String(body.otp || "").trim();
         if (!/^\d{6}$/.test(otp)) return json({ error: "Enter the six-digit code." }, 400);
