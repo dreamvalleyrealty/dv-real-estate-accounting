@@ -1,7 +1,7 @@
 {
   "name": "dv-real-estate-accounting",
   "private": true,
-  "version": "40.02",
+  "version": "40.03",
   "type": "module",
   "scripts": {
     "dev": "vite",
