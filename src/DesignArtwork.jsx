@@ -81,7 +81,6 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
       const cellW=(w-gridLeft)/2,cellH=(footerY-gridTop)/2;photo(pics[1],gridLeft,gridTop,cellW-3,cellH-3);photo(pics[2],gridLeft+cellW,gridTop,cellW-3,cellH-3);photo(pics[3],gridLeft,gridTop+cellH,cellW-3,cellH-3);photo(pics[4],gridLeft+cellW,gridTop+cellH,cellW-3,cellH-3);
     }
    }
-   }
    const footerY=isProperty?propertyFooterY:h*.83;ctx.fillStyle=navy;ctx.fillRect(0,footerY,w,h-footerY);
    const avatarSize=(h-footerY)*.78,ax=pad,ay=footerY+(h-footerY-avatarSize)/2;
    if(avatar){ctx.save();ctx.beginPath();ctx.arc(ax+avatarSize/2,ay+avatarSize/2,avatarSize/2,0,Math.PI*2);ctx.clip();ctx.drawImage(avatar,ax,ay,avatarSize,avatarSize);ctx.restore();ctx.strokeStyle=gold;ctx.lineWidth=Math.max(3,scale*6);ctx.beginPath();ctx.arc(ax+avatarSize/2,ay+avatarSize/2,avatarSize/2,0,Math.PI*2);ctx.stroke()}
