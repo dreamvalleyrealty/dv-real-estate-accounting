@@ -85,10 +85,12 @@ async function requireActor(req: Request, admin: any, supabaseUrl: string, anonK
   const callerClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authorization } }, auth: { persistSession: false } });
   const { data: { user }, error } = await callerClient.auth.getUser();
   if (error || !user) throw new Error("Your session could not be verified. Please sign in again.");
-  // Resolve the role for the caller via the authenticated client; never trust client-supplied role data.
-  const { data: actualRole, error: actualRoleError } = await callerClient.rpc("dv_accounting_current_user_role");
-  if (actualRoleError) throw new Error("Could not verify your access role.");
-  return { user, role: String(actualRole || "").toUpperCase() };
+  const { data: profile, error: profileError } = await admin.from("dv_accounting_user_profiles")
+    .select("role,active").eq("user_id", user.id).maybeSingle();
+  if (profileError || profile?.active === false) throw new Error("Your active user role could not be verified.");
+  const metadataRole = String(user.app_metadata?.role || user.app_metadata?.user_role || "").toUpperCase();
+  const role = String(profile?.role || metadataRole || "STAFF").toUpperCase();
+  return { user, role };
 }
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -111,9 +113,10 @@ Deno.serve(async (req: Request) => {
       if (!/^[a-f0-9]{64}$/i.test(token)) return json({ error: "This secure link is invalid or expired." }, 400);
       const tokenHash = await sha256(token);
       const { data: log, error } = await admin.from("dv_accounting_trust_info_email_log").select("*").eq("token_hash", tokenHash).maybeSingle();
-      if (error || !log || new Date(log.link_expires_at).getTime() <= Date.now() || ["REVOKED","EXPIRED","FAILED"].includes(log.status)) return json({ error: "This secure link is invalid or expired." }, 410);
+      if (error || !log || new Date(log.link_expires_at).getTime() <= Date.now() || ["REVOKED","EXPIRED","FAILED","PENDING"].includes(log.status)) return json({ error: "This secure link is invalid or expired." }, 410);
       if (action === "verify_otp") {
         const otp = String(body.otp || "").trim();
+        if (!log.recipient_email || log.recipient_email.length > 254) return json({ error: "This secure link is invalid or expired." }, 410);
         if (!/^\d{6}$/.test(otp)) return json({ error: "Enter the six-digit code." }, 400);
         if (!log.otp_hash || !log.otp_expires_at || new Date(log.otp_expires_at).getTime() <= Date.now()) return json({ error: "The code has expired. Ask the sender to issue a new secure link." }, 410);
         if (Number(log.otp_attempts || 0) >= 5) return json({ error: "Too many attempts. Ask the sender to issue a new secure link." }, 429);
@@ -205,13 +208,14 @@ Deno.serve(async (req: Request) => {
       const subject = "Secure Dream Valley Realty trust account instructions";
       const html = "<div style=\"font-family:Arial,sans-serif;max-width:620px;color:#172b4d\"><h2>Trust account instructions</h2><p>Hello " + htmlEscape(recipientName) + ",</p><p>" + htmlEscape(actor.user.email || "A Dream Valley Realty team member") + " has shared secure banking instructions with you.</p><p><a href=\"" + link + "\" style=\"display:inline-block;background:#0f2141;color:#fff;padding:12px 18px;text-decoration:none;border-radius:6px\">View secure instructions</a></p><p>The link expires in 24 hours. After opening it, enter the six-digit verification code sent to this email address. The code expires in 15 minutes.</p><p>For security, banking numbers are not included in this email.</p></div>";
       try {
+        const otpHtml = "<div style=\"font-family:Arial,sans-serif;max-width:620px;color:#172b4d\"><h2>Your verification code</h2><p>Hello " + htmlEscape(recipientName) + ",</p><p>Your one-time code is:</p><p style=\"font-size:30px;font-weight:bold;letter-spacing:6px\">" + otp + "</p><p>This code expires in 15 minutes. Do not share it with anyone.</p></div>";
         const providerMessageId = await sendZoho(admin, recipientEmail, subject, html);
+        const otpMessageId = await sendZoho(admin, recipientEmail, "Your Dream Valley Realty verification code", otpHtml);
         const { error: updateError } = await admin.from("dv_accounting_trust_info_email_log").update({
-          status: "SENT", sent_at: new Date().toISOString(), provider_message_id: providerMessageId,
+          status: "SENT", sent_at: new Date().toISOString(),
+          provider_message_id: JSON.stringify({ secure_link: providerMessageId, verification_code: otpMessageId }),
         }).eq("id", created.id);
         if (updateError) throw updateError;
-        const otpHtml = "<div style=\"font-family:Arial,sans-serif;max-width:620px;color:#172b4d\"><h2>Your verification code</h2><p>Hello " + htmlEscape(recipientName) + ",</p><p>Your one-time code is:</p><p style=\"font-size:30px;font-weight:bold;letter-spacing:6px\">" + otp + "</p><p>This code expires in 15 minutes. Do not share it with anyone.</p></div>";
-        const otpMessageId = await sendZoho(admin, recipientEmail, "Your Dream Valley Realty verification code", otpHtml);
         return json({ ok: true, logId: created.id, status: "SENT", message: "Secure link and one-time verification code sent to the recipient." });
       } catch (error) {
         const message = String((error as Error)?.message || "Email sending failed").slice(0, 350);
