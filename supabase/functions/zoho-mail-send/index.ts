@@ -68,7 +68,7 @@ Deno.serve(async(req:Request)=>{
  const accountId=acct?.accountId||acct?.account_id||acct?.id;
  if(!accountId)return json({error:"Zoho returned account data but no account ID could be identified. Please contact the administrator.",accountFields:acct?Object.keys(acct):[]},502);
  const attachmentNames=files.map(f=>f.name).join("; ");
- const {data:log,error:logError}=await admin.from("dv_accounting_email_log").insert({transaction_id:body.transactionId||null,document_type:documentType,recipient_email:recipient,cc_email:cc||null,subject,attachment_name:attachmentNames,status:"PENDING",sent_by:userData.user.id,sent_by_email:from}).select("id").single();
+ const {data:log,error:logError}=await admin.from("dv_accounting_email_log").insert({transaction_id:body.transactionId||null,trade_submission_id:lawyerPackage?body.tradeSubmissionId||null:null,document_type:documentType,recipient_email:recipient,cc_email:cc||null,subject,attachment_name:attachmentNames,status:"PENDING",sent_by:userData.user.id,sent_by_email:from}).select("id").single();
  if(logError)return json({error:"Could not create the email audit record. No email was sent."},500);
  try{
   const uploadedAttachments:any[]=[];
