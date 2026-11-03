@@ -20,7 +20,7 @@ Apply `supabase/migrations/20261103180000_secure_trust_account_information.sql` 
 
 ### Edge Function and environment
 
-Deploy `supabase/functions/trust-account-information` to the same Supabase project used by this app.
+Deploy `supabase/functions/trust-account-information` to the same Supabase project used by this app with JWT gateway verification disabled (for example, `supabase functions deploy trust-account-information --no-verify-jwt`). The function validates signed-in sender requests itself; the recipient endpoints use the random 256-bit link token and OTP.
 
 Set these Edge Function secrets:
 
@@ -36,7 +36,7 @@ The recipient follows a 24-hour link, requests a six-digit code sent to that sam
 
 ### Operations
 
-Configure both trust-account records in Banking & Reconciliation > Trust Account Information as an administrator. Existing full account numbers are not imported automatically from the bank ledger; enter them in the secure setup form. When editing existing instructions, leaving the masked/blank account-number field empty preserves the encrypted account number.
+Configure both trust-account records in Banking & Reconciliation > Trust Account Information as an administrator. Enter the bank name, three-digit Canadian institution number, five-digit transit number, full account number, account name, and any bank/wire instructions. Existing full account numbers are not imported automatically from the bank ledger; enter them in the secure setup form. When editing existing instructions, leaving the blank account-number field empty preserves the encrypted account number. Agents use Agent Portal > Trust Account Information and can share Real Estate Trust details only.
 
 The send endpoint checks the authenticated user and role independently of the browser UI. Only `SUPERADMIN` and `ADMIN` can manage both account records and send either or both types. An agent is identified through the Back Office's linked agent-user record (matching user ID and email) and can send only `REAL_ESTATE_TRUST`. Staff, manager, accountant, and viewer roles cannot send these instructions.
 
