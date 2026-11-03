@@ -5,6 +5,7 @@
 create table if not exists public.dv_accounting_trust_account_instructions (
   account_type text primary key check (account_type in ('REAL_ESTATE_TRUST','COMMISSION_TRUST')),
   institution text not null,
+  institution_number text not null,
   transit_number text not null,
   account_number_ciphertext bytea not null,
   account_name text not null,
