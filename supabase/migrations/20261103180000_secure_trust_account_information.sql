@@ -36,6 +36,7 @@ create table if not exists public.dv_accounting_trust_info_email_log (
   verified_at timestamptz,
   opened_at timestamptz,
   token_verified boolean not null default false,
+  otp_sent_at timestamptz,
   created_at timestamptz not null default now(),
   sent_at timestamptz,
   error_message text,
