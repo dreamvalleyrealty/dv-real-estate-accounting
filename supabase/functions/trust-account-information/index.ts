@@ -88,17 +88,19 @@ async function requireActor(req: Request, admin: any, supabaseUrl: string, anonK
   const { data: profile, error: profileError } = await admin.from("dv_accounting_user_profiles")
     .select("role,active").eq("user_id", user.id).maybeSingle();
   if (profileError || profile?.active === false) throw new Error("Your active user role could not be verified.");
+
   const metadataRole = String(user.app_metadata?.role || user.app_metadata?.user_role || "").toUpperCase();
-  const email = String(user.email || "").toLowerCase();
-  const linkedAgentId = String(user.app_metadata?.agent_id || user.user_metadata?.agent_id || "");
-  let linkedAgent = false;
-  if (linkedAgentId) {
-    const { data: agent, error: agentError } = await admin.from("dv_accounting_agents")
-      .select("id,user_id,email,active").eq("id", linkedAgentId).maybeSingle();
-    if (!agentError && agent && agent.active !== false && String(agent.user_id || "") === user.id && String(agent.email || "").toLowerCase() === email) linkedAgent = true;
-  }
-  const role = String(profile?.role || metadataRole || (linkedAgent ? "AGENT" : "STAFF")).toUpperCase();
-  if (linkedAgent && !["SUPERADMIN","ADMIN"].includes(role)) return { user, role: "AGENT" };
+  const profileRole = String(profile?.role || "").toUpperCase();
+  const isAdmin = ["SUPERADMIN","ADMIN"].includes(profileRole || metadataRole);
+  const email = String(user.email || "").trim().toLowerCase();
+  const { data: linkedAgent, error: agentError } = await admin.from("dv_accounting_agents")
+    .select("id,user_id,email,active").eq("user_id", user.id).maybeSingle();
+  if (agentError) throw new Error("Could not verify the linked agent record.");
+  const isLinkedAgent = !!linkedAgent
+    && linkedAgent.active !== false
+    && String(linkedAgent.user_id || "") === user.id
+    && String(linkedAgent.email || "").trim().toLowerCase() === email;
+  const role = isAdmin ? (profileRole || metadataRole) : isLinkedAgent ? "AGENT" : (profileRole || metadataRole || "STAFF");
   return { user, role };
 }
 Deno.serve(async (req: Request) => {
@@ -117,12 +119,13 @@ Deno.serve(async (req: Request) => {
   try { body = await req.json(); } catch { return json({ error: "Invalid request body." }, 400); }
   const action = String(body?.action || "");
   try {
-    if (action === "verify_otp" || action === "view_details") {
+    if (["request_otp","verify_otp","view_details"].includes(action)) {
       const token = String(body.token || "");
       if (!/^[a-f0-9]{64}$/i.test(token)) return json({ error: "This secure link is invalid or expired." }, 400);
       const tokenHash = await sha256(token);
       const { data: log, error } = await admin.from("dv_accounting_trust_info_email_log").select("*").eq("token_hash", tokenHash).maybeSingle();
-      if (error || !log || new Date(log.link_expires_at).getTime() <= Date.now() || ["REVOKED","EXPIRED","FAILED"].includes(log.status)) return json({ error: "This secure link is invalid or expired." }, 410);
+      const expectedStatus = action === "view_details" ? "VERIFIED" : "SENT";
+      if (error || !log || log.status !== expectedStatus || new Date(log.link_expires_at).getTime() <= Date.now()) return json({ error: "This secure link is invalid or expired." }, 410);
       if (action === "verify_otp") {
         const otp = String(body.otp || "").trim();
         if (!log.recipient_email || log.recipient_email.length > 254) return json({ error: "This secure link is invalid or expired." }, 410);
@@ -165,13 +168,30 @@ Deno.serve(async (req: Request) => {
       if (instructionError || !instructions?.length) return json({ error: "Banking instructions are not available." }, 503);
       const result = [];
       for (const item of instructions) {
-        const encrypted = new Uint8Array(item.account_number_ciphertext);
+        let encrypted: Uint8Array;
         let accountNumber: string;
-        try { accountNumber = await decrypt(encrypted, encryptionSecret); }
-        catch { return json({ error: "Banking instructions could not be decrypted." }, 500); }
+        try {
+          const raw = item.account_number_ciphertext;
+          if (raw instanceof Uint8Array) encrypted = raw;
+          else if (Array.isArray(raw)) encrypted = new Uint8Array(raw);
+          else {
+            const encoded = String(raw || "");
+            const hex = encoded.startsWith("\\x") ? encoded.slice(2) : encoded;
+            if (!/^[0-9a-f]+$/i.test(hex) || hex.length % 2 !== 0) throw new Error("Invalid encrypted account data.");
+            encrypted = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < encrypted.length; i++) encrypted[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+          }
+          accountNumber = await decrypt(encrypted, encryptionSecret);
+        } catch {
+          return json({ error: "Banking instructions could not be decrypted." }, 500);
+        }
         result.push({ account_type: item.account_type, institution: item.institution, transit_number: item.transit_number, account_number: accountNumber, account_name: item.account_name, bank_address: item.bank_address });
       }
-      await admin.from("dv_accounting_trust_info_email_log").update({ status: "VIEWED", opened_at: new Date().toISOString() }).eq("id", log.id);
+      // Claim the one-time view atomically so two concurrent requests cannot both release the details.
+      const { data: claimed, error: claimError } = await admin.from("dv_accounting_trust_info_email_log")
+        .update({ status: "VIEWED", opened_at: new Date().toISOString() })
+        .eq("id", log.id).is("opened_at", null).eq("token_verified", true).select("id").maybeSingle();
+      if (claimError || !claimed) return json({ error: "These banking instructions have already been viewed. Request a new secure link if you need access again." }, 409);
       return json({ accounts: result });
     }
 
