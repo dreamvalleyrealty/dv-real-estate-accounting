@@ -32,12 +32,12 @@ The function also reads the existing Zoho refresh token from `dv_accounting_priv
 
 ### Recipient flow
 
-The recipient follows a 24-hour link, enters a six-digit code sent to the same email address, then views the banking details. The code expires after 15 minutes and is limited to five attempts. The service records sender, recipient, account type(s), send status, verification and first-view time.
+The recipient follows a 24-hour link, requests a six-digit code sent to that same email address, then verifies and views the banking details. The code expires after 15 minutes, resend requests are throttled, and five failed attempts are allowed. The service records sender, recipient, account type(s), send status, verification and first-view time.
 
 ### Operations
 
 Configure both trust-account records in Banking & Reconciliation > Trust Account Information as an administrator. Existing full account numbers are not imported automatically from the bank ledger; enter them in the secure setup form. When editing existing instructions, leaving the masked/blank account-number field empty preserves the encrypted account number.
 
-The existing Back Office roles in `dv_accounting_user_profiles` are used. Only `SUPERADMIN` and `ADMIN` can manage both account records. The send endpoint checks the authenticated role independently of the browser UI. The agent sender is allowed only when the authenticated profile role is `AGENT`, and only for `REAL_ESTATE_TRUST`.
+The send endpoint checks the authenticated user and role independently of the browser UI. Only `SUPERADMIN` and `ADMIN` can manage both account records and send either or both types. An agent is identified through the Back Office's linked agent-user record (matching user ID and email) and can send only `REAL_ESTATE_TRUST`. Staff, manager, accountant, and viewer roles cannot send these instructions.
 
 Before production use, verify the deployed Edge Function secrets, apply the SQL migration, and test with one administrator account, one agent account, and a recipient mailbox. Confirm that an agent request for `COMMISSION_TRUST` is rejected by the Edge Function and that no authenticated client can select from the encrypted instructions table.
