@@ -169,15 +169,27 @@ Deno.serve(async (req: Request) => {
         const transit = String(row.transit_number || "").trim();
         const accountName = String(row.account_name || "").trim();
         const accountNumber = String(row.account_number || "").trim();
-        if (!institution || !transit || !accountName || !accountNumber) return json({ error: "Complete the institution, transit number, account name and full account number for both trust accounts." }, 400);
-        if (!/^\d{5}$/.test(transit) || !/^\d{5,20}$/.test(accountNumber)) return json({ error: "Enter a five-digit transit number and a valid account number (5–20 digits)." }, 400);
-        const cipher = await encrypt(accountNumber, encryptionSecret);
-        const { error } = await admin.rpc("dv_accounting_store_trust_account_instruction", {
-          p_account_type: type, p_institution: institution, p_transit_number: transit,
-          p_account_number_ciphertext: Array.from(cipher), p_account_name: accountName,
-          p_bank_address: String(row.bank_address || "").trim() || null,
-        });
-        if (error) throw error;
+        if (!institution || !transit || !accountName) return json({ error: "Complete the institution, transit number, and account name for both trust accounts." }, 400);
+        if (!/^\d{5}$/.test(transit)) return json({ error: "Enter a five-digit transit number." }, 400);
+        // An empty account number means leave the previously encrypted value unchanged.
+        if (accountNumber) {
+          if (!/^\d{5,20}$/.test(accountNumber)) return json({ error: "Enter an account number containing 5–20 digits." }, 400);
+          const cipher = await encrypt(accountNumber, encryptionSecret);
+          const { error } = await admin.rpc("dv_accounting_store_trust_account_instruction", {
+            p_account_type: type, p_institution: institution, p_transit_number: transit,
+            p_account_number_ciphertext: Array.from(cipher), p_account_name: accountName,
+            p_bank_address: String(row.bank_address || "").trim() || null,
+          });
+          if (error) throw error;
+        } else {
+          const { data: existing, error: readError } = await admin.from("dv_accounting_trust_account_instructions")
+            .select("account_number_ciphertext").eq("account_type", type).maybeSingle();
+          if (readError || !existing) return json({ error: "Enter the full account number the first time this trust account is configured." }, 400);
+          const { error: updateError } = await admin.from("dv_accounting_trust_account_instructions")
+            .update({ institution, transit_number: transit, account_name: accountName, bank_address: String(row.bank_address || "").trim() || null, updated_at: new Date().toISOString(), updated_by: actor.user.id })
+            .eq("account_type", type);
+          if (updateError) throw updateError;
+        }
       }
       return json({ ok: true, message: "Both trust account instructions were saved securely." });
     }
