@@ -21,7 +21,7 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
   const loadImg=src=>new Promise(resolve=>{if(!src)return resolve(null);const im=new Image();im.crossOrigin="anonymous";im.onload=()=>resolve(im);im.onerror=()=>resolve(null);im.src=src});
   const crop=(im,x,y,cw,ch)=>{if(!im)return;const s=Math.max(cw/im.width,ch/im.height),sw=cw/s,sh=ch/s;ctx.drawImage(im,(im.width-sw)/2,(im.height-sh)/2,sw,sh,x,y,cw,ch)};
   const render=async()=>{
-   const pics=await Promise.all(previewUrls.map(loadImg)),avatar=await loadImg(headshot);
+   const pics=await Promise.all(previewUrls.map(loadImg)),avatar=await loadImg(headshot),brandLogo=await loadImg("/dv-logo.svg");
    ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);
    if(!isProperty){
     ctx.fillStyle=navy;ctx.fillRect(0,0,w,h);ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.075)+"px Arial";ctx.textAlign="center";ctx.fillText(occasion.toUpperCase(),w/2,h*.32);
@@ -29,15 +29,14 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
    }else{
     // Rebuild the property layout to follow the approved Dream Valley reference.
     const footerY=h*.81,brandBottom=h*.295,gridTop=h*.39,gridBottom=footerY,footerH=h-footerY;
-    const brandEdgeTop=w*.30,brandEdgeBottom=w*.425,photoLeft=w*.30;
+    const brandEdgeTop=w*.30,brandEdgeBottom=w*.425,photoLeft=w*.30,gridLeft=w*.47;
     // Main hero image fills the upper-right area.
     if(pics[0])crop(pics[0],photoLeft,0,w-photoLeft,gridTop);else{ctx.fillStyle="#e8ebef";ctx.fillRect(photoLeft,0,w-photoLeft,gridTop)}
     // Navy brand panel with the angled right edge from the reference.
     ctx.fillStyle=navy;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(brandEdgeTop,0);ctx.lineTo(brandEdgeBottom,brandBottom);ctx.lineTo(0,brandBottom);ctx.closePath();ctx.fill();
     // DV house mark and wordmark, positioned inside the navy panel.
-    const cx=w*.158, logoTop=h*.055, logoW=w*.108, logoH=h*.13;
-    ctx.strokeStyle=gold;ctx.lineWidth=Math.max(3,w*.004);ctx.beginPath();ctx.moveTo(cx-logoW*.52,logoTop+logoH*.34);ctx.lineTo(cx,logoTop);ctx.lineTo(cx+logoW*.52,logoTop+logoH*.34);ctx.lineTo(cx+logoW*.52,logoTop+logoH*.91);ctx.lineTo(cx-logoW*.52,logoTop+logoH*.91);ctx.closePath();ctx.stroke();
-    ctx.fillStyle=gold;ctx.textAlign="center";ctx.font="bold "+Math.round(w*.105)+"px Georgia";ctx.fillText("DV",cx,logoTop+logoH*.82);
+    const cx=w*.158,logoW=w*.115,logoH=h*.145,logoX=cx-logoW/2,logoY=h*.045;
+    if(brandLogo)ctx.drawImage(brandLogo,logoX,logoY,logoW,logoH);
     ctx.fillStyle="#fff";ctx.font="bold "+Math.round(w*.043)+"px Arial";ctx.fillText("DREAM VALLEY",cx,h*.212);
     ctx.fillStyle=gold;ctx.font=Math.round(w*.025)+"px Arial";ctx.fillText("REALTY INC.",cx,h*.244);
     ctx.fillStyle="#fff";ctx.font=Math.round(w*.021)+"px Arial";ctx.fillText("Brokerage",cx,h*.271);
@@ -50,18 +49,18 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
     ctx.fillStyle=isMinimal?gold:navy;ctx.fillRect(0,ribbonY+ribbonH,w*.48,h*.052);
     ctx.fillStyle="#fff";ctx.font="bold "+Math.round(w*.027)+"px Arial";ctx.fillText(representation,w*.04,ribbonY+ribbonH+h*.036);
     // Four supporting photos in a 2 x 2 grid on the right.
-    const cellW=(w-photoLeft)/2,cellH=(gridBottom-gridTop)/2;
-    for(let i=1;i<5;i++){const gx=photoLeft+((i-1)%2)*cellW,gy=gridTop+Math.floor((i-1)/2)*cellH;if(pics[i])crop(pics[i],gx,gy,cellW-3,cellH-3);else{ctx.fillStyle="#e8ebef";ctx.fillRect(gx,gy,cellW-3,cellH-3)}}
+    const cellW=(w-gridLeft)/2,cellH=(gridBottom-gridTop)/2;
+    for(let i=1;i<5;i++){const gx=gridLeft+((i-1)%2)*cellW,gy=gridTop+Math.floor((i-1)/2)*cellH;if(pics[i])crop(pics[i],gx,gy,cellW-3,cellH-3);else{ctx.fillStyle="#e8ebef";ctx.fillRect(gx,gy,cellW-3,cellH-3)}}
     // Property facts and address stay in the left information column.
-    ctx.fillStyle="#fff";ctx.fillRect(0,ribbonY+ribbonH+h*.052,w*.47,footerY-(ribbonY+ribbonH+h*.052));
+    ctx.fillStyle="#fff";ctx.fillRect(0,ribbonY+ribbonH+h*.052,gridLeft,footerY-(ribbonY+ribbonH+h*.052));
     const specs=[[beds||"—","BEDS"],[baths||"—","BATHS"],[parking||"—","PARKING"],[sqft||"—","SQ FT"]];
-    const sy=h*.548,sw=w*.47/4;
+    const sy=h*.548,sw=gridLeft/4;
     specs.forEach((v,i)=>{const x=i*sw+sw/2;ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.047)+"px Arial";ctx.textAlign="center";ctx.fillText(v[0],x,sy);ctx.fillStyle=navy;ctx.font="bold "+Math.round(w*.019)+"px Arial";ctx.fillText(v[1],x,sy+h*.029);if(i){ctx.strokeStyle="#d0d5dd";ctx.beginPath();ctx.moveTo(i*sw,sy-h*.035);ctx.lineTo(i*sw,sy+h*.045);ctx.stroke()}});
-    const infoY=h*.62;ctx.textAlign="left";ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.031)+"px Arial";wrap(ctx,address||"PROPERTY ADDRESS",w*.035,infoY,w*.40,h*.038,2);
+    const infoY=h*.62;ctx.textAlign="left";ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.031)+"px Arial";wrap(ctx,address||"PROPERTY ADDRESS",w*.035,infoY,gridLeft-w*.07,h*.038,2);
     ctx.fillStyle=navy;ctx.font="bold "+Math.round(w*.027)+"px Arial";ctx.fillText([selected?.city,selected?.province,selected?.postal_code].filter(Boolean).join(", "),w*.035,infoY+h*.071);
     ctx.font=Math.round(w*.024)+"px Arial";ctx.fillText("MLS # "+(selected?.mls_number||"—"),w*.035,infoY+h*.112);
     const price=customPrice||(selected?.listing_price?money(selected.listing_price):"");
-    ctx.fillStyle=isMinimal?navy:gold;ctx.fillRect(0,h*.73,w*.47,h*.08);
+    ctx.fillStyle=isMinimal?navy:gold;ctx.fillRect(0,h*.73,gridLeft,h*.08);
     ctx.fillStyle="#fff";ctx.font="bold "+Math.round(w*.026)+"px Arial";ctx.fillText(status==="Leased"?"LEASED FOR":status==="Sold"?"SOLD FOR":"LISTED AT",w*.035,h*.758);
     ctx.font="bold "+Math.round(w*.045)+"px Arial";ctx.fillText(price||"Contact for price",w*.035,h*.795);
 
