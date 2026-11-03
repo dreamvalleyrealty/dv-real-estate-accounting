@@ -139,8 +139,13 @@ Deno.serve(async (req: Request) => {
           otp_attempts: 0,
         }).eq("id", log.id);
         if (updateOtpError) throw updateOtpError;
-        await sendZoho(admin, log.recipient_email, "Your Dream Valley Realty verification code", otpHtml);
-        return json({ ok: true, message: "A verification code has been sent to the email address this link was issued to." });
+        try {
+          await sendZoho(admin, log.recipient_email, "Your Dream Valley Realty verification code", otpHtml);
+          return json({ ok: true, message: "A verification code has been sent to the email address this link was issued to." });
+        } catch (sendError) {
+          await admin.from("dv_accounting_trust_info_email_log").update({ otp_hash: null, otp_expires_at: null }).eq("id", log.id);
+          throw sendError;
+        }
       }
       if (!log.token_verified) return json({ error: "Verify your email code before viewing the banking instructions." }, 403);
       if (new Date(log.link_expires_at).getTime() <= Date.now()) return json({ error: "This secure link has expired." }, 410);
