@@ -76,7 +76,7 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
       ctx.fillStyle=navy;ctx.fillRect(0,460,508,56);text(representation,42,500,26,"#fff","bold");
       ctx.fillStyle="#fff";ctx.fillRect(0,516,508,359);
       const sw=127;specs.forEach((v,i)=>{text(v[0],i*sw+sw/2,590,48,gold,"bold","center");text(v[1],i*sw+sw/2,626,21,navy,"bold","center");if(i){ctx.strokeStyle="#d0d5dd";ctx.beginPath();ctx.moveTo(i*sw,555);ctx.lineTo(i*sw,640);ctx.stroke()}});
-      text(addr,38,690,32,gold,"bold");text(cityLine,38,744,27,navy,"bold");text("MLS # "+(selected?.mls_number||"—"),38,790,24,navy);
+      text(addr,38,690,32,gold,"bold");text(cityLine,38,744,27,navy,"bold");text("MLS # "+(selected?.mls_number||"—"),38,777,22,navy);
       ctx.fillStyle=gold;ctx.fillRect(0,788,508,87);text(status==="Leased"?"LEASED FOR":status==="Sold"?"SOLD FOR":"LISTED AT",38,820,26,"#fff","bold");text(price,38,864,42,"#fff","bold");
       const cellW=(w-gridLeft)/2,cellH=(footerY-gridTop)/2;photo(pics[1],gridLeft,gridTop,cellW-3,cellH-3);photo(pics[2],gridLeft+cellW,gridTop,cellW-3,cellH-3);photo(pics[3],gridLeft,gridTop+cellH,cellW-3,cellH-3);photo(pics[4],gridLeft+cellW,gridTop+cellH,cellW-3,cellH-3);
     }
