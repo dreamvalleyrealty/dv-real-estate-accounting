@@ -127,6 +127,18 @@ Deno.serve(async (req: Request) => {
         await admin.from("dv_accounting_trust_info_email_log").update({ status: "VERIFIED", verified_at: new Date().toISOString() }).eq("id", log.id);
         return json({ ok: true, verified: true });
       }
+      if (action === "request_otp") {
+        const otp = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
+        const otpHtml = "<div style=\"font-family:Arial,sans-serif;max-width:620px;color:#172b4d\"><h2>Your verification code</h2><p>Hello " + htmlEscape(log.recipient_name) + ",</p><p>Your one-time code is:</p><p style=\"font-size:30px;font-weight:bold;letter-spacing:6px\">" + otp + "</p><p>This code expires in 15 minutes. Do not share it with anyone.</p></div>";
+        const { error: updateOtpError } = await admin.from("dv_accounting_trust_info_email_log").update({
+          otp_hash: await sha256(token + ":" + otp),
+          otp_expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          otp_attempts: 0,
+        }).eq("id", log.id);
+        if (updateOtpError) throw updateOtpError;
+        await sendZoho(admin, log.recipient_email, "Your Dream Valley Realty verification code", otpHtml);
+        return json({ ok: true, message: "A verification code has been sent to the email address this link was issued to." });
+      }
       if (!log.verified_at) return json({ error: "Verify your email code before viewing the banking instructions." }, 403);
       if (new Date(log.link_expires_at).getTime() <= Date.now()) return json({ error: "This secure link has expired." }, 410);
       const { data: instructions, error: instructionError } = await admin.from("dv_accounting_trust_account_instructions")
@@ -211,23 +223,21 @@ Deno.serve(async (req: Request) => {
         recipient_name: recipientName, recipient_email: recipientEmail, account_types: accountTypes,
         sent_by: actor.user.id, sent_by_email: actor.user.email || null,
         status: "PENDING", token_hash: tokenHash, otp_hash: await sha256(token + ":" + otp),
-        otp_expires_at: new Date(now.getTime() + 15 * 60 * 1000).toISOString(),
+        otp_hash: null, otp_expires_at: null,
         link_expires_at: expires.toISOString(), otp_attempts: 0,
       }).select("id").single();
       if (createError) throw createError;
       const link = publicAppUrl.replace(/\/$/,"") + "/trust-account-information?token=" + token;
       const subject = "Secure Dream Valley Realty trust account instructions";
       const linkHtml = "<div style=\"font-family:Arial,sans-serif;max-width:620px;color:#172b4d\"><h2>Trust account instructions</h2><p>Hello " + htmlEscape(recipientName) + ",</p><p>" + htmlEscape(actor.user.email || "A Dream Valley Realty team member") + " has shared secure banking instructions with you.</p><p><a href=\"" + link + "\" style=\"display:inline-block;background:#0f2141;color:#fff;padding:12px 18px;text-decoration:none;border-radius:6px\">View secure instructions</a></p><p>The link expires in 24 hours. You will enter a separate six-digit code sent to this same email address.</p><p>For security, banking numbers are not included in this email.</p></div>";
-      const otpHtml = "<div style=\"font-family:Arial,sans-serif;max-width:620px;color:#172b4d\"><h2>Your verification code</h2><p>Hello " + htmlEscape(recipientName) + ",</p><p>Your one-time code is:</p><p style=\"font-size:30px;font-weight:bold;letter-spacing:6px\">" + otp + "</p><p>This code expires in 15 minutes. Do not share it with anyone.</p></div>";
       try {
         const linkMessageId = await sendZoho(admin, recipientEmail, subject, linkHtml);
-        const otpMessageId = await sendZoho(admin, recipientEmail, "Your Dream Valley Realty verification code", otpHtml);
         const { error: updateError } = await admin.from("dv_accounting_trust_info_email_log").update({
           status: "SENT", sent_at: new Date().toISOString(),
-          provider_message_id: JSON.stringify({ secure_link: linkMessageId, verification_code: otpMessageId }),
+          provider_message_id: JSON.stringify({ secure_link: linkMessageId }),
         }).eq("id", created.id);
         if (updateError) throw updateError;
-        return json({ ok: true, logId: created.id, status: "SENT", message: "Secure link and one-time verification code sent to the recipient." });
+        return json({ ok: true, logId: created.id, status: "SENT", message: "Secure link sent. The recipient requests a one-time verification code after opening it." });
       } catch (error) {
         const message = String((error as Error)?.message || "Email sending failed").slice(0, 350);
         await admin.from("dv_accounting_trust_info_email_log").update({ status: "FAILED", error_message: message, otp_hash: null }).eq("id", created.id);
