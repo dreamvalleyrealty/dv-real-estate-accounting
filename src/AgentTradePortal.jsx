@@ -466,7 +466,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const docsList=selectedDocs.map(d=>"<li>"+escapeHtml(d.document_name||d.document_type||"Trade document")+"</li>").join("");
    const contactBlock="<p><strong>"+(side==="buyer"?"Buyer":"Seller")+":</strong> "+escapeHtml(partyName)+"</p>"+(partyEmail?"<p><strong>Email:</strong> "+escapeHtml(partyEmail)+"</p>":"")+(partyPhone?"<p><strong>Phone:</strong> "+escapeHtml(partyPhone)+"</p>":"");
    const htmlBody="<div style='font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:#222'><p>Hello,</p><p>Please find attached the selected trade documents for the following transaction.</p><p><strong>Property address:</strong> "+escapeHtml(address)+"<br><strong>Closing date:</strong> "+escapeHtml(closeDate)+"</p>"+contactBlock+"<p><strong>Documents attached:</strong></p><ul>"+docsList+"</ul><p>Please let us know if you require anything further.</p></div>";
-   const subject=(side==="buyer"?"Buyer":"Seller")+" Documents - "+address;
+   const subject=(side==="buyer"?"Buyer":"Seller")+" Documents - "+address+" - Closing Date: "+displayDate(closeDate);
    const {data,error:invokeError}=await supabase.functions.invoke("zoho-mail-send",{body:{transactionId:selected.transaction_id||null,documentType:"LAWYER_DOCUMENT_PACKAGE",senderMode,fromEmail,to:recipient,cc:String(lawyerShareCc||"").trim(),subject,htmlBody,attachments}});
    if(invokeError){let detail=invokeError.message||"The email service could not be reached.";try{const payload=await invokeError.context?.clone?.().json();if(payload?.error)detail=payload.error}catch{}throw new Error(detail)}
    if(data?.error)throw new Error(data.error);
