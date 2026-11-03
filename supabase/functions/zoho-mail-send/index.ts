@@ -43,7 +43,10 @@ Deno.serve(async(req:Request)=>{
  const {data:profileRoleData}=await admin.from("dv_accounting_user_profiles").select("role").eq("user_id",userData.user.id).maybeSingle();
  const role=String(userData.user.app_metadata?.role||userData.user.app_metadata?.user_role||profileRoleData?.role||"").toUpperCase().replace(/[^A-Z]/g,"");
  const adminRoles=["ADMIN","ADMINISTRATOR","SUPERADMIN","SUPERADMINISTRATOR","BROKER","BROKEROFRECORD","OFFICEADMIN","TRADEADMIN"];
- const isAdmin=adminRoles.includes(role)||String(userData.user.email||"").toLowerCase()==="admin@dvrealty.ca";
+ const adminPermissionCodes=["trade_submissions.manage","transactions.edit","listings.manage"];
+ const [rolePermissionResult,userOverrideResult]=await Promise.all([admin.from("dv_accounting_role_permission_rules").select("permission_code,allowed").eq("role",profileRoleData?.role||role).in("permission_code",adminPermissionCodes),admin.from("dv_accounting_user_permission_overrides").select("permission_code,allowed").eq("user_id",userData.user.id).in("permission_code",adminPermissionCodes)]);
+ const canManageTradeReview=(rolePermissionResult.data||[]).some((p:any)=>p.allowed===true)||(userOverrideResult.data||[]).some((p:any)=>p.allowed===true);
+ const isAdmin=adminRoles.includes(role)||canManageTradeReview||String(userData.user.email||"").toLowerCase()==="admin@dvrealty.ca";
  const expectedLawyerFrom=isAdmin?"admin@dvrealty.ca":String(userData.user.email||"").trim();
  if(lawyerPackage&&!validEmail(expectedLawyerFrom))return json({error:"Your signed-in account does not have a valid sender email address."},400);
  if(lawyerPackage&&String(body.fromEmail||"").toLowerCase()!==expectedLawyerFrom.toLowerCase())return json({error:"The sender address must match your signed-in account or the authorized brokerage admin address."},403);
