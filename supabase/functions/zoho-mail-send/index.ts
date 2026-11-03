@@ -41,7 +41,7 @@ Deno.serve(async(req:Request)=>{
   files.push({name:attachmentName,bytes});
  }
  const {data:profileRoleData}=await admin.from("dv_accounting_user_profiles").select("role").eq("user_id",userData.user.id).maybeSingle();
- const role=String(userData.user.app_metadata?.role||userData.user.app_metadata?.user_role||userData.user.user_metadata?.role||userData.user.user_metadata?.user_role||profileRoleData?.role||"").toUpperCase().replace(/[^A-Z]/g,"");
+ const role=String(userData.user.app_metadata?.role||userData.user.app_metadata?.user_role||profileRoleData?.role||"").toUpperCase().replace(/[^A-Z]/g,"");
  const adminRoles=["ADMIN","ADMINISTRATOR","SUPERADMIN","SUPERADMINISTRATOR","BROKER","BROKEROFRECORD","OFFICEADMIN","TRADEADMIN"];
  const isAdmin=adminRoles.includes(role)||String(userData.user.email||"").toLowerCase()==="admin@dvrealty.ca";
  const expectedLawyerFrom=isAdmin?"admin@dvrealty.ca":String(userData.user.email||"").trim();
