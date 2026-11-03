@@ -175,6 +175,7 @@ Deno.serve(async (req: Request) => {
     if (action === "save_settings") {
       if (!isAdmin) return json({ error: "Only an administrator can update trust banking instructions." }, 403);
       const accounts = body.accounts || {};
+      const updates = [];
       for (const [key, type] of [["real_estate_trust","REAL_ESTATE_TRUST"],["commission_trust","COMMISSION_TRUST"]] as const) {
         const row = accounts[key] || {};
         const institution = String(row.institution || "").trim();
@@ -186,21 +187,17 @@ Deno.serve(async (req: Request) => {
         if (accountNumber) {
           if (!/^\d{5,20}$/.test(accountNumber)) return json({ error: "Enter an account number containing 5–20 digits." }, 400);
           const cipher = await encrypt(accountNumber, encryptionSecret);
-          const { error } = await admin.rpc("dv_accounting_store_trust_account_instruction", {
-            p_account_type: type, p_institution: institution, p_transit_number: transit,
-            p_account_number_ciphertext: "\\x" + bytesToHex(cipher), p_account_name: accountName,
-            p_bank_address: String(row.bank_address || "").trim() || null,
-          });
-          if (error) throw error;
+          updates.push({ account_type: type, institution, transit_number: transit, account_number_ciphertext: "\\x" + bytesToHex(cipher), account_name: accountName, bank_address: String(row.bank_address || "").trim() || null, updated_at: new Date().toISOString(), updated_by: actor.user.id });
         } else {
           const { data: existing, error: readError } = await admin.from("dv_accounting_trust_account_instructions")
             .select("account_number_ciphertext").eq("account_type", type).maybeSingle();
           if (readError || !existing) return json({ error: "Enter the full account number the first time this trust account is configured." }, 400);
-          const { error: updateError } = await admin.from("dv_accounting_trust_account_instructions")
-            .update({ institution, transit_number: transit, account_name: accountName, bank_address: String(row.bank_address || "").trim() || null, updated_at: new Date().toISOString(), updated_by: actor.user.id })
-            .eq("account_type", type);
-          if (updateError) throw updateError;
+          updates.push({ account_type: type, institution, transit_number: transit, account_name: accountName, bank_address: String(row.bank_address || "").trim() || null, updated_at: new Date().toISOString(), updated_by: actor.user.id });
         }
+      }
+      for (const update of updates) {
+        const { error } = await admin.from("dv_accounting_trust_account_instructions").upsert(update, { onConflict: "account_type" });
+        if (error) throw error;
       }
       return json({ ok: true, message: "Both trust account instructions were saved securely." });
     }
