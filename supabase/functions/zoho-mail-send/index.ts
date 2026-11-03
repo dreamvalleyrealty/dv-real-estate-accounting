@@ -47,10 +47,10 @@ Deno.serve(async(req:Request)=>{
  const [rolePermissionResult,userOverrideResult]=await Promise.all([admin.from("dv_accounting_role_permission_rules").select("permission_code,allowed").eq("role",profileRoleData?.role||role).in("permission_code",adminPermissionCodes),admin.from("dv_accounting_user_permission_overrides").select("permission_code,allowed").eq("user_id",userData.user.id).in("permission_code",adminPermissionCodes)]);
  const canManageTradeReview=adminPermissionCodes.some(permissionCode=>{const override=(userOverrideResult.data||[]).find((p:any)=>p.permission_code===permissionCode);if(override)return override.allowed===true;return (rolePermissionResult.data||[]).some((p:any)=>p.permission_code===permissionCode&&p.allowed===true)});
  const isAdmin=adminRoles.includes(role)||String(userData.user.email||"").toLowerCase()==="admin@dvrealty.ca";
- const expectedLawyerFrom=isAdmin?"admin@dvrealty.ca":String(userData.user.email||"").trim();
+ const requestedAdminSender=String(body.senderMode||"").toLowerCase()==="admin";
+ if(lawyerPackage&&requestedAdminSender&&!isAdmin)return json({error:"Only an authorized administrator can send from admin@dvrealty.ca."},403);
+ const expectedLawyerFrom=requestedAdminSender?"admin@dvrealty.ca":String(userData.user.email||"").trim();
  if(lawyerPackage&&!validEmail(expectedLawyerFrom))return json({error:"Your signed-in account does not have a valid sender email address."},400);
- if(lawyerPackage&&String(body.fromEmail||"").toLowerCase()!==expectedLawyerFrom.toLowerCase())return json({error:"The sender address must match your signed-in account or the authorized brokerage admin address."},403);
- if(lawyerPackage&&String(body.senderMode||"").toLowerCase()==="admin"&&!isAdmin)return json({error:"Only an authorized administrator can send from admin@dvrealty.ca."},403);
  const {data:integration,error:integrationError}=await admin.from("dv_accounting_private_integrations").select("secret_payload").eq("integration_key","zoho_mail").maybeSingle();
  if(integrationError||!integration?.secret_payload?.refresh_token)return json({error:"Zoho Mail is not connected. Reconnect the mailbox first."},503);
  const p=integration.secret_payload,accountsServer=String(p.accounts_server||"https://accounts.zoho.com"),mailBase=String(p.mail_api_base||"https://mail.zoho.com"),configuredFrom=String(p.sender_email||"admin@dvrealty.ca");
