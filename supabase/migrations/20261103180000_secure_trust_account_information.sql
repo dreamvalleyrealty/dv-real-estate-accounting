@@ -47,46 +47,5 @@ create index if not exists dv_accounting_trust_info_email_log_expiry_idx
 create index if not exists dv_accounting_trust_info_email_log_sender_idx
  on public.dv_accounting_trust_info_email_log(sent_by,created_at desc);
 alter table public.dv_accounting_trust_info_email_log enable row level security;
-revoke all on public.dv_accounting_trust_info_email_log from anon;
-revoke all on public.dv_accounting_trust_info_email_log from authenticated;
-grant select on public.dv_accounting_trust_info_email_log to authenticated;
-drop policy if exists "Trust information history sender or admin" on public.dv_accounting_trust_info_email_log;
-create policy "Trust information history sender or admin"
- on public.dv_accounting_trust_info_email_log
- for select to authenticated
- using (
-   sent_by = auth.uid()
-   or public.dv_accounting_current_user_role() in ('SUPERADMIN','ADMIN')
- );
-create or replace function public.dv_accounting_store_trust_account_instruction(
- p_account_type text,
- p_institution text,
- p_transit_number text,
- p_account_number_ciphertext bytea,
- p_account_name text,
- p_bank_address text default null
-) returns void
-language plpgsql security definer set search_path=public
-as $$
-begin
- if public.dv_accounting_current_user_role() not in ('SUPERADMIN','ADMIN') then
-   raise exception 'Only an administrator can update trust banking instructions';
- end if;
- if p_account_type not in ('REAL_ESTATE_TRUST','COMMISSION_TRUST') then
-   raise exception 'Invalid trust account type';
- end if;
- if length(coalesce(p_institution,''))=0 or length(coalesce(p_transit_number,''))=0
-   or length(coalesce(p_account_name,''))=0 or p_account_number_ciphertext is null
-   or octet_length(p_account_number_ciphertext)=0 then
-   raise exception 'Complete all required banking fields';
- end if;
- insert into public.dv_accounting_trust_account_instructions(
-   account_type,institution,transit_number,account_number_ciphertext,account_name,bank_address,updated_at,updated_by
- ) values(p_account_type,p_institution,p_transit_number,p_account_number_ciphertext,p_account_name,p_bank_address,now(),auth.uid())
- on conflict(account_type) do update set
-   institution=excluded.institution,transit_number=excluded.transit_number,
-   account_number_ciphertext=excluded.account_number_ciphertext,account_name=excluded.account_name,
-   bank_address=excluded.bank_address,updated_at=now(),updated_by=auth.uid();
-end $$;
-revoke all on function public.dv_accounting_store_trust_account_instruction(text,text,text,bytea,text,text) from public,anon,authenticated;
-grant execute on function public.dv_accounting_store_trust_account_instruction(text,text,text,bytea,text,text) to service_role;
+revoke all on public.dv_accounting_trust_info_email_log from anon, authenticated;
+-- The audit history is returned only by a service-role Edge Function after role checks.
