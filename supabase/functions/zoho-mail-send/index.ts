@@ -40,7 +40,8 @@ Deno.serve(async(req:Request)=>{
   if(bytes.length<5||bytes[0]!==37||bytes[1]!==80||bytes[2]!==68||bytes[3]!==70||bytes.length>8*1024*1024)return json({error:"The attachment must be a valid PDF no larger than 8 MB."},400);
   files.push({name:attachmentName,bytes});
  }
- const role=String(userData.user.app_metadata?.role||userData.user.user_metadata?.role||"").toUpperCase();
+ const {data:profileRoleData}=await admin.from("dv_accounting_user_profiles").select("role").eq("user_id",userData.user.id).maybeSingle();
+ const role=String(userData.user.app_metadata?.role||userData.user.app_metadata?.user_role||userData.user.user_metadata?.role||userData.user.user_metadata?.user_role||profileRoleData?.role||"").toUpperCase().replace(/[^A-Z]/g,"");
  const adminRoles=["ADMIN","SUPERADMIN","SUPER_ADMIN","BROKER","BROKER_OF_RECORD","OFFICE_ADMIN","TRADE_ADMIN"];
  const isAdmin=adminRoles.includes(role)||String(userData.user.email||"").toLowerCase()==="admin@dvrealty.ca";
  const from=lawyerPackage?(isAdmin?"admin@dvrealty.ca":String(userData.user.email||"").trim()):String(body.fromEmail||"admin@dvrealty.ca");
