@@ -190,9 +190,13 @@ Deno.serve(async (req: Request) => {
           updates.push({ account_type: type, institution, transit_number: transit, account_number_ciphertext: "\\x" + bytesToHex(cipher), account_name: accountName, bank_address: String(row.bank_address || "").trim() || null, updated_at: new Date().toISOString(), updated_by: actor.user.id });
         } else {
           const { data: existing, error: readError } = await admin.from("dv_accounting_trust_account_instructions")
-            .select("account_number_ciphertext").eq("account_type", type).maybeSingle();
+            .select("account_type").eq("account_type", type).maybeSingle();
           if (readError || !existing) return json({ error: "Enter the full account number the first time this trust account is configured." }, 400);
-          updates.push({ account_type: type, institution, transit_number: transit, account_name: accountName, bank_address: String(row.bank_address || "").trim() || null, updated_at: new Date().toISOString(), updated_by: actor.user.id });
+          // Update only non-secret fields. The encrypted account number remains untouched.
+          const { error: updateError } = await admin.from("dv_accounting_trust_account_instructions")
+            .update({ institution, transit_number: transit, account_name: accountName, bank_address: String(row.bank_address || "").trim() || null, updated_at: new Date().toISOString(), updated_by: actor.user.id })
+            .eq("account_type", type);
+          if (updateError) throw updateError;
         }
       }
       for (const update of updates) {
