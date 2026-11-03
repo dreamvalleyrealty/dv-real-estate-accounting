@@ -225,6 +225,15 @@ Deno.serve(async (req: Request) => {
       }
       return json({ ok: true, message: "Both trust account instructions were saved securely." });
     }
+    if (action === "get_history") {
+      const isAdmin = ["SUPERADMIN","ADMIN"].includes(actor.role);
+      let query = admin.from("dv_accounting_trust_info_email_log")
+        .select("id,recipient_name,recipient_email,account_types,status,sent_by,sent_by_email,created_at,sent_at,link_expires_at,verified_at,opened_at,error_message");
+      if (!isAdmin) query = query.eq("sent_by", actor.user.id);
+      const { data, error } = await query.order("created_at", { ascending: false }).limit(100);
+      if (error) throw error;
+      return json({ history: data || [] });
+    }
     if (action === "send_link") {
       const recipientName = String(body.recipientName || "").trim();
       const recipientEmail = String(body.recipientEmail || "").trim().toLowerCase();
