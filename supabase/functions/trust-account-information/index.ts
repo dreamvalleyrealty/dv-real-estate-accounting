@@ -124,22 +124,25 @@ Deno.serve(async (req: Request) => {
           await admin.from("dv_accounting_trust_info_email_log").update({ otp_attempts: Number(log.otp_attempts || 0) + 1 }).eq("id", log.id);
           return json({ error: "The code does not match. Check the email and try again." }, 401);
         }
-        await admin.from("dv_accounting_trust_info_email_log").update({ status: "VERIFIED", verified_at: new Date().toISOString() }).eq("id", log.id);
+        await admin.from("dv_accounting_trust_info_email_log").update({ status: "VERIFIED", token_verified: true, verified_at: new Date().toISOString() }).eq("id", log.id);
         return json({ ok: true, verified: true });
       }
       if (action === "request_otp") {
+        if (log.token_verified) return json({ error: "This secure link has already been verified." }, 409);
+        if (log.otp_sent_at && Date.now() - new Date(log.otp_sent_at).getTime() < 60_000) return json({ error: "Please wait one minute before requesting another code." }, 429);
         const otp = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
         const otpHtml = "<div style=\"font-family:Arial,sans-serif;max-width:620px;color:#172b4d\"><h2>Your verification code</h2><p>Hello " + htmlEscape(log.recipient_name) + ",</p><p>Your one-time code is:</p><p style=\"font-size:30px;font-weight:bold;letter-spacing:6px\">" + otp + "</p><p>This code expires in 15 minutes. Do not share it with anyone.</p></div>";
         const { error: updateOtpError } = await admin.from("dv_accounting_trust_info_email_log").update({
           otp_hash: await sha256(token + ":" + otp),
           otp_expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          otp_sent_at: new Date().toISOString(),
           otp_attempts: 0,
         }).eq("id", log.id);
         if (updateOtpError) throw updateOtpError;
         await sendZoho(admin, log.recipient_email, "Your Dream Valley Realty verification code", otpHtml);
         return json({ ok: true, message: "A verification code has been sent to the email address this link was issued to." });
       }
-      if (!log.verified_at) return json({ error: "Verify your email code before viewing the banking instructions." }, 403);
+      if (!log.token_verified) return json({ error: "Verify your email code before viewing the banking instructions." }, 403);
       if (new Date(log.link_expires_at).getTime() <= Date.now()) return json({ error: "This secure link has expired." }, 410);
       const { data: instructions, error: instructionError } = await admin.from("dv_accounting_trust_account_instructions")
         .select("account_type,institution,transit_number,account_number_ciphertext,account_name,bank_address")
