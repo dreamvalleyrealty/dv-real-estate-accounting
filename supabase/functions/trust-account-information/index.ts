@@ -113,7 +113,7 @@ Deno.serve(async (req: Request) => {
       if (!/^[a-f0-9]{64}$/i.test(token)) return json({ error: "This secure link is invalid or expired." }, 400);
       const tokenHash = await sha256(token);
       const { data: log, error } = await admin.from("dv_accounting_trust_info_email_log").select("*").eq("token_hash", tokenHash).maybeSingle();
-      if (error || !log || new Date(log.link_expires_at).getTime() <= Date.now() || ["REVOKED","EXPIRED","FAILED","PENDING"].includes(log.status)) return json({ error: "This secure link is invalid or expired." }, 410);
+      if (error || !log || new Date(log.link_expires_at).getTime() <= Date.now() || ["REVOKED","EXPIRED","FAILED"].includes(log.status)) return json({ error: "This secure link is invalid or expired." }, 410);
       if (action === "verify_otp") {
         const otp = String(body.otp || "").trim();
         if (!log.recipient_email || log.recipient_email.length > 254) return json({ error: "This secure link is invalid or expired." }, 410);
@@ -217,13 +217,11 @@ Deno.serve(async (req: Request) => {
       if (configuredError) throw configuredError;
       if ((configured || []).length !== accountTypes.length) return json({ error: "The selected trust account information has not been configured by an administrator." }, 409);
       const token = randomHex(32), tokenHash = await sha256(token);
-      const otp = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
       const now = new Date(), expires = new Date(now.getTime() + 24 * 60 * 60 * 1000);
       const { data: created, error: createError } = await admin.from("dv_accounting_trust_info_email_log").insert({
         recipient_name: recipientName, recipient_email: recipientEmail, account_types: accountTypes,
         sent_by: actor.user.id, sent_by_email: actor.user.email || null,
-        status: "PENDING", token_hash: tokenHash, otp_hash: await sha256(token + ":" + otp),
-        otp_hash: null, otp_expires_at: null,
+        status: "PENDING", token_hash: tokenHash, otp_hash: null, otp_expires_at: null,
         link_expires_at: expires.toISOString(), otp_attempts: 0,
       }).select("id").single();
       if (createError) throw createError;
