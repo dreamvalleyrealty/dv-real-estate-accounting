@@ -251,19 +251,20 @@ Deno.serve(async (req: Request) => {
           const cipher = await encrypt(accountNumber, encryptionSecret);
           updates.push({ account_type: type, institution, institution_number: institutionNumber, transit_number: transit, account_number_ciphertext: "\\x" + bytesToHex(cipher), account_name: accountName, bank_address: String(row.bank_address || "").trim() || null, updated_at: new Date().toISOString(), updated_by: actor.user.id });
         } else {
-          const { data: existing, error: readError } = await admin.from("dv_accounting_trust_account_instructions")
-            .select("account_type").eq("account_type", type).maybeSingle();
-          if (readError || !existing) return json({ error: "Enter the full account number the first time this trust account is configured." }, 400);
-          // Queue metadata-only edits until both account records have passed validation.
           metadataUpdates.push({ account_type: type, institution, institution_number: institutionNumber, transit_number: transit, account_name: accountName, bank_address: String(row.bank_address || "").trim() || null, updated_at: new Date().toISOString(), updated_by: actor.user.id });
         }
       }
       if (seenTypes.length !== 2) return json({ error: "Both trust account records must be provided." }, 400);
+      if (metadataUpdates.length) {
+        const typesNeedingExisting = metadataUpdates.map(item => item.account_type);
+        const { data: existingRows, error: existingError } = await admin.from("dv_accounting_trust_account_instructions")
+          .select("account_type").in("account_type", typesNeedingExisting);
+        if (existingError) throw existingError;
+        const existingSet = new Set((existingRows || []).map((item: any) => item.account_type));
+        if (typesNeedingExisting.some(type => !existingSet.has(type))) return json({ error: "Enter the full account number the first time each trust account is configured." }, 400);
+      }
       for (const update of metadataUpdates) {
         const { account_type, ...fields } = update;
-        const { data: existing, error: readError } = await admin.from("dv_accounting_trust_account_instructions")
-          .select("account_type").eq("account_type", account_type).maybeSingle();
-        if (readError || !existing) return json({ error: "Enter the full account number the first time this trust account is configured." }, 400);
         const { error } = await admin.from("dv_accounting_trust_account_instructions").update(fields).eq("account_type", account_type);
         if (error) throw error;
       }
