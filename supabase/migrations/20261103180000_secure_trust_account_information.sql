@@ -35,6 +35,7 @@ create table if not exists public.dv_accounting_trust_info_email_log (
   link_expires_at timestamptz not null,
   verified_at timestamptz,
   opened_at timestamptz,
+  token_verified boolean not null default false,
   created_at timestamptz not null default now(),
   sent_at timestamptz,
   error_message text,
