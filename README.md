@@ -24,7 +24,7 @@ Deploy `supabase/functions/trust-account-information` to the same Supabase proje
 
 Set these Edge Function secrets:
 
-- `TRUST_ACCOUNT_ENCRYPTION_KEY`: a unique, randomly generated high-entropy secret. Keep it outside the repository and do not reuse a Supabase key.
+- `TRUST_ACCOUNT_ENCRYPTION_KEY`: a unique, randomly generated high-entropy secret of at least 32 characters. Keep it outside the repository and do not reuse a Supabase key.
 - `TRUST_ACCOUNT_PUBLIC_URL`: the public Back Office origin, for example `https://bo.dvrealty.ca`. Do not include a path.
 - `ZOHO_CLIENT_ID` and `ZOHO_CLIENT_SECRET`: the same Zoho OAuth app credentials used by `zoho-mail-send`.
 
