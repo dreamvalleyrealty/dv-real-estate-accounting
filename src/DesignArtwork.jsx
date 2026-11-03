@@ -44,10 +44,10 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
       ctx.fillStyle=gold;ctx.fillRect(0,220,590,90);text(title,35,284,65,"#fff","900");
       ctx.fillStyle=navy;ctx.fillRect(0,310,590,36);text(representation,35,336,20,"#fff","bold");
       ctx.fillStyle="#fff";ctx.fillRect(0,346,590,184);
-      const sw=590/4;specs.forEach((v,i)=>{text(v[0],i*sw+sw/2,393,34,gold,"bold","center");text(v[1],i*sw+sw/2,419,16,navy,"bold","center");if(i){ctx.strokeStyle="#d0d5dd";ctx.beginPath();ctx.moveTo(i*sw,365);ctx.lineTo(i*sw,430);ctx.stroke()}});
-      text(addr,35,459,22,gold,"bold");text(cityLine,35,485,18,navy,"bold");text("MLS # "+(selected?.mls_number||"—"),35,510,16,navy);
+      const sw=590/4;specs.forEach((v,i)=>{text(v[0],i*sw+sw/2,375,34,gold,"bold","center");text(v[1],i*sw+sw/2,400,16,navy,"bold","center");if(i){ctx.strokeStyle="#d0d5dd";ctx.beginPath();ctx.moveTo(i*sw,365);ctx.lineTo(i*sw,430);ctx.stroke()}});
+      text(addr,35,435,21,gold,"bold");text(cityLine,35,460,17,navy,"bold");text("MLS # "+(selected?.mls_number||"—"),35,485,15,navy);
       photo(pics[1],590,220,305,155);photo(pics[2],897,220,303,155);photo(pics[3],590,377,305,153);photo(pics[4],897,377,303,153);
-      ctx.fillStyle=gold;ctx.fillRect(0,530,590,100);text(status==="Leased"?"LEASED FOR":status==="Sold"?"SOLD FOR":"LISTED AT",35,558,19,"#fff","bold");text(price,35,611,38,"#fff","bold");
+      ctx.fillStyle=gold;ctx.fillRect(0,495,590,35);text(status==="Leased"?"LEASED FOR":status==="Sold"?"SOLD FOR":"LISTED AT",35,511,13,"#fff","bold");text(price,155,524,20,"#fff","bold");
     }else if(portrait||story){
       // Tall formats use a vertical reading order rather than stretching the square artwork.
       const tallH=1920===h?1920:1350,head=story?235:190,ribbon=story?130:105,hero=story?390:260,details=story?300:235,gallery=story?620:390,foot=story?245:170;
@@ -71,7 +71,7 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
       const footerY=875,brandBottom=318,gridTop=420,gridLeft=508;propertyFooterY=footerY;
       photo(pics[0],350,0,730,420);
       ctx.fillStyle=navy;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(325,0);ctx.lineTo(458,brandBottom);ctx.lineTo(0,brandBottom);ctx.closePath();ctx.fill();
-      logo(74,55,118);text("DREAM VALLEY",172,226,40,"#fff","bold");text("REALTY INC.",172,260,25,gold);text("Brokerage",172,292,20,"#fff");
+      logo(74,55,118);text("DREAM VALLEY",220,226,36,"#fff","bold","center");text("REALTY INC.",220,260,23,gold,"normal","center");text("Brokerage",220,292,19,"#fff","normal","center");
       ctx.fillStyle=gold;ctx.beginPath();ctx.moveTo(0,brandBottom);ctx.lineTo(550,brandBottom);ctx.lineTo(505,460);ctx.lineTo(0,460);ctx.closePath();ctx.fill();text(title,38,420,82,"#fff","900");
       ctx.fillStyle=navy;ctx.fillRect(0,460,508,56);text(representation,42,500,26,"#fff","bold");
       ctx.fillStyle="#fff";ctx.fillRect(0,516,508,359);
