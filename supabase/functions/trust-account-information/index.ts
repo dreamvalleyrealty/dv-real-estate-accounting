@@ -98,7 +98,7 @@ async function requireActor(req: Request, admin: any, supabaseUrl: string, anonK
     if (!agentError && agent && agent.active !== false && String(agent.user_id || "") === user.id && String(agent.email || "").toLowerCase() === email) linkedAgent = true;
   }
   const role = String(profile?.role || metadataRole || (linkedAgent ? "AGENT" : "STAFF")).toUpperCase();
-  if (!profile && linkedAgent) return { user, role: "AGENT" };
+  if (linkedAgent && !["SUPERADMIN","ADMIN"].includes(role)) return { user, role: "AGENT" };
   return { user, role };
 }
 Deno.serve(async (req: Request) => {
