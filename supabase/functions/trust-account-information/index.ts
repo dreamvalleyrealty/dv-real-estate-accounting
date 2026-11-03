@@ -91,8 +91,9 @@ async function requireActor(req: Request, admin: any, supabaseUrl: string, anonK
 
   const metadataRole = String(user.app_metadata?.role || user.app_metadata?.user_role || "").toUpperCase();
   const profileRole = String(profile?.role || "").toUpperCase();
-  const roleCandidate = profileRole || metadataRole || "STAFF";
-  const isAdmin = ["SUPERADMIN","ADMIN"].includes(roleCandidate);
+  const roleCandidate = (profileRole || metadataRole || "STAFF").replace(/[^A-Z]/g, "");
+  const isSuperAdmin = roleCandidate === "SUPERADMIN" || roleCandidate === "SUPERADMINISTRATOR";
+  const isAdmin = isSuperAdmin || ["ADMIN","ADMINISTRATOR","BROKER","BROKEROFRECORD","OFFICEADMIN","TRADEADMIN"].includes(roleCandidate);
   const email = String(user.email || "").trim().toLowerCase();
   let linkedAgent: any = null;
   const metadataAgentId = String(user.app_metadata?.agent_id || user.user_metadata?.agent_id || "").trim();
@@ -119,7 +120,7 @@ async function requireActor(req: Request, admin: any, supabaseUrl: string, anonK
     && (!linkedAgent.user_id || String(linkedAgent.user_id) === user.id)
     && String(linkedAgent.email || "").trim().toLowerCase() === email;
   // An AGENT role alone is insufficient; it must be backed by the matching agent record.
-  const role = isAdmin ? roleCandidate : isLinkedAgent ? "AGENT" : roleCandidate === "AGENT" ? "STAFF" : roleCandidate;
+  const role = isAdmin ? (isSuperAdmin ? "SUPERADMIN" : "ADMIN") : isLinkedAgent ? "AGENT" : roleCandidate === "AGENT" ? "STAFF" : roleCandidate;
   return { user, role };
 }
 Deno.serve(async (req: Request) => {
