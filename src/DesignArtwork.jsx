@@ -27,32 +27,46 @@ export default function DesignArtwork({user,agentId,adminMode=false}){
     ctx.fillStyle=navy;ctx.fillRect(0,0,w,h);ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.075)+"px Arial";ctx.textAlign="center";ctx.fillText(occasion.toUpperCase(),w/2,h*.32);
     ctx.fillStyle="#fff";ctx.font=Math.round(w*.045)+"px Arial";wrap(ctx,greeting,w*.12,h*.43,w*.76,w*.065,5);
    }else{
-    const headerH=h*.265,photoH=h*.39,footerH=h*.205,detailsH=h-headerH-photoH-footerH;
-    const leftW=w*.47,rightW=w-leftW;
-    ctx.fillStyle=navy;ctx.fillRect(0,0,leftW,headerH);
-    ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.12)+"px Georgia";ctx.textAlign="center";ctx.fillText("DV",leftW*.5,headerH*.48);
-    ctx.fillStyle="#fff";ctx.font="bold "+Math.round(w*.043)+"px Arial";ctx.fillText("DREAM VALLEY",leftW*.5,headerH*.66);
-    ctx.fillStyle=gold;ctx.font=Math.round(w*.025)+"px Arial";ctx.fillText("REALTY INC.",leftW*.5,headerH*.76);
-    ctx.fillStyle="#fff";ctx.font=Math.round(w*.022)+"px Arial";ctx.fillText("Brokerage",leftW*.5,headerH*.86);
-    if(pics[0])crop(pics[0],leftW,0,rightW,headerH);else{ctx.fillStyle="#e8ebef";ctx.fillRect(leftW,0,rightW,headerH);ctx.fillStyle=navy;ctx.font="bold "+Math.round(w*.025)+"px Arial";ctx.textAlign="center";ctx.fillText("MAIN PROPERTY PHOTO",leftW+rightW/2,headerH/2)}
-    const ribbonY=headerH*.76,ribbonH=h*.105;ctx.fillStyle=isMinimal?navy:gold;ctx.fillRect(0,ribbonY,w*.52,ribbonH);
-    ctx.fillStyle="#fff";ctx.textAlign="left";ctx.font="900 "+Math.round(w*.083)+"px Arial";ctx.fillText(status==="For Sale"?"JUST LISTED":status==="Open House"?"OPEN HOUSE":status==="Leased"?"JUST LEASED":status==="Sold"?"JUST SOLD":status.toUpperCase(),w*.035,ribbonY+ribbonH*.72);
+    // Rebuild the property layout to follow the approved Dream Valley reference.
+    const footerY=h*.81,brandBottom=h*.295,gridTop=h*.39,gridBottom=footerY,footerH=h-footerY;
+    const brandEdgeTop=w*.30,brandEdgeBottom=w*.425,photoLeft=w*.30;
+    // Main hero image fills the upper-right area.
+    if(pics[0])crop(pics[0],photoLeft,0,w-photoLeft,gridTop);else{ctx.fillStyle="#e8ebef";ctx.fillRect(photoLeft,0,w-photoLeft,gridTop)}
+    // Navy brand panel with the angled right edge from the reference.
+    ctx.fillStyle=navy;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(brandEdgeTop,0);ctx.lineTo(brandEdgeBottom,brandBottom);ctx.lineTo(0,brandBottom);ctx.closePath();ctx.fill();
+    // DV house mark and wordmark, positioned inside the navy panel.
+    const cx=w*.158, logoTop=h*.055, logoW=w*.108, logoH=h*.13;
+    ctx.strokeStyle=gold;ctx.lineWidth=Math.max(3,w*.004);ctx.beginPath();ctx.moveTo(cx-logoW*.52,logoTop+logoH*.34);ctx.lineTo(cx,logoTop);ctx.lineTo(cx+logoW*.52,logoTop+logoH*.34);ctx.lineTo(cx+logoW*.52,logoTop+logoH*.91);ctx.lineTo(cx-logoW*.52,logoTop+logoH*.91);ctx.closePath();ctx.stroke();
+    ctx.fillStyle=gold;ctx.textAlign="center";ctx.font="bold "+Math.round(w*.105)+"px Georgia";ctx.fillText("DV",cx,logoTop+logoH*.82);
+    ctx.fillStyle="#fff";ctx.font="bold "+Math.round(w*.043)+"px Arial";ctx.fillText("DREAM VALLEY",cx,h*.212);
+    ctx.fillStyle=gold;ctx.font=Math.round(w*.025)+"px Arial";ctx.fillText("REALTY INC.",cx,h*.244);
+    ctx.fillStyle="#fff";ctx.font=Math.round(w*.021)+"px Arial";ctx.fillText("Brokerage",cx,h*.271);
+    // Gold listing banner with angled right edge.
+    const ribbonY=h*.295,ribbonH=h*.132;
+    ctx.fillStyle=isMinimal?navy:gold;ctx.beginPath();ctx.moveTo(0,ribbonY);ctx.lineTo(w*.51,ribbonY);ctx.lineTo(w*.465,ribbonY+ribbonH);ctx.lineTo(0,ribbonY+ribbonH);ctx.closePath();ctx.fill();
+    ctx.fillStyle="#fff";ctx.textAlign="left";ctx.font="900 "+Math.round(w*.083)+"px Arial";
+    ctx.fillText(status==="For Sale"?"JUST LISTED":status==="Open House"?"OPEN HOUSE":status==="Leased"?"JUST LEASED":status==="Sold"?"JUST SOLD":status.toUpperCase(),w*.035,ribbonY+ribbonH*.73);
+    // Navy representation strip immediately below the banner.
     ctx.fillStyle=isMinimal?gold:navy;ctx.fillRect(0,ribbonY+ribbonH,w*.48,h*.052);
     ctx.fillStyle="#fff";ctx.font="bold "+Math.round(w*.027)+"px Arial";ctx.fillText(representation,w*.04,ribbonY+ribbonH+h*.036);
-    const gridY=headerH+ribbonH+h*.052,gridH=photoH-ribbonH-h*.052,cellW=rightW/2,cellH=gridH/2;
-    for(let i=1;i<5;i++){const gx=leftW+((i-1)%2)*cellW,gy=gridY+Math.floor((i-1)/2)*cellH;if(pics[i])crop(pics[i],gx,gy,cellW-3,cellH-3);else{ctx.fillStyle="#e8ebef";ctx.fillRect(gx,gy,cellW-3,cellH-3);ctx.fillStyle="#667085";ctx.font="bold "+Math.round(w*.018)+"px Arial";ctx.textAlign="center";ctx.fillText("PHOTO "+(i+1),gx+cellW/2,gy+cellH/2)}}
-    ctx.fillStyle="#fff";ctx.fillRect(0,headerH+ribbonH+h*.052,leftW,detailsH);
-    const specs=[ [beds||"—","BEDS"],[baths||"—","BATHS"],[parking||"—","PARKING"],[sqft||"—","SQ FT"] ];
-    const sy=headerH+ribbonH+h*.09,sw=leftW/4;
-    specs.forEach((v,i)=>{const x=i*sw+sw/2;ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.047)+"px Arial";ctx.textAlign="center";ctx.fillText(v[0],x,sy);ctx.fillStyle=navy;ctx.font="bold "+Math.round(w*.019)+"px Arial";ctx.fillText(v[1],x,sy+h*.028);if(i) {ctx.strokeStyle="#d0d5dd";ctx.beginPath();ctx.moveTo(i*sw,sy-h*.035);ctx.lineTo(i*sw,sy+h*.045);ctx.stroke()}});
-    const infoY=sy+h*.085;ctx.textAlign="left";ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.031)+"px Arial";wrap(ctx,address||"PROPERTY ADDRESS",w*.035,infoY,leftW-w*.07,h*.038,2);
+    // Four supporting photos in a 2 x 2 grid on the right.
+    const cellW=(w-photoLeft)/2,cellH=(gridBottom-gridTop)/2;
+    for(let i=1;i<5;i++){const gx=photoLeft+((i-1)%2)*cellW,gy=gridTop+Math.floor((i-1)/2)*cellH;if(pics[i])crop(pics[i],gx,gy,cellW-3,cellH-3);else{ctx.fillStyle="#e8ebef";ctx.fillRect(gx,gy,cellW-3,cellH-3)}}
+    // Property facts and address stay in the left information column.
+    ctx.fillStyle="#fff";ctx.fillRect(0,ribbonY+ribbonH+h*.052,w*.47,footerY-(ribbonY+ribbonH+h*.052));
+    const specs=[[beds||"—","BEDS"],[baths||"—","BATHS"],[parking||"—","PARKING"],[sqft||"—","SQ FT"]];
+    const sy=h*.548,sw=w*.47/4;
+    specs.forEach((v,i)=>{const x=i*sw+sw/2;ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.047)+"px Arial";ctx.textAlign="center";ctx.fillText(v[0],x,sy);ctx.fillStyle=navy;ctx.font="bold "+Math.round(w*.019)+"px Arial";ctx.fillText(v[1],x,sy+h*.029);if(i){ctx.strokeStyle="#d0d5dd";ctx.beginPath();ctx.moveTo(i*sw,sy-h*.035);ctx.lineTo(i*sw,sy+h*.045);ctx.stroke()}});
+    const infoY=h*.62;ctx.textAlign="left";ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.031)+"px Arial";wrap(ctx,address||"PROPERTY ADDRESS",w*.035,infoY,w*.40,h*.038,2);
     ctx.fillStyle=navy;ctx.font="bold "+Math.round(w*.027)+"px Arial";ctx.fillText([selected?.city,selected?.province,selected?.postal_code].filter(Boolean).join(", "),w*.035,infoY+h*.071);
     ctx.font=Math.round(w*.024)+"px Arial";ctx.fillText("MLS # "+(selected?.mls_number||"—"),w*.035,infoY+h*.112);
-    const price=customPrice||(selected?.listing_price?money(selected.listing_price):"");ctx.fillStyle=isMinimal?navy:gold;ctx.fillRect(0,h-footerH-h*.035,leftW,h*.075);
-    ctx.fillStyle="#fff";ctx.font="bold "+Math.round(w*.026)+"px Arial";ctx.fillText(status==="Leased"?"LEASED FOR":status==="Sold"?"SOLD FOR":"LISTED AT",w*.035,h-footerH-h*.008);
-    ctx.font="bold "+Math.round(w*.045)+"px Arial";ctx.fillText(price||"Contact for price",w*.035,h-footerH+h*.027);
+    const price=customPrice||(selected?.listing_price?money(selected.listing_price):"");
+    ctx.fillStyle=isMinimal?navy:gold;ctx.fillRect(0,h*.73,w*.47,h*.08);
+    ctx.fillStyle="#fff";ctx.font="bold "+Math.round(w*.026)+"px Arial";ctx.fillText(status==="Leased"?"LEASED FOR":status==="Sold"?"SOLD FOR":"LISTED AT",w*.035,h*.758);
+    ctx.font="bold "+Math.round(w*.045)+"px Arial";ctx.fillText(price||"Contact for price",w*.035,h*.795);
+
    }
-   const footerY=h-(isProperty?h*.205:h*.17);ctx.fillStyle=navy;ctx.fillRect(0,footerY,w,h-footerY);
+   const footerY=isProperty?h*.81:h*.83;ctx.fillStyle=navy;ctx.fillRect(0,footerY,w,h-footerY);
    const avatarSize=(h-footerY)*.78,ax=pad,ay=footerY+(h-footerY-avatarSize)/2;
    if(avatar){ctx.save();ctx.beginPath();ctx.arc(ax+avatarSize/2,ay+avatarSize/2,avatarSize/2,0,Math.PI*2);ctx.clip();ctx.drawImage(avatar,ax,ay,avatarSize,avatarSize);ctx.restore();ctx.strokeStyle=gold;ctx.lineWidth=Math.max(3,scale*6);ctx.beginPath();ctx.arc(ax+avatarSize/2,ay+avatarSize/2,avatarSize/2,0,Math.PI*2);ctx.stroke()}
    const tx=ax+avatarSize+pad*.55;ctx.textAlign="left";ctx.fillStyle=gold;ctx.font="bold "+Math.round(w*.036)+"px Arial";ctx.fillText([agent?.first_name,agent?.last_name].filter(Boolean).join(" ")||"YOUR NAME",tx,ay+avatarSize*.35);
