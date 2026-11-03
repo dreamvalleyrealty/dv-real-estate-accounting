@@ -41,3 +41,13 @@ Configure both trust-account records in Banking & Reconciliation > Trust Account
 The send endpoint checks the authenticated user and role independently of the browser UI. Only `SUPERADMIN` and `ADMIN` can manage both account records and send either or both types. An agent is identified through the Back Office's linked agent-user record (matching user ID and email) and can send only `REAL_ESTATE_TRUST`. Staff, manager, accountant, and viewer roles cannot send these instructions.
 
 Before production use, verify the deployed Edge Function secrets, apply the SQL migration, and test with one administrator account, one agent account, and a recipient mailbox. Confirm that an agent request for `COMMISSION_TRUST` is rejected by the Edge Function and that no authenticated client can select from the encrypted instructions table.
+
+### Pre-release security checks
+
+- Sign in as an administrator and confirm both trust account records can be configured and either or both account types can be shared.
+- Sign in as a linked agent and confirm the Agent Portal shows only the Real Estate Trust sharing page.
+- Invoke `send_link` as an agent with `COMMISSION_TRUST` in `accountTypes`; the function must return HTTP 403.
+- Attempt a direct authenticated read of `dv_accounting_trust_account_instructions`; it must be denied.
+- Open a valid recipient link, request the OTP, and confirm the code arrives at the target email address.
+- Confirm an incorrect code is rejected, the code expires after 15 minutes, the link expires after 24 hours, and the same link cannot reveal instructions a second time.
+- Confirm the audit history records sender, recipient, shared account type(s), send status, verification time and first-view time.
