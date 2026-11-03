@@ -89,7 +89,16 @@ async function requireActor(req: Request, admin: any, supabaseUrl: string, anonK
     .select("role,active").eq("user_id", user.id).maybeSingle();
   if (profileError || profile?.active === false) throw new Error("Your active user role could not be verified.");
   const metadataRole = String(user.app_metadata?.role || user.app_metadata?.user_role || "").toUpperCase();
-  const role = String(profile?.role || metadataRole || "STAFF").toUpperCase();
+  const email = String(user.email || "").toLowerCase();
+  const linkedAgentId = String(user.app_metadata?.agent_id || user.user_metadata?.agent_id || "");
+  let linkedAgent = false;
+  if (linkedAgentId) {
+    const { data: agent, error: agentError } = await admin.from("dv_accounting_agents")
+      .select("id,user_id,email,active").eq("id", linkedAgentId).maybeSingle();
+    if (!agentError && agent && agent.active !== false && String(agent.user_id || "") === user.id && String(agent.email || "").toLowerCase() === email) linkedAgent = true;
+  }
+  const role = String(profile?.role || metadataRole || (linkedAgent ? "AGENT" : "STAFF")).toUpperCase();
+  if (!profile && linkedAgent) return { user, role: "AGENT" };
   return { user, role };
 }
 Deno.serve(async (req: Request) => {
