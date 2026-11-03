@@ -176,6 +176,7 @@ Deno.serve(async (req: Request) => {
       if (!isAdmin) return json({ error: "Only an administrator can update trust banking instructions." }, 403);
       const accounts = body.accounts || {};
       const updates = [];
+      const seenTypes = [];
       for (const [key, type] of [["real_estate_trust","REAL_ESTATE_TRUST"],["commission_trust","COMMISSION_TRUST"]] as const) {
         const row = accounts[key] || {};
         const institution = String(row.institution || "").trim();
@@ -183,6 +184,7 @@ Deno.serve(async (req: Request) => {
         const accountName = String(row.account_name || "").trim();
         const accountNumber = String(row.account_number || "").trim();
         if (!institution || !transit || !accountName) return json({ error: "Complete the institution, transit number, and account name for both trust accounts." }, 400);
+        seenTypes.push(type);
         if (!/^\d{5}$/.test(transit)) return json({ error: "Enter a five-digit transit number." }, 400);
         if (accountNumber) {
           if (!/^\d{5,20}$/.test(accountNumber)) return json({ error: "Enter an account number containing 5–20 digits." }, 400);
@@ -199,6 +201,7 @@ Deno.serve(async (req: Request) => {
           if (updateError) throw updateError;
         }
       }
+      if (seenTypes.length !== 2) return json({ error: "Both trust account records must be provided." }, 400);
       for (const update of updates) {
         const { error } = await admin.from("dv_accounting_trust_account_instructions").upsert(update, { onConflict: "account_type" });
         if (error) throw error;
