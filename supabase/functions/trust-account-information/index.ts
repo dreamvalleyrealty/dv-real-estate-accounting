@@ -182,7 +182,7 @@ Deno.serve(async (req: Request) => {
       if (new Date(log.link_expires_at).getTime() <= Date.now()) return json({ error: "This secure link has expired." }, 410);
       if (log.opened_at) return json({ error: "These banking instructions have already been viewed. Request a new secure link if you need access again." }, 410);
       const { data: instructions, error: instructionError } = await admin.from("dv_accounting_trust_account_instructions")
-        .select("account_type,institution,transit_number,account_number_ciphertext,account_name,bank_address")
+        .select("account_type,institution,institution_number,transit_number,account_number_ciphertext,account_name,bank_address")
         .in("account_type", log.account_types);
       if (instructionError || !instructions?.length) return json({ error: "Banking instructions are not available." }, 503);
       const result = [];
@@ -204,7 +204,7 @@ Deno.serve(async (req: Request) => {
         } catch {
           return json({ error: "Banking instructions could not be decrypted." }, 500);
         }
-        result.push({ account_type: item.account_type, institution: item.institution, transit_number: item.transit_number, account_number: accountNumber, account_name: item.account_name, bank_address: item.bank_address });
+        result.push({ account_type: item.account_type, institution: item.institution, institution_number: item.institution_number, transit_number: item.transit_number, account_number: accountNumber, account_name: item.account_name, bank_address: item.bank_address });
       }
       // Claim the one-time view atomically so two concurrent requests cannot both release the details.
       const { data: claimed, error: claimError } = await admin.from("dv_accounting_trust_info_email_log")
@@ -219,12 +219,12 @@ Deno.serve(async (req: Request) => {
     if (action === "get_settings") {
       if (!isAdmin) return json({ error: "Only an administrator can view the saved banking instructions." }, 403);
       const { data, error } = await admin.from("dv_accounting_trust_account_instructions")
-        .select("account_type,institution,transit_number,account_name,bank_address,updated_at");
+        .select("account_type,institution,institution_number,transit_number,account_name,bank_address,updated_at");
       if (error) throw error;
       // Return metadata only. The full account number is never sent back to the browser.
       const accounts: any = {};
       for (const row of data || []) accounts[row.account_type === "REAL_ESTATE_TRUST" ? "real_estate_trust" : "commission_trust"] = {
-        institution: row.institution, transit_number: row.transit_number, account_name: row.account_name,
+        institution: row.institution, institution_number: row.institution_number, transit_number: row.transit_number, account_name: row.account_name,
         bank_address: row.bank_address, account_number: "",
       };
       return json({ accounts });
@@ -237,23 +237,25 @@ Deno.serve(async (req: Request) => {
       for (const [key, type] of [["real_estate_trust","REAL_ESTATE_TRUST"],["commission_trust","COMMISSION_TRUST"]] as const) {
         const row = accounts[key] || {};
         const institution = String(row.institution || "").trim();
+        const institutionNumber = String(row.institution_number || "").trim();
         const transit = String(row.transit_number || "").trim();
         const accountName = String(row.account_name || "").trim();
         const accountNumber = String(row.account_number || "").trim();
-        if (!institution || !transit || !accountName) return json({ error: "Complete the institution, transit number, and account name for both trust accounts." }, 400);
+        if (!institution || !institutionNumber || !transit || !accountName) return json({ error: "Complete the financial institution, institution number, transit number, and account name for both trust accounts." }, 400);
         seenTypes.push(type);
+        if (!/^\d{3}$/.test(institutionNumber)) return json({ error: "Enter the three-digit Canadian institution number." }, 400);
         if (!/^\d{5}$/.test(transit)) return json({ error: "Enter a five-digit transit number." }, 400);
         if (accountNumber) {
           if (!/^\d{5,20}$/.test(accountNumber)) return json({ error: "Enter an account number containing 5–20 digits." }, 400);
           const cipher = await encrypt(accountNumber, encryptionSecret);
-          updates.push({ account_type: type, institution, transit_number: transit, account_number_ciphertext: "\\x" + bytesToHex(cipher), account_name: accountName, bank_address: String(row.bank_address || "").trim() || null, updated_at: new Date().toISOString(), updated_by: actor.user.id });
+          updates.push({ account_type: type, institution, institution_number: institutionNumber, transit_number: transit, account_number_ciphertext: "\\x" + bytesToHex(cipher), account_name: accountName, bank_address: String(row.bank_address || "").trim() || null, updated_at: new Date().toISOString(), updated_by: actor.user.id });
         } else {
           const { data: existing, error: readError } = await admin.from("dv_accounting_trust_account_instructions")
             .select("account_type").eq("account_type", type).maybeSingle();
           if (readError || !existing) return json({ error: "Enter the full account number the first time this trust account is configured." }, 400);
           // Update only non-secret fields. The encrypted account number remains untouched.
           const { error: updateError } = await admin.from("dv_accounting_trust_account_instructions")
-            .update({ institution, transit_number: transit, account_name: accountName, bank_address: String(row.bank_address || "").trim() || null, updated_at: new Date().toISOString(), updated_by: actor.user.id })
+            .update({ institution, institution_number: institutionNumber, transit_number: transit, account_name: accountName, bank_address: String(row.bank_address || "").trim() || null, updated_at: new Date().toISOString(), updated_by: actor.user.id })
             .eq("account_type", type);
           if (updateError) throw updateError;
         }
