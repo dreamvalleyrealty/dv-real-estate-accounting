@@ -227,6 +227,8 @@ Deno.serve(async (req: Request) => {
     }
     if (action === "get_history") {
       const isAdmin = ["SUPERADMIN","ADMIN"].includes(actor.role);
+      const isAgent = actor.role === "AGENT";
+      if (!isAdmin && !isAgent) return json({ error: "You do not have access to trust information sharing history." }, 403);
       let query = admin.from("dv_accounting_trust_info_email_log")
         .select("id,recipient_name,recipient_email,account_types,status,sent_by,sent_by_email,created_at,sent_at,link_expires_at,verified_at,opened_at,error_message");
       if (!isAdmin) query = query.eq("sent_by", actor.user.id);
