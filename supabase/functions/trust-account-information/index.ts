@@ -186,7 +186,7 @@ Deno.serve(async (req: Request) => {
         .select("account_type,institution,institution_number,transit_number,account_number_ciphertext,account_name,bank_address")
         .in("account_type", log.account_types);
       if (instructionError || !instructions?.length) return json({ error: "Banking instructions are not available." }, 503);
-      const result = [];
+      const result: any[] = [];
       for (const item of instructions) {
         let encrypted: Uint8Array;
         let accountNumber: string;
@@ -233,9 +233,9 @@ Deno.serve(async (req: Request) => {
     if (action === "save_settings") {
       if (!isAdmin) return json({ error: "Only an administrator can update trust banking instructions." }, 403);
       const accounts = body.accounts || {};
-      const updates = [];
-      const metadataUpdates = [];
-      const seenTypes = [];
+      const updates: any[] = [];
+      const metadataUpdates: any[] = [];
+      const seenTypes: string[] = [];
       for (const [key, type] of [["real_estate_trust","REAL_ESTATE_TRUST"],["commission_trust","COMMISSION_TRUST"]] as const) {
         const row = accounts[key] || {};
         const institution = String(row.institution || "").trim();
