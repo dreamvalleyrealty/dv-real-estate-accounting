@@ -429,7 +429,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
   const side=lawyerShareSide==="seller"?"seller":"buyer";
   const recipient=String(lawyerShareTo||"").trim();
   const selectedDocs=docs.filter(d=>lawyerShareSelectedIds.includes(d.id));
-  if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(recipient)){setLawyerShareError("Enter the lawyer’s email address.");return}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)){setLawyerShareError("Enter the lawyer’s email address.");return}
   if(!selectedDocs.length){setLawyerShareError("Select at least one trade document to attach.");return}
   const address=String(form.property_address||form.address||selected.payload?.property_address||"").trim();
   const closeDate=String(form.close_date||selected.payload?.close_date||"").trim();
@@ -457,8 +457,8 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
     let binary="";for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
     const fallback=String(doc.storage_path||"document").split("/").pop()||"document";
     const rawName=String(doc.document_name||fallback).trim();
-    const extension=(fallback.match(/\\.[a-z0-9]{2,5}$/i)||[])[0]||"";
-    const name=(rawName.match(/\\.[a-z0-9]{2,5}$/i)?rawName:rawName.replace(/[^a-z0-9._ -]+/gi," ").trim()+extension).replace(/[^a-z0-9._ -]+/gi,"_").slice(0,150)||"Trade-Document"+extension;
+    const extension=(fallback.match(/\.[a-z0-9]{2,5}$/i)||[])[0]||"";
+    const name=(rawName.match(/\.[a-z0-9]{2,5}$/i)?rawName:rawName.replace(/[^a-z0-9._ -]+/gi," ").trim()+extension).replace(/[^a-z0-9._ -]+/gi,"_").slice(0,150)||"Trade-Document"+extension;
     attachments.push({name,base64:btoa(binary),mimeType:doc.mime_type||file.type||"application/octet-stream"});
    }
    const docsList=selectedDocs.map(d=>"<li>"+escapeHtml(d.document_name||d.document_type||"Trade document")+"</li>").join("");
