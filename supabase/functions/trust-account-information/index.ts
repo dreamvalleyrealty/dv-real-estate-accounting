@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { TRUST_ACCOUNT_PDF_BASE64 } from "./trust-account-information-pdf.ts";
+import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -80,10 +80,55 @@ async function sendZoho(admin: any, to: string, subject: string, body: string) {
   }
   return result?.data?.messageId || result?.data?.message_id || result?.messageId || null;
 }
+async function buildTrustAccountPdf() {
+  const document = await PDFDocument.create();
+  const page = document.addPage([612, 792]);
+  const regular = await document.embedFont(StandardFonts.Helvetica);
+  const bold = await document.embedFont(StandardFonts.HelveticaBold);
+  const navy = rgb(15 / 255, 33 / 255, 65 / 255);
+  const gold = rgb(158 / 255, 133 / 255, 86 / 255);
+  const center = (text: string, y: number, size = 10, font = regular, color = rgb(0, 0, 0)) => {
+    page.drawText(text, { x: (612 - font.widthOfTextAtSize(text, size)) / 2, y, size, font, color });
+  };
+  center("TRUST ACCOUNT INFORMATION", 744, 16, bold, navy);
+  center("(DEPOSIT ONLY)", 725, 10, bold, gold);
+  center("885 Progress Ave #109", 697);
+  center("Toronto. ON M1H 3G3", 682);
+  const rows: [string, string][] = [
+    ["Beneficiary Name:", "Dream Valley Realty Inc."],
+    ["Bank Name:", "TD Canada Trust"],
+    ["Bank Address:", "1900 Ellesmere Road, Scarborough, ON M1H 2V6"],
+    ["Account Number:", "5278905"],
+    ["Transit Number:", "17902"],
+    ["Branch Number:", "004"],
+    ["Swift Code:", "TDOMCATTTOR"],
+  ];
+  let y = 635;
+  for (const [label, value] of rows) {
+    page.drawText(label, { x: 92, y, size: 10.5, font: bold });
+    page.drawText(value, { x: 205, y, size: 10.5, font: regular });
+    y -= 25;
+  }
+  center("Once you have arranged the transfer please forward a receipt to", 428, 10, regular);
+  center("frontdesk@dvrealty.ca we can send you a receipt for the deposit.", 412, 10, bold);
+  page.drawText("NOTE: Please add an additional bank charge of $17.50 on top of the funds when doing wire", {
+    x: 72, y: 378, size: 9, font: regular, maxWidth: 468,
+  });
+  page.drawText("transfers, if this fee is not received the deposit will be adjusted accordingly.", {
+    x: 72, y: 363, size: 9, font: regular,
+  });
+  page.drawText("Wire transfer must come from the Canadian banks only", { x: 72, y: 340, size: 9, font: regular });
+  center("*WE DO NOT ACCEPT INTERNATIONAL WIRE TRANSFERS*", 300, 10, bold, rgb(0.65, 0.12, 0.12));
+  center("*WE DO NOT ACCEPT CASH DEPOSITS*", 282, 10, bold, rgb(0.65, 0.12, 0.12));
+  page.drawLine({ start: { x: 72, y: 95 }, end: { x: 540, y: 95 }, thickness: 0.6, color: gold });
+  center("885 Progress Ave. Suite #109, Toronto, ON M1H 3G3 | Tel 416-951-9929 | Fax 647-949-2959", 78, 7.5);
+  center("The Brokerage is Independently Owned and Operated", 62, 7.5);
+  return await document.save();
+}
 async function sendZohoWithPdfAttachment(admin: any, to: string, subject: string, body: string) {
   const z = await getZohoSecrets(admin);
   const fileName = "DREAM VALLEY - TRUST ACCOUNT INFORMATION.pdf";
-  const pdfBytes = Uint8Array.from(atob(TRUST_ACCOUNT_PDF_BASE64), (character) => character.charCodeAt(0));
+  const pdfBytes = await buildTrustAccountPdf();
   const uploadResponse = await fetch(
     z.mailBase + "/api/accounts/" + encodeURIComponent(z.accountId) + "/messages/attachments?fileName=" + encodeURIComponent(fileName) + "&isInline=false",
     { method: "POST", headers: { ...z.headers, "Content-Type": "application/pdf" }, body: pdfBytes },
@@ -108,7 +153,6 @@ async function sendZohoWithPdfAttachment(admin: any, to: string, subject: string
   }
   return result?.data?.messageId || result?.data?.message_id || result?.messageId || null;
 }
-
 async function requireActor(req: Request, admin: any, supabaseUrl: string, anonKey: string) {
   const authorization = req.headers.get("Authorization") || "";
   if (!authorization.startsWith("Bearer ")) throw new Error("Sign in before using trust account information.");
