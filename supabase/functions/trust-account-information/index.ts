@@ -361,10 +361,10 @@ Deno.serve(async (req: Request) => {
         const name=String(item?.name||"").replace(/[\\/]/g,"_").replace(/[^a-zA-Z0-9._ -]/g,"_").slice(0,160);
         const mime=String(item?.type||"").toLowerCase();
         const encoded=String(item?.data||"").replace(/^data:[^,]*;base64,/,"");
-        if(!name||!allowed.has(mime)||!encoded||encoded.length>14_000_000)return json({error:"Only PDF, JPG, PNG and WEBP files up to 10 MB each are accepted."},400);
+        if(!name||!allowed.has(mime)||!encoded||encoded.length>5_800_000)return json({error:"Only PDF, JPG, PNG and WEBP files up to 4 MB each are accepted."},400);
         const binary=atob(encoded),bytes=new Uint8Array(binary.length);
         for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
-        if(bytes.length>10*1024*1024)return json({error:"Each file must be 10 MB or smaller."},400);
+        if(bytes.length>4*1024*1024)return json({error:"Each file must be 4 MB or smaller."},400);
         const path="listing-deposit-receipts/"+log.listing_id+"/"+log.id+"/"+crypto.randomUUID()+"-"+name.replace(/\s+/g,"_");
         const {error:uploadError}=await admin.storage.from("dv-trade-documents").upload(path,bytes,{contentType:mime,upsert:false});
         if(uploadError)throw uploadError;
