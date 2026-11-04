@@ -607,7 +607,7 @@ Deno.serve(async (req: Request) => {
       if (supportingListError) throw supportingListError;
       const newestByOriginalName = new Map<string, any>();
       for (const stored of (storedFiles || []).filter((item: any) => item.name && item.id)) {
-        const originalName = String(stored.name).replace(/^\\d+-/, "");
+        const originalName = String(stored.name).replace(/^\d+-/, "");
         const previous = newestByOriginalName.get(originalName);
         if (!previous || String(stored.created_at || "") > String(previous.created_at || "")) {
           newestByOriginalName.set(originalName, stored);
@@ -626,7 +626,7 @@ Deno.serve(async (req: Request) => {
         const titlePage = document.addPage([612, 792]);
         titlePage.drawRectangle({ x: 0, y: 720, width: 612, height: 72, color: navy });
         titlePage.drawText("SUPPORTING DOCUMENT", { x: 72, y: 750, size: 16, font: bold, color: rgb(1,1,1) });
-        titlePage.drawText(String(supportingDoc.name || "Supporting document").replace(/^\\d+-/, "").slice(0, 90), { x: 72, y: 690, size: 11, font: bold, color: navy, maxWidth: 468 });
+        titlePage.drawText(String(supportingDoc.name || "Supporting document").replace(/^\d+-/, "").slice(0, 90), { x: 72, y: 690, size: 11, font: bold, color: navy, maxWidth: 468 });
         titlePage.drawText("Attached to deposit receipt " + receiptNumber, { x: 72, y: 670, size: 9, font: regular, color: rgb(0.4,0.44,0.5) });
         if (mime === "application/pdf" || /\.pdf$/i.test(String(supportingDoc.name || ""))) {
           const sourcePdf = await PDFDocument.load(supportingBytes);
