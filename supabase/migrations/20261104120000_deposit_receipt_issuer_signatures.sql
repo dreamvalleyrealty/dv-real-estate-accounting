@@ -141,6 +141,8 @@ CREATE TABLE IF NOT EXISTS public.dv_accounting_deposit_receipt_issuances (
 
 CREATE INDEX IF NOT EXISTS dv_accounting_deposit_receipt_issuances_transaction_idx
   ON public.dv_accounting_deposit_receipt_issuances(transaction_id, issued_at DESC);
+CREATE INDEX IF NOT EXISTS dv_accounting_deposit_receipt_issuances_issued_by_idx
+  ON public.dv_accounting_deposit_receipt_issuances(issued_by);
 
 ALTER TABLE public.dv_accounting_deposit_receipt_issuances ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT ON public.dv_accounting_deposit_receipt_issuances TO authenticated;
@@ -158,7 +160,7 @@ CREATE POLICY "Admins issue deposit receipts as themselves"
 ON public.dv_accounting_deposit_receipt_issuances
 FOR INSERT TO authenticated
 WITH CHECK (
-  issued_by = auth.uid()
+  issued_by = (select auth.uid())
   AND public.dv_accounting_current_user_role() IN ('SUPERADMIN','ADMIN','MANAGER')
   AND (
     issuer_signature_path IS NULL
