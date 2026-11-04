@@ -30,7 +30,7 @@ USING (
   bucket_id = 'dv-user-signatures'
   AND (
     (storage.foldername(name))[1] = auth.uid()::text
-    OR public.dv_accounting_can_manage_personnel()
+    OR public.dv_accounting_current_user_role() IN ('SUPERADMIN','ADMIN','MANAGER')
   )
 );
 
@@ -127,7 +127,6 @@ CREATE INDEX IF NOT EXISTS dv_accounting_deposit_receipt_issuances_transaction_i
   ON public.dv_accounting_deposit_receipt_issuances(transaction_id, issued_at DESC);
 
 ALTER TABLE public.dv_accounting_deposit_receipt_issuances ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON public.dv_accounting_deposit_receipt_issuances FROM anon, authenticated;
 GRANT SELECT, INSERT ON public.dv_accounting_deposit_receipt_issuances TO authenticated;
 
 DROP POLICY IF EXISTS "Admins read deposit receipt issuances" ON public.dv_accounting_deposit_receipt_issuances;
