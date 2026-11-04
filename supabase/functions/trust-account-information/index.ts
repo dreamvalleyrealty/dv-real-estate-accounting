@@ -166,6 +166,35 @@ async function sendZohoWithPdfAttachment(admin: any, to: string, subject: string
   }
   return result?.data?.messageId || result?.data?.message_id || result?.messageId || null;
 }
+async function sendZohoWithAttachmentBytes(admin: any, to: string, subject: string, body: string, pdfBytes: Uint8Array, fileName: string) {
+  const z = await getZohoSecrets(admin);
+  const form = new FormData();
+  form.append("attach", new Blob([pdfBytes], { type: "application/pdf" }), fileName);
+  const uploadResponse = await fetch(
+    z.mailBase + "/api/accounts/" + encodeURIComponent(z.accountId) + "/messages/attachments?uploadType=multipart&isInline=false",
+    { method: "POST", headers: z.headers, body: form },
+  );
+  const uploadResult = await uploadResponse.json().catch(() => ({}));
+  const attachment = Array.isArray(uploadResult?.data) ? uploadResult.data[0] : uploadResult?.data;
+  if (!uploadResponse.ok || (uploadResult?.status?.code && Number(uploadResult.status.code) >= 400)
+      || !attachment?.storeName || !attachment?.attachmentPath || !attachment?.attachmentName) {
+    const detail = String(uploadResult?.status?.description || uploadResult?.message || uploadResult?.error || "Zoho did not return attachment details").slice(0, 220);
+    throw new Error("Zoho PDF attachment upload failed (HTTP " + uploadResponse.status + "): " + detail);
+  }
+  const response = await fetch(z.mailBase + "/api/accounts/" + encodeURIComponent(z.accountId) + "/messages", {
+    method: "POST", headers: { ...z.headers, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fromAddress: z.from, toAddress: to, subject, content: body, mailFormat: "html",
+      attachments: [{ storeName: attachment.storeName, attachmentPath: attachment.attachmentPath, attachmentName: attachment.attachmentName }],
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || (result?.status?.code && Number(result.status.code) >= 400)) {
+    const detail = String(result?.status?.description || result?.message || result?.error || "Zoho rejected the message").slice(0, 220);
+    throw new Error("Zoho email send failed (HTTP " + response.status + "): " + detail);
+  }
+  return result?.data?.messageId || result?.data?.message_id || result?.messageId || null;
+}
 async function requireActor(req: Request, admin: any, supabaseUrl: string, anonKey: string) {
   const authorization = req.headers.get("Authorization") || "";
   if (!authorization.startsWith("Bearer ")) throw new Error("Sign in before using trust account information.");
@@ -452,6 +481,139 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, message: "Both trust account instructions were saved securely." });
     }
 
+    if (action === "approve_deposit_receipt" || action === "reject_deposit_receipt") {
+      if (!["ADMIN","SUPERADMIN"].includes(actor.role)) return json({ error: "Only an Admin or Super Admin can approve or reject deposit receipts." }, 403);
+      const trustTransactionId = String(body.trustTransactionId || "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(trustTransactionId)) return json({ error: "Select a valid deposit receipt." }, 400);
+      const { data: issuance, error: issuanceError } = await admin.from("dv_accounting_deposit_receipt_issuances")
+        .select("id,issued_by,approval_status,issuer_name,transaction_id")
+        .eq("trust_transaction_id", trustTransactionId).maybeSingle();
+      if (issuanceError) throw issuanceError;
+      if (!issuance) return json({ error: "The receipt issuer record could not be found." }, 404);
+      if (issuance.approval_status === "APPROVED") return json({ error: "This receipt has already been approved and locked." }, 409);
+      if (actor.role !== "SUPERADMIN" && issuance.issued_by === actor.user.id) return json({ error: "You cannot approve a receipt you issued yourself. Another Admin or the Super Admin must approve it." }, 403);
+      const nextStatus = action === "approve_deposit_receipt" ? "APPROVED" : "REJECTED";
+      const rejectionReason = String(body.rejectionReason || "").trim();
+      if (nextStatus === "REJECTED" && (!rejectionReason || rejectionReason.length > 500)) return json({ error: "Enter a reason for rejecting this receipt (maximum 500 characters)." }, 400);
+      const update: any = {
+        approval_status: nextStatus,
+        approved_by: nextStatus === "APPROVED" ? actor.user.id : null,
+        approved_at: nextStatus === "APPROVED" ? new Date().toISOString() : null,
+        rejection_reason: nextStatus === "REJECTED" ? rejectionReason : null,
+      };
+      const { error: updateError } = await admin.from("dv_accounting_deposit_receipt_issuances")
+        .update(update).eq("id", issuance.id);
+      if (updateError) throw updateError;
+      return json({ ok: true, approvalStatus: nextStatus, message: nextStatus === "APPROVED" ? "Deposit receipt approved and locked." : "Deposit receipt rejected. The issuer can correct it and submit it again." });
+    }
+
+    if (action === "send_deposit_receipt") {
+      if (!["SUPERADMIN","ADMIN","MANAGER"].includes(actor.role)) return json({ error: "Only authorized brokerage staff can email a listing deposit receipt." }, 403);
+      const trustTransactionId = String(body.trustTransactionId || "").trim();
+      const recipientEmail = String(body.recipientEmail || "").trim().toLowerCase();
+      if (!/^[0-9a-f-]{36}$/i.test(trustTransactionId)) return json({ error: "Select a valid deposit receipt." }, 400);
+      if (!validEmail(recipientEmail) || recipientEmail.length > 254) return json({ error: "Enter a valid recipient email address." }, 400);
+      const { data: ledger, error: ledgerError } = await admin.from("dv_accounting_trust_transactions")
+        .select("id,transaction_id,ledger_date,client_name,amount,reference,bank_account_id,trust_account_type,direction,status")
+        .eq("id", trustTransactionId).eq("trust_account_type", "REAL_ESTATE_TRUST").eq("direction", "DEPOSIT").eq("status", "POSTED").maybeSingle();
+      if (ledgerError) throw ledgerError;
+      if (!ledger?.transaction_id) return json({ error: "The posted Real Estate Trust deposit could not be found." }, 404);
+      const { data: transaction, error: transactionError } = await admin.from("dv_accounting_transactions")
+        .select("id,transaction_number,property_address,unit_number,city,province,postal_code,listing_id,transaction_type")
+        .eq("id", ledger.transaction_id).maybeSingle();
+      if (transactionError) throw transactionError;
+      if (!transaction) return json({ error: "The property transaction linked to this deposit could not be found." }, 404);
+      if (!transaction.listing_id) return json({ error: "This receipt is not linked to a listing." }, 409);
+      const { data: listing, error: listingError } = await admin.from("dv_accounting_listing_submissions")
+        .select("id,property_address,unit_number,city,province,postal_code").eq("id", transaction.listing_id).maybeSingle();
+      if (listingError) throw listingError;
+      if (!listing) return json({ error: "The listing linked to this receipt could not be found." }, 404);
+      const { data: issuance, error: issuanceError } = await admin.from("dv_accounting_deposit_receipt_issuances")
+        .select("issuer_name,issuer_signature_path,issued_at").eq("trust_transaction_id", ledger.id).maybeSingle();
+      if (issuanceError) throw issuanceError;
+      if (!issuance?.issuer_name) return json({ error: "This receipt has no authorized issuer record. Open and verify the receipt before emailing it." }, 409);
+      if (issuance.approval_status !== "APPROVED") return json({ error: "This deposit receipt must be approved by an Admin before it can be emailed." }, 409);
+      const { data: trustMeta, error: trustMetaError } = await admin.from("dv_accounting_transaction_trust")
+        .select("payment_type,received_from,reference_number").eq("transaction_id", transaction.id).maybeSingle();
+      if (trustMetaError) throw trustMetaError;
+      const { data: bank, error: bankError } = await admin.from("dv_accounting_bank_accounts")
+        .select("name").eq("id", ledger.bank_account_id).maybeSingle();
+      if (bankError) throw bankError;
+      const address = [listing.property_address || transaction.property_address, listing.unit_number || transaction.unit_number ? "Unit " + (listing.unit_number || transaction.unit_number) : "", listing.city || transaction.city, listing.province || transaction.province, listing.postal_code || transaction.postal_code].filter(Boolean).join(", ");
+      const transactionNumber = transaction.transaction_number || transaction.id;
+      const receiptNumber = "DR-" + String(transactionNumber).replace(/[^A-Za-z0-9-]/g, "");
+      const receivedFrom = String(ledger.client_name || trustMeta?.received_from || "—");
+      const paymentMethod = String(trustMeta?.payment_type || "Deposit").replaceAll("_", " ");
+      const reference = String(ledger.reference || trustMeta?.reference_number || "—");
+      const amount = Number(ledger.amount || 0);
+      const date = String(ledger.ledger_date || "").slice(0, 10);
+      const issuerName = String(issuance.issuer_name);
+      const document = await PDFDocument.create();
+      const page = document.addPage([612, 792]);
+      const regular = await document.embedFont(StandardFonts.Helvetica);
+      const bold = await document.embedFont(StandardFonts.HelveticaBold);
+      const navy = rgb(15 / 255, 33 / 255, 65 / 255);
+      const gold = rgb(158 / 255, 133 / 255, 86 / 255);
+      page.drawRectangle({ x: 0, y: 650, width: 612, height: 142, color: navy });
+      page.drawText("DV", { x: 276, y: 738, size: 32, font: bold, color: gold });
+      page.drawText("DREAM VALLEY REALTY INC.", { x: 165, y: 704, size: 17, font: bold, color: gold });
+      page.drawText("TRUST DEPOSIT RECEIPT", { x: 225, y: 680, size: 11, font: bold, color: rgb(1,1,1) });
+      page.drawText("Official receipt for funds received into the Real Estate Trust account", { x: 72, y: 620, size: 10, font: regular, color: navy });
+      const rows: [string,string][] = [
+        ["Receipt No.", receiptNumber], ["Date", date], ["Property Address", address],
+        ["Received From", receivedFrom], ["Type of Payment", "Deposit"], ["Payment Method", paymentMethod],
+        ["Transaction No.", String(transactionNumber)], ["Reference", reference],
+        ["Trust Account", String(bank?.name || "Real Estate Trust")],
+        ["Amount Received", "CAD " + amount.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })],
+        ["Received By", issuerName],
+      ];
+      let y = 580;
+      for (const [label, value] of rows) {
+        page.drawRectangle({ x: 72, y: y - 9, width: 468, height: 29, color: y % 2 === 0 ? rgb(0.97,0.98,0.99) : rgb(1,1,1), borderColor: rgb(0.82,0.85,0.89), borderWidth: 0.5 });
+        page.drawText(label, { x: 84, y, size: 9.5, font: bold, color: navy });
+        const textValue = value.length > 65 ? value.slice(0, 62) + "..." : value;
+        page.drawText(textValue, { x: 205, y, size: 9.2, font: regular, color: rgb(0.12,0.16,0.22) });
+        y -= 34;
+      }
+      if (issuance.issuer_signature_path) {
+        const { data: signatureFile, error: signatureError } = await admin.storage.from("dv-user-signatures").download(issuance.issuer_signature_path);
+        if (!signatureError && signatureFile) {
+          const signatureBytes = new Uint8Array(await signatureFile.arrayBuffer());
+          try {
+            const signatureImage = /\.jpe?g$/i.test(issuance.issuer_signature_path) ? await document.embedJpg(signatureBytes) : await document.embedPng(signatureBytes);
+            const dims = signatureImage.scale(Math.min(130 / signatureImage.width, 38 / signatureImage.height));
+            page.drawImage(signatureImage, { x: 84, y: 74, width: dims.width, height: dims.height });
+          } catch (imageError) { console.warn("Could not embed issuer signature in receipt PDF", String(imageError)); }
+        }
+      }
+      page.drawLine({ start: { x: 78, y: 70 }, end: { x: 230, y: 70 }, thickness: 0.8, color: navy });
+      page.drawText(issuerName, { x: 84, y: 55, size: 9, font: bold, color: navy });
+      page.drawText("Authorized issuer", { x: 84, y: 42, size: 8, font: regular, color: rgb(0.4,0.44,0.5) });
+      page.drawLine({ start: { x: 72, y: 28 }, end: { x: 540, y: 28 }, thickness: 0.6, color: gold });
+      page.drawText("Dream Valley Realty Inc. | 885 Progress Ave. Suite 109, Toronto, ON M1H 3G3", { x: 72, y: 14, size: 7, font: regular, color: rgb(0.4,0.44,0.5) });
+      const pdfBytes = await document.save();
+      const subject = "Deposit Receipt " + receiptNumber + " — " + address;
+      const html = "<div style='font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:0 auto;color:#243247;border:1px solid #d8dde5;border-radius:8px;overflow:hidden'><div style='background:#0f2141;color:#9e8556;text-align:center;padding:24px 18px'><div style='font-size:26px;font-weight:bold;letter-spacing:2px'>DV</div><div style='font-size:17px;font-weight:bold;letter-spacing:2px;margin-top:8px'>DREAM VALLEY REALTY</div><div style='font-size:11px;letter-spacing:1px;margin-top:4px;color:#fff'>DEPOSIT RECEIPT</div></div><div style='padding:24px 28px'><p>Please find your official deposit receipt details below. The full receipt is attached as a PDF for your records.</p><h3 style='font-size:14px;color:#0f2141;text-decoration:underline;margin:18px 0 8px'>Deposit Receipt</h3><table style='border-collapse:collapse;width:100%;font-size:12px'><tr><td style='font-weight:bold;padding:2px 6px'>Receipt No</td><td style='padding:2px 6px'>"+htmlEscape(receiptNumber)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Date</td><td style='padding:2px 6px'>"+htmlEscape(date)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Property Address</td><td style='padding:2px 6px'>"+htmlEscape(address)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Received From</td><td style='padding:2px 6px'>"+htmlEscape(receivedFrom)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Type of Payment</td><td style='padding:2px 6px'>Deposit</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Payment Method</td><td style='padding:2px 6px'>"+htmlEscape(paymentMethod)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Transaction No</td><td style='padding:2px 6px'>"+htmlEscape(String(transactionNumber))+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Amount Received</td><td style='padding:2px 6px;font-weight:bold'>"+htmlEscape(amount.toLocaleString("en-CA",{style:"currency",currency:"CAD"}))+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Received By</td><td style='padding:2px 6px'>"+htmlEscape(issuerName)+"</td></tr></table></div><div style='border-top:1px solid #e5e7eb;padding:18px 28px;color:#555;font-size:12px'><p>Thank you for your prompt attention.</p><p>Best regards,<br/><strong>The Dream Valley Realty Admin Team</strong></p></div><div style='background:#0f2141;color:#9e8556;text-align:center;padding:12px;font-size:10px'>© "+new Date().getFullYear()+" Dream Valley Realty. All rights reserved.<br/><span style='color:#aab3c2'>This is an automated message. Please do not reply to this email.</span></div></div>";
+      const fileName = receiptNumber + ".pdf";
+      const { data: emailLog, error: emailLogError } = await admin.from("dv_accounting_email_log").insert({
+        transaction_id: transaction.id, document_type: "DEPOSIT_RECEIPT", recipient_email: recipientEmail,
+        subject, attachment_name: fileName, status: "PENDING", sent_by: actor.user.id,
+        sent_by_email: actor.user.email || null,
+      }).select("id").single();
+      if (emailLogError) throw emailLogError;
+      try {
+        const providerId = await sendZohoWithAttachmentBytes(admin, recipientEmail, subject, html, pdfBytes, fileName);
+        const { error: updateLogError } = await admin.from("dv_accounting_email_log").update({
+          status: "SENT", provider_message_id: providerId, sent_at: new Date().toISOString(),
+        }).eq("id", emailLog.id);
+        if (updateLogError) throw updateLogError;
+        return json({ ok: true, status: "SENT", message: "Deposit receipt PDF emailed to " + recipientEmail + "." });
+      } catch (sendError) {
+        const message = String((sendError as Error)?.message || "Email sending failed").slice(0, 350);
+        await admin.from("dv_accounting_email_log").update({ status: "FAILED", error_message: message }).eq("id", emailLog.id);
+        return json({ error: message }, 502);
+      }
+    }
     if (action === "delete_deposit_receipt_upload") {
       if (!isAdmin) return json({error:"Only an administrator can delete uploaded deposit receipts."},403);
       const uploadId=String(body.uploadId||"");
