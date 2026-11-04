@@ -208,7 +208,7 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
    let rpcResult=initial.transaction_number?await supabase.rpc("dv_accounting_get_posted_deposits_by_number",{p_transaction_number:initial.transaction_number}):await supabase.rpc("dv_accounting_get_posted_deposits",{p_transaction_id:transactionId});
    rpcError=rpcResult.error||null;
    if(rpcError){const fallbackRpc=await supabase.rpc("dv_accounting_get_posted_deposits",{p_transaction_id:transactionId});if(!fallbackRpc.error){rpcResult=fallbackRpc;rpcError=null}else rpcError=new Error((rpcError.message||String(rpcError))+"; fallback RPC failed: "+fallbackRpc.error.message);}
-   allTrustRows=Array.isArray(rpcResult.data)?rpcResult.data:[];
+   allTrustRows=Array.isArray(rpcResult.data)?rpcResult.data.filter(row=>String(row.trust_account_type||"").trim().toUpperCase()==="REAL_ESTATE_TRUST"):[];
    // Fallback to a direct read if the RPC returns no rows or is not executable in this session.
    // Filter client-side so minor case/spacing differences in ledger status do not hide receipts.
    if(!allTrustRows.length){
@@ -217,7 +217,7 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
      if(rpcError)throw new Error("Deposit history RPC failed: "+rpcError.message+"; direct ledger read failed: "+directError.message);
      throw directError;
     }
-    allTrustRows=(directRows||[]).filter(row=>String(row.direction||"").trim().toUpperCase()==="DEPOSIT"&&String(row.status||"").trim().toUpperCase()==="POSTED"&&Number(row.amount||0)>0);
+    allTrustRows=(directRows||[]).filter(row=>String(row.direction||"").trim().toUpperCase()==="DEPOSIT"&&String(row.status||"").trim().toUpperCase()==="POSTED"&&String(row.trust_account_type||"").trim().toUpperCase()==="REAL_ESTATE_TRUST"&&Number(row.amount||0)>0);
    }
    directHistory=(allTrustRows||[]).map(row=>({...row,transaction_id:transactionId,transaction_number:initial.transaction_number||"—",deposit_date:row.ledger_date||row.created_at?.slice(0,10)||"",received_from:row.client_name||"—",reference_number:row.reference||"—",amount:Number(row.amount||0),_source:"TRADE"}));
    // Show posted deposits on this trade immediately. A separate listing-history lookup
@@ -237,7 +237,7 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
     const byId=new Map((trustRows||[]).map(x=>[x.transaction_id,x]));
     listingHistory=(listingTransactions||[]).map(tx=>{const row=byId.get(tx.id);if(!row||String(row.received||"").toUpperCase()!=="YES"||Number(row.amount||tx.deposit_amount||0)<=0)return null;return {...row,transaction_id:tx.id,transaction_number:tx.transaction_number,amount:Number(row.amount||tx.deposit_amount||0),deposit_date:row.deposit_date||row.created_at?.slice(0,10)||tx.created_at?.slice(0,10)||"",received_from:row.received_from||"—",reference_number:row.reference_number||"—",_source:"LISTING"}}).filter(Boolean);
    }
-   const seen=new Set();const combined=[...directHistory,...listingHistory].filter(row=>{const key=[row.deposit_date,Number(row.amount||0).toFixed(2),String(row.reference_number||"").trim().toUpperCase()].join("|");if(seen.has(key))return false;seen.add(key);return true;});
+   const sameDeposit=(a,b)=>String(a.deposit_date||"").slice(0,10)===String(b.deposit_date||"").slice(0,10)&&Math.abs(Number(a.amount||0)-Number(b.amount||0))<0.01&&String(a.received_from||"").trim().toLowerCase()===String(b.received_from||"").trim().toLowerCase();const uniqueListingHistory=listingHistory.filter(row=>!directHistory.some(tradeRow=>sameDeposit(tradeRow,row)));const combined=[...directHistory,...uniqueListingHistory];
    if(!cancelled)setListingDepositHistory(current=>mergeDepositHistoryRows(current,combined));
   }catch(err){console.warn("Could not load linked listing deposit history; showing trade receipts only:",err);if(!cancelled)setListingDepositHistory(directHistory)}
   finally{if(!cancelled)setListingDepositHistoryLoading(false)}
