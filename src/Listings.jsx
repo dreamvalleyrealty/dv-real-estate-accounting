@@ -51,14 +51,14 @@ function ListingDepositInstructions({ listings, agents, user, onBack }) {
   try{
    const {data,error:e}=await supabase.functions.invoke("trust-account-information",{body:{action:"send_deposit_instructions",listingId:selected.id,recipientName:recipient.name.trim(),recipientEmail:email}});
    if(e)throw e;if(data?.error)throw new Error(data.error);
-   setMessage(data?.message||"Deposit instructions sent securely.");
+   setMessage(data?.message||"Deposit instructions PDF attached and emailed to the buyer's agent.");
    setRecipient({name:"",email:""});await loadHistory();
   }catch(err){setError(err?.message||"Could not send deposit instructions.")}
   finally{setBusy(false)}
  }
  return <><div className="pagehead"><div><h1>Send Deposit Instructions</h1><p>Send the brokerage's Real Estate Trust deposit instructions to the buyer's agent for a specific listing.</p></div><button type="button" className="secondary" onClick={onBack}>Back to Listings</button></div>
  <section className="panel" style={{maxWidth:1050}}>
-  <div className="notice"><ShieldCheck size={17}/> The recipient receives a secure 24-hour link and must verify the same email address with a six-digit code before viewing the deposit instructions.</div>
+  <div className="notice"><FileText size={17}/> The Dream Valley Realty Trust Account Information PDF will be attached automatically to the email.</div>
   <form onSubmit={send}>
    <div className="formgrid">
     <label>Listing / property *
@@ -71,17 +71,17 @@ function ListingDepositInstructions({ listings, agents, user, onBack }) {
     <label>Buyer's agent email *<input required type="email" maxLength={254} value={recipient.email} onChange={e=>setRecipient(v=>({...v,email:e.target.value}))} placeholder="agent@brokerage.ca"/></label>
    </div>
    {selected&&<div className="notice" style={{marginTop:12}}><strong>Property:</strong> {address(selected)}<div style={{marginTop:3}}><strong>Assigned agent:</strong> {agentName(selected)}</div></div>}
-   <p className="muted" style={{marginTop:12}}>The email does not contain banking numbers or instructions directly. The recipient must open the secure link, request a code sent to the same email address, and verify it before the instructions are displayed.</p>
+   <p className="muted" style={{marginTop:12}}>The email will include the selected property address and the PDF attachment. No secure link or email verification code is required.</p>
    {error&&<div className="error" role="alert" style={{marginBottom:12}}>{error}</div>}
    {message&&<div className="notice" role="status" style={{marginBottom:12}}>{message}</div>}
-   <button className="primary" disabled={busy||!selected}>{busy?"Sending secure link…":"Send Deposit Instructions"}</button>
+   <button className="primary" disabled={busy||!selected}>{busy?"Sending email with PDF…":"Send Deposit Instructions"}</button>
   </form>
  </section>
  <section className="panel tablewrap" style={{maxWidth:1200,marginTop:18}}>
   <div className="paneltitle"><h2>Deposit Instructions Sharing History</h2><button type="button" className="secondary" onClick={loadHistory}>Refresh</button></div>
-  <table><thead><tr><th>Sent</th><th>Property</th><th>Buyer’s agent</th><th>Sent by</th><th>Link expires</th><th>Verified</th><th>Status</th></tr></thead><tbody>
-   {history.map(row=><tr key={row.id}><td>{row.sent_at?new Date(row.sent_at).toLocaleString():"—"}</td><td>{row.property_address||"—"}</td><td>{row.recipient_name}<div className="muted">{row.recipient_email}</div></td><td>{row.sent_by_email||"—"}</td><td>{row.link_expires_at?new Date(row.link_expires_at).toLocaleString():"—"}</td><td>{row.verified_at?"Yes":"No"}</td><td>{row.status}</td></tr>)}
-   {!history.length&&<tr><td colSpan="7">No deposit instructions have been sent.</td></tr>}
+  <table><thead><tr><th>Sent</th><th>Property</th><th>Buyer’s agent</th><th>Sent by</th><th>Attachment</th><th>Status</th></tr></thead><tbody>
+   {history.map(row=><tr key={row.id}><td>{row.sent_at?new Date(row.sent_at).toLocaleString():"—"}</td><td>{row.property_address||"—"}</td><td>{row.recipient_name}<div className="muted">{row.recipient_email}</div></td><td>{row.sent_by_email||"—"}</td><td>Trust Account Information PDF</td><td>{row.status}</td></tr>)}
+   {!history.length&&<tr><td colSpan="6">No deposit instructions have been sent.</td></tr>}
   </tbody></table>
  </section></>;
 }
