@@ -2,6 +2,19 @@
 ALTER TABLE public.dv_accounting_user_profiles
   ADD COLUMN IF NOT EXISTS signature_storage_path text;
 
+CREATE OR REPLACE FUNCTION public.dv_accounting_current_user_role()
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  SELECT CASE
+    WHEN EXISTS (SELECT 1 FROM public.dv_accounting_user_profiles p WHERE p.user_id=auth.uid() AND p.active=false) THEN 'DISABLED'
+    ELSE coalesce((SELECT upper(p.role) FROM public.dv_accounting_user_profiles p WHERE p.user_id=auth.uid() AND p.active=true LIMIT 1), 'STAFF')
+  END
+$function$;
+
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
   'dv-user-signatures',
@@ -109,7 +122,7 @@ BEGIN
 END
 $function$;
 
-REVOKE ALL ON FUNCTION public.dv_accounting_update_my_profile_signature(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.dv_accounting_update_my_profile_signature(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.dv_accounting_update_my_profile_signature(text) TO authenticated;
 
 -- A separate immutable issuance record is required because one transaction can
