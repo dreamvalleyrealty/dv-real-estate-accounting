@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { TRUST_ACCOUNT_PDF_BASE64 } from "./trust-account-information-pdf.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -79,6 +80,35 @@ async function sendZoho(admin: any, to: string, subject: string, body: string) {
   }
   return result?.data?.messageId || result?.data?.message_id || result?.messageId || null;
 }
+async function sendZohoWithPdfAttachment(admin: any, to: string, subject: string, body: string) {
+  const z = await getZohoSecrets(admin);
+  const fileName = "DREAM VALLEY - TRUST ACCOUNT INFORMATION.pdf";
+  const pdfBytes = Uint8Array.from(atob(TRUST_ACCOUNT_PDF_BASE64), (character) => character.charCodeAt(0));
+  const uploadResponse = await fetch(
+    z.mailBase + "/api/accounts/" + encodeURIComponent(z.accountId) + "/messages/attachments?fileName=" + encodeURIComponent(fileName) + "&isInline=false",
+    { method: "POST", headers: { ...z.headers, "Content-Type": "application/pdf" }, body: pdfBytes },
+  );
+  const uploadResult = await uploadResponse.json().catch(() => ({}));
+  const attachment = uploadResult?.data;
+  if (!uploadResponse.ok || (uploadResult?.status?.code && Number(uploadResult.status.code) >= 400)
+      || !attachment?.storeName || !attachment?.attachmentPath || !attachment?.attachmentName) {
+    throw new Error("Zoho could not upload the deposit-instructions PDF attachment (HTTP " + uploadResponse.status + ").");
+  }
+  const response = await fetch(z.mailBase + "/api/accounts/" + encodeURIComponent(z.accountId) + "/messages", {
+    method: "POST",
+    headers: { ...z.headers, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fromAddress: z.from, toAddress: to, subject, content: body, mailFormat: "html",
+      attachments: [{ storeName: attachment.storeName, attachmentPath: attachment.attachmentPath, attachmentName: fileName }],
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || (result?.status?.code && Number(result.status.code) >= 400)) {
+    throw new Error("Zoho rejected the deposit-instructions email (HTTP " + response.status + ").");
+  }
+  return result?.data?.messageId || result?.data?.message_id || result?.messageId || null;
+}
+
 async function requireActor(req: Request, admin: any, supabaseUrl: string, anonKey: string) {
   const authorization = req.headers.get("Authorization") || "";
   if (!authorization.startsWith("Bearer ")) throw new Error("Sign in before using trust account information.");
@@ -365,13 +395,12 @@ let query = admin.from("dv_accounting_deposit_instruction_email_log")
         link_expires_at:expires.toISOString(),otp_attempts:0
       }).select("id").single();
       if(createError)throw createError;
-      const link=publicAppUrl.replace(/\/$/,"")+"/deposit-instructions?token="+token;
-      const html="<div style=\"font-family:Arial,sans-serif;max-width:620px;color:#172b4d\"><h2>Real Estate Trust deposit instructions</h2><p>Hello "+htmlEscape(recipientName)+",</p><p>"+htmlEscape(actor.user.email||"A Dream Valley Realty team member")+" has shared deposit instructions for this property:</p><p><strong>"+htmlEscape(propertyAddress)+"</strong></p><p><a href=\""+link+"\" style=\"display:inline-block;background:#0f2141;color:#fff;padding:12px 18px;text-decoration:none;border-radius:6px\">View secure deposit instructions</a></p><p>This link expires in 24 hours. Open it and request a separate six-digit code sent to this same email address.</p><p>For security, banking numbers are not included in this email.</p></div>";
+      const html="<div style=\"font-family:Arial,sans-serif;max-width:620px;color:#172b4d\"><h2>Real Estate Trust deposit instructions</h2><p>Hello "+htmlEscape(recipientName)+",</p><p>Please find attached Dream Valley Realty's Real Estate Trust deposit instructions for the following property:</p><p><strong>"+htmlEscape(propertyAddress)+"</strong></p><p>Please forward the deposit receipt to <a href=\"mailto:frontdesk@dvrealty.ca\">frontdesk@dvrealty.ca</a> once the transfer has been arranged.</p><p>Regards,<br/>Dream Valley Realty Inc.</p></div>";
       try{
-        const messageId=await sendZoho(admin,recipientEmail,"Secure deposit instructions — "+propertyAddress,html);
-        const {error:updateError}=await admin.from("dv_accounting_deposit_instruction_email_log").update({status:"SENT",sent_at:new Date().toISOString(),provider_message_id:JSON.stringify({secure_link:messageId})}).eq("id",created.id);
+        const messageId=await sendZohoWithPdfAttachment(admin,recipientEmail,"Real Estate Trust Deposit Instructions — "+propertyAddress,html);
+        const {error:updateError}=await admin.from("dv_accounting_deposit_instruction_email_log").update({status:"SENT",sent_at:new Date().toISOString(),provider_message_id:JSON.stringify({pdf_attachment:messageId})}).eq("id",created.id);
         if(updateError)throw updateError;
-        return json({ok:true,status:"SENT",logId:created.id,message:"Secure deposit instructions link sent to the buyer's agent."});
+        return json({ok:true,status:"SENT",logId:created.id,message:"Deposit instructions PDF attached and emailed to the buyer's agent."});
       }catch(error){
         const message=String((error as Error)?.message||"Email sending failed").slice(0,350);
         await admin.from("dv_accounting_deposit_instruction_email_log").update({status:"FAILED",error_message:message}).eq("id",created.id);
