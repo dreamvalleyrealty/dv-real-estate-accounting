@@ -598,26 +598,37 @@ Deno.serve(async (req: Request) => {
       page.drawText("Authorized issuer", { x: 84, y: 42, size: 8, font: regular, color: rgb(0.4,0.44,0.5) });
       page.drawLine({ start: { x: 72, y: 28 }, end: { x: 540, y: 28 }, thickness: 0.6, color: gold });
       page.drawText("Dream Valley Realty Inc. | 885 Progress Ave. Suite 109, Toronto, ON M1H 3G3", { x: 72, y: 14, size: 7, font: regular, color: rgb(0.4,0.44,0.5) });
-      // Append buyer-agent supporting documents uploaded for this listing after the official receipt.
-      const { data: supportingDocs, error: supportingDocsError } = await admin.from("dv_accounting_deposit_receipt_uploads")
-        .select("id,file_name,mime_type,storage_path,uploaded_at")
-        .eq("listing_id", transaction.listing_id)
-        .order("uploaded_at", { ascending: true });
-      if (supportingDocsError) throw supportingDocsError;
-      for (const supportingDoc of supportingDocs || []) {
-        const { data: supportingFile, error: supportingFileError } = await admin.storage.from("dv-trade-documents").download(supportingDoc.storage_path);
+      // Supporting confirmations are uploaded under the transaction folder in Storage.
+      // The receipt-upload UI stores these files directly and does not create rows in
+      // dv_accounting_deposit_receipt_uploads, so read the actual Storage folder.
+      const supportingFolder = "listings/" + transaction.id + "/listing-deposit-receipts";
+      const { data: storedFiles, error: supportingListError } = await admin.storage
+        .from("dv-trade-documents").list(supportingFolder, { limit: 100, sortBy: { column: "name", order: "asc" } });
+      if (supportingListError) throw supportingListError;
+      const newestByOriginalName = new Map<string, any>();
+      for (const stored of (storedFiles || []).filter((item: any) => item.name && item.id)) {
+        const originalName = String(stored.name).replace(/^\\d+-/, "");
+        const previous = newestByOriginalName.get(originalName);
+        if (!previous || String(stored.created_at || "") > String(previous.created_at || "")) {
+          newestByOriginalName.set(originalName, stored);
+        }
+      }
+      const supportingDocs = [...newestByOriginalName.values()];
+      for (const supportingDoc of supportingDocs) {
+        const supportingPath = supportingFolder + "/" + supportingDoc.name;
+        const { data: supportingFile, error: supportingFileError } = await admin.storage.from("dv-trade-documents").download(supportingPath);
         if (supportingFileError || !supportingFile) {
           console.warn("Could not load deposit supporting document", supportingDoc.file_name, String(supportingFileError?.message || ""));
           continue;
         }
         const supportingBytes = new Uint8Array(await supportingFile.arrayBuffer());
-        const mime = String(supportingDoc.mime_type || "").toLowerCase();
+        const mime = String(supportingDoc.metadata?.mimetype || "").toLowerCase();
         const titlePage = document.addPage([612, 792]);
         titlePage.drawRectangle({ x: 0, y: 720, width: 612, height: 72, color: navy });
         titlePage.drawText("SUPPORTING DOCUMENT", { x: 72, y: 750, size: 16, font: bold, color: rgb(1,1,1) });
-        titlePage.drawText(String(supportingDoc.file_name || "Supporting document").slice(0, 90), { x: 72, y: 690, size: 11, font: bold, color: navy, maxWidth: 468 });
+        titlePage.drawText(String(supportingDoc.name || "Supporting document").replace(/^\\d+-/, "").slice(0, 90), { x: 72, y: 690, size: 11, font: bold, color: navy, maxWidth: 468 });
         titlePage.drawText("Attached to deposit receipt " + receiptNumber, { x: 72, y: 670, size: 9, font: regular, color: rgb(0.4,0.44,0.5) });
-        if (mime === "application/pdf" || /\.pdf$/i.test(String(supportingDoc.file_name || ""))) {
+        if (mime === "application/pdf" || /\.pdf$/i.test(String(supportingDoc.name || ""))) {
           const sourcePdf = await PDFDocument.load(supportingBytes);
           const copiedPages = await document.copyPages(sourcePdf, sourcePdf.getPageIndices());
           for (const copiedPage of copiedPages) document.addPage(copiedPage);
