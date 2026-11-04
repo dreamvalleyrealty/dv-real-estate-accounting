@@ -180,7 +180,9 @@ async function sendZohoWithAttachmentBytes(admin: any, to: string, subject: stri
   if (!logoResponse.ok || (logoResult?.status?.code && Number(logoResult.status.code) >= 400) || !logoAttachment?.url) {
     throw new Error("Zoho could not prepare the Dream Valley logo for the email body.");
   }
-  const emailBody = body.replace("__DV_LOGO_INLINE_URL__", htmlEscape(String(logoAttachment.url)));
+  const rawLogoUrl = String(logoAttachment.url);
+  const logoUrl = /^https?:\\/\\//i.test(rawLogoUrl) ? rawLogoUrl : z.mailBase.replace(/\\/+$/, "") + (rawLogoUrl.startsWith("/") ? rawLogoUrl : "/" + rawLogoUrl);
+  const emailBody = body.replace("__DV_LOGO_INLINE_URL__", htmlEscape(logoUrl));
   const form = new FormData();
   form.append("attach", new Blob([pdfBytes], { type: "application/pdf" }), fileName);
   const uploadResponse = await fetch(
