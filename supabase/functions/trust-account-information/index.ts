@@ -372,6 +372,23 @@ Deno.serve(async (req: Request) => {
         if(recordError){await admin.storage.from("dv-trade-documents").remove([path]);throw recordError}
         saved.push(record);
       }
+      // Notify the listing's assigned agents and brokerage admin after the files are safely stored.
+      try {
+        const {data:listing,error:listingError}=await admin.from("dv_accounting_listing_submissions")
+          .select("agent_id,additional_agent_ids").eq("id",log.listing_id).maybeSingle();
+        if(listingError)throw listingError;
+        const agentIds=[...new Set([listing?.agent_id,...(Array.isArray(listing?.additional_agent_ids)?listing.additional_agent_ids:[])].filter(Boolean))];
+        const {data:assignedAgents,error:agentsError}=agentIds.length
+          ? await admin.from("dv_accounting_agents").select("email,first_name,last_name").in("id",agentIds)
+          : {data:[],error:null};
+        if(agentsError)throw agentsError;
+        const recipients=[...new Set(["admin@dvrealty.ca",...(assignedAgents||[]).map((a:any)=>String(a.email||"").trim().toLowerCase()),String(log.sent_by_email||"").trim().toLowerCase()].filter((email)=>validEmail(email)))];
+        const uploadedNames=saved.map((file:any)=>htmlEscape(file.file_name)).join("<br/>");
+        const notice="<div style=\"font-family:Arial,sans-serif;max-width:620px;color:#172b4d\"><h2>Deposit receipt uploaded</h2><p>A deposit receipt or bank confirmation was uploaded for:</p><p><strong>"+htmlEscape(log.property_address)+"</strong></p><p>Uploaded by the buyer's agent: "+htmlEscape(log.recipient_email)+"</p><p>"+uploadedNames+"</p><p>Open the property record in DV Back Office to review the uploaded file(s).</p></div>";
+        await Promise.allSettled(recipients.map((email)=>sendZoho(admin,email,"Deposit receipt uploaded — "+log.property_address,notice)));
+      } catch(notificationError) {
+        console.error("Deposit receipt upload notification failed",String((notificationError as Error)?.message||notificationError).slice(0,250));
+      }
       return json({ok:true,uploaded:saved.length,files:saved,message:saved.length+" receipt file(s) uploaded successfully."});
     }
     const actor = await requireActor(req, admin, supabaseUrl, anonKey);
