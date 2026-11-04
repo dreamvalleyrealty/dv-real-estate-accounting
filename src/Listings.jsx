@@ -95,14 +95,14 @@ function ListingDepositInstructions({ listings, agents, user, adminMode=false, o
 
 
 function PropertyDepositCommunicationHistory({listingId,propertyAddress,adminMode=false}){
- const [emails,setEmails]=useState([]),[uploads,setUploads]=useState([]),[loading,setLoading]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
+ const [emails,setEmails]=useState([]),[uploads,setUploads]=useState([]),[canDelete,setCanDelete]=useState(false),[loading,setLoading]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  async function load(){
   if(!listingId)return;
   setLoading(true);setError("");
   try{
    const {data,error}=await supabase.functions.invoke("trust-account-information",{body:{action:"get_deposit_receipt_uploads",listingId}});
    if(error||data?.error)throw new Error(data?.error||error?.message||"Could not load deposit communication history.");
-   setEmails(data?.emails||[]);setUploads(data?.uploads||[]);
+   setEmails(data?.emails||[]);setUploads(data?.uploads||[]);setCanDelete(data?.can_delete===true);
   }catch(err){setError(err?.message||"Could not load deposit communication history.")}
   finally{setLoading(false)}
  }
@@ -124,13 +124,13 @@ function PropertyDepositCommunicationHistory({listingId,propertyAddress,adminMod
  return <section className="panel tablewrap" style={{maxWidth:1200,marginTop:18}}>
   <div className="paneltitle"><div><h2>Deposit Instructions & Receipt History</h2><p className="muted">{propertyAddress}</p></div><button type="button" className="secondary" onClick={load} disabled={loading}><RefreshCw size={14}/>{loading?"Loading…":"Refresh"}</button></div>
   {error&&<div className="error" role="alert">{error}</div>}{notice&&<div className="notice" role="status">{notice}</div>}
-  <h3>Deposit instruction emails</h3><table><thead><tr><th>Sent</th><th>Recipient</th><th>Sent by</th><th>Status</th><th>Upload link expiry</th>{adminMode&&<th>Admin</th>}</tr></thead><tbody>
-   {emails.map(row=><tr key={row.id}><td>{row.sent_at?new Date(row.sent_at).toLocaleString():"—"}</td><td>{row.recipient_name}<div className="muted">{row.recipient_email}</div></td><td>{row.sent_by_email||"—"}</td><td>{row.status}{row.error_message?<div className="muted">{row.error_message}</div>:null}</td><td>{row.link_expires_at?new Date(row.link_expires_at).toLocaleString():"—"}</td>{adminMode&&<td><button type="button" className="secondary" onClick={()=>removeEmail(row)}><Trash2 size={13}/> Delete log</button></td>}</tr>)}
-   {!emails.length&&<tr><td colSpan={adminMode?6:5}>No deposit instruction emails for this property.</td></tr>}
+  <h3>Deposit instruction emails</h3><table><thead><tr><th>Sent</th><th>Recipient</th><th>Sent by</th><th>Status</th><th>Upload link expiry</th>{canDelete&&<th>Admin</th>}</tr></thead><tbody>
+   {emails.map(row=><tr key={row.id}><td>{row.sent_at?new Date(row.sent_at).toLocaleString():"—"}</td><td>{row.recipient_name}<div className="muted">{row.recipient_email}</div></td><td>{row.sent_by_email||"—"}</td><td>{row.status}{row.error_message?<div className="muted">{row.error_message}</div>:null}</td><td>{row.link_expires_at?new Date(row.link_expires_at).toLocaleString():"—"}</td>{canDelete&&<td><button type="button" className="secondary" onClick={()=>removeEmail(row)}><Trash2 size={13}/> Delete log</button></td>}</tr>)}
+   {!emails.length&&<tr><td colSpan={canDelete?6:5}>No deposit instruction emails for this property.</td></tr>}
   </tbody></table>
   <h3 style={{marginTop:18}}>Uploaded deposit receipts</h3><table><thead><tr><th>Uploaded</th><th>File</th><th>Size</th><th>Open</th>{adminMode&&<th>Admin</th>}</tr></thead><tbody>
-   {uploads.map(file=><tr key={file.id}><td>{new Date(file.uploaded_at).toLocaleString()}</td><td>{file.file_name}</td><td>{Math.max(1,Math.round(Number(file.file_size||0)/1024))} KB</td><td>{file.download_url?<a href={file.download_url} target="_blank" rel="noreferrer">Open file</a>:"Unavailable"}</td>{adminMode&&<td><button type="button" className="secondary" onClick={()=>removeReceipt(file)}><Trash2 size={13}/> Delete receipt</button></td>}</tr>)}
-   {!uploads.length&&<tr><td colSpan={adminMode?5:4}>No receipts uploaded yet.</td></tr>}
+   {uploads.map(file=><tr key={file.id}><td>{new Date(file.uploaded_at).toLocaleString()}</td><td>{file.file_name}</td><td>{Math.max(1,Math.round(Number(file.file_size||0)/1024))} KB</td><td>{file.download_url?<a href={file.download_url} target="_blank" rel="noreferrer">Open file</a>:"Unavailable"}</td>{canDelete&&<td><button type="button" className="secondary" onClick={()=>removeReceipt(file)}><Trash2 size={13}/> Delete receipt</button></td>}</tr>)}
+   {!uploads.length&&<tr><td colSpan={canDelete?5:4}>No receipts uploaded yet.</td></tr>}
   </tbody></table>
  </section>;
 }
