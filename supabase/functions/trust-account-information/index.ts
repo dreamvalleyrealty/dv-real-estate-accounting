@@ -155,7 +155,7 @@ async function sendZohoWithPdfAttachment(admin: any, to: string, subject: string
     method: "POST",
     headers: { ...z.headers, "Content-Type": "application/json" },
     body: JSON.stringify({
-      fromAddress: z.from, toAddress: to, subject, content: emailBody, mailFormat: "html",
+      fromAddress: z.from, toAddress: to, subject, content: body, mailFormat: "html",
       attachments: [{ storeName: attachment.storeName, attachmentPath: attachment.attachmentPath, attachmentName: attachment.attachmentName }],
     }),
   });
@@ -197,7 +197,7 @@ async function sendZohoWithAttachmentBytes(admin: any, to: string, subject: stri
   const response = await fetch(z.mailBase + "/api/accounts/" + encodeURIComponent(z.accountId) + "/messages", {
     method: "POST", headers: { ...z.headers, "Content-Type": "application/json" },
     body: JSON.stringify({
-      fromAddress: z.from, toAddress: to, subject, content: body, mailFormat: "html",
+      fromAddress: z.from, toAddress: to, subject, content: emailBody, mailFormat: "html",
       attachments: [{ storeName: attachment.storeName, attachmentPath: attachment.attachmentPath, attachmentName: attachment.attachmentName }],
     }),
   });
