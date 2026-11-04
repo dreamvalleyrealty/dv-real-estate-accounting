@@ -29,7 +29,8 @@ function ListingDepositInstructions({ listings, agents, user, onBack }) {
  const [listingId,setListingId]=useState("");
  const [recipient,setRecipient]=useState({name:"",email:""});
  const [history,setHistory]=useState([]);
- const [propertyEmails,setPropertyEmails]=useState([]);\n const [propertyUploads,setPropertyUploads]=useState([]);\n const [propertyHistoryBusy,setPropertyHistoryBusy]=useState(false);
+ const [propertyEmails,setPropertyEmails]=useState([]);
+ const [propertyUploads,setPropertyUploads]=useState([]);\n const [propertyHistoryBusy,setPropertyHistoryBusy]=useState(false);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState("");
  const [message,setMessage]=useState("");
