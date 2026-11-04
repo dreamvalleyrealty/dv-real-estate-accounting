@@ -482,7 +482,15 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
    const receiptReference=depositForm.reference_number.trim();
    if(receiptReference){const {data:matchingReceipts,error:matchingReceiptError}=await supabase.from("dv_accounting_trust_transactions").select("id").eq("transaction_id",transaction.id).eq("trust_account_type","REAL_ESTATE_TRUST").eq("direction","DEPOSIT").eq("status","POSTED").eq("bank_account_id",bank.id).eq("ledger_date",depositForm.date).eq("amount",amount).eq("reference",receiptReference).limit(1);if(matchingReceiptError)throw matchingReceiptError;if(matchingReceipts?.length)throw new Error("A deposit with this same reference, date, amount, and trust account is already recorded. Check the existing receipt or use the correct reference for this deposit.");}
    const selectedProof=depositProofFiles.find(file=>file.id===depositProofId)||null;
-   const trustPayload={transaction_id:transaction.id,we_hold_deposit:"YES",held_by:"Dream Valley Realty Inc.",received:"YES",deposit_date:depositForm.date,received_from:depositForm.received_from.trim(),amount,trust_bank_account_id:bank.id,earns_interest:"NO",payment_type:depositForm.payment_type,reference_number:depositForm.reference_number.trim()||null,...(selectedProof?{receipt_attachment_path:selectedProof.storage_path,receipt_attachment_name:selectedProof.file_name,receipt_attachment_mime_type:selectedProof.mime_type}:{})};
+   let receiptAttachment=selectedProof?{path:selectedProof.storage_path,name:selectedProof.file_name,mime:selectedProof.mime_type||null}:null;
+   if(depositAttachment){
+    const safe=depositAttachment.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+    const path="listings/"+transaction.id+"/listing-deposit-receipts/"+Date.now()+"-"+safe;
+    const {error:uploadError}=await supabase.storage.from("dv-trade-documents").upload(path,depositAttachment,{upsert:false,contentType:depositAttachment.type||"application/octet-stream"});
+    if(uploadError)throw new Error("The deposit was not posted because the supporting receipt could not be uploaded: "+uploadError.message);
+    receiptAttachment={path,name:depositAttachment.name,mime:depositAttachment.type||null};
+   }
+   const trustPayload={transaction_id:transaction.id,we_hold_deposit:"YES",held_by:"Dream Valley Realty Inc.",received:"YES",deposit_date:depositForm.date,received_from:depositForm.received_from.trim(),amount,trust_bank_account_id:bank.id,earns_interest:"NO",payment_type:depositForm.payment_type,reference_number:depositForm.reference_number.trim()||null,...(receiptAttachment?{receipt_attachment_path:receiptAttachment.path,receipt_attachment_name:receiptAttachment.name,receipt_attachment_mime_type:receiptAttachment.mime}:{})};
    const {data:trustRows,error:trustFindError}=await supabase.from("dv_accounting_transaction_trust").select("id").eq("transaction_id",transaction.id).limit(1);
    if(trustFindError)throw trustFindError;
    if(trustRows?.length){const {error:trustUpdateError}=await supabase.from("dv_accounting_transaction_trust").update(trustPayload).eq("id",trustRows[0].id);if(trustUpdateError)throw new Error("RLS diagnostic: update on dv_accounting_transaction_trust failed. Details: "+trustUpdateError.message)}
