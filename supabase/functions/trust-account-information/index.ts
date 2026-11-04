@@ -144,7 +144,7 @@ async function sendZohoWithPdfAttachment(admin: any, to: string, subject: string
     headers: { ...z.headers, "Content-Type": "application/json" },
     body: JSON.stringify({
       fromAddress: z.from, toAddress: to, subject, content: body, mailFormat: "html",
-      attachments: [{ storeName: attachment.storeName, attachmentPath: attachment.attachmentPath, attachmentName: fileName }],
+      attachments: [{ storeName: attachment.storeName, attachmentPath: attachment.attachmentPath, attachmentName: attachment.attachmentName }],
     }),
   });
   const result = await response.json().catch(() => ({}));
