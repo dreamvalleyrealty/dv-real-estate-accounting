@@ -347,6 +347,33 @@ Deno.serve(async (req: Request) => {
       return json({property_address:log.property_address,instructions:{institution:instructions.institution,institution_number:instructions.institution_number,transit_number:instructions.transit_number,account_number:accountNumber,account_name:instructions.account_name,bank_address:instructions.bank_address}});
     }
 
+    if (action === "upload_deposit_receipts") {
+      const token=String(body.token||"");
+      if(!/^[a-f0-9]{64}$/i.test(token))return json({error:"This upload link is invalid or expired."},400);
+      const tokenHash=await sha256(token);
+      const {data:log,error:logError}=await admin.from("dv_accounting_deposit_instruction_email_log").select("id,listing_id,property_address,recipient_email,status,link_expires_at").eq("token_hash",tokenHash).maybeSingle();
+      if(logError||!log||!["SENT","VERIFIED","VIEWED"].includes(log.status)||new Date(log.link_expires_at).getTime()<=Date.now())return json({error:"This upload link is invalid or has expired."},410);
+      const files=Array.isArray(body.files)?body.files:[];
+      if(!files.length||files.length>10)return json({error:"Choose between 1 and 10 files per upload."},400);
+      const allowed=new Set(["application/pdf","image/jpeg","image/png","image/webp"]);
+      const saved=[];
+      for(const item of files){
+        const name=String(item?.name||"").replace(/[\\/]/g,"_").replace(/[^a-zA-Z0-9._ -]/g,"_").slice(0,160);
+        const mime=String(item?.type||"").toLowerCase();
+        const encoded=String(item?.data||"").replace(/^data:[^,]*;base64,/,"");
+        if(!name||!allowed.has(mime)||!encoded||encoded.length>14_000_000)return json({error:"Only PDF, JPG, PNG and WEBP files up to 10 MB each are accepted."},400);
+        const binary=atob(encoded),bytes=new Uint8Array(binary.length);
+        for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+        if(bytes.length>10*1024*1024)return json({error:"Each file must be 10 MB or smaller."},400);
+        const path="listing-deposit-receipts/"+log.listing_id+"/"+log.id+"/"+crypto.randomUUID()+"-"+name.replace(/\s+/g,"_");
+        const {error:uploadError}=await admin.storage.from("dv-trade-documents").upload(path,bytes,{contentType:mime,upsert:false});
+        if(uploadError)throw uploadError;
+        const {data:record,error:recordError}=await admin.from("dv_accounting_deposit_receipt_uploads").insert({email_log_id:log.id,listing_id:log.listing_id,property_address:log.property_address,recipient_email:log.recipient_email,storage_path:path,file_name:name,mime_type:mime,file_size:bytes.length}).select("id,file_name,uploaded_at").single();
+        if(recordError){await admin.storage.from("dv-trade-documents").remove([path]);throw recordError}
+        saved.push(record);
+      }
+      return json({ok:true,uploaded:saved.length,files:saved,message:saved.length+" receipt file(s) uploaded successfully."});
+    }
     const actor = await requireActor(req, admin, supabaseUrl, anonKey);
     const isAdmin = ["SUPERADMIN","ADMIN"].includes(actor.role);
     if (action === "get_settings") {
@@ -408,6 +435,26 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, message: "Both trust account instructions were saved securely." });
     }
 
+    if (action === "get_deposit_receipt_uploads") {
+      const listingId=String(body.listingId||"");
+      if(!/^[0-9a-f-]{36}$/i.test(listingId))return json({error:"Select a valid property."},400);
+      const {data:listing,error:listingError}=await admin.from("dv_accounting_listing_submissions").select("id,agent_id,additional_agent_ids").eq("id",listingId).maybeSingle();
+      if(listingError)throw listingError;if(!listing)return json({error:"Property not found."},404);
+      if(!isAdmin){
+        if(actor.role!=="AGENT")return json({error:"You do not have access to these receipts."},403);
+        const {data:agent,error:agentError}=await admin.from("dv_accounting_agents").select("id,user_id,email,active").eq("user_id",actor.user.id).maybeSingle();
+        if(agentError)throw agentError;
+        if(!agent||agent.active===false||String(agent.email||"").toLowerCase()!==String(actor.user.email||"").toLowerCase()||(listing.agent_id!==agent.id&&!(Array.isArray(listing.additional_agent_ids)&&listing.additional_agent_ids.includes(agent.id))))return json({error:"You may view receipts only for listings assigned to you."},403);
+      }
+      const [{data:emails,error:emailError},{data:uploads,error:uploadError}]=await Promise.all([
+        admin.from("dv_accounting_deposit_instruction_email_log").select("id,recipient_name,recipient_email,sent_by_email,status,created_at,sent_at,link_expires_at,error_message").eq("listing_id",listingId).order("created_at",{ascending:false}).limit(100),
+        admin.from("dv_accounting_deposit_receipt_uploads").select("id,email_log_id,file_name,mime_type,file_size,uploaded_at,storage_path").eq("listing_id",listingId).order("uploaded_at",{ascending:false}).limit(200)
+      ]);
+      if(emailError)throw emailError;if(uploadError)throw uploadError;
+      const files=[];
+      for(const file of uploads||[]){const {data:link,error:linkError}=await admin.storage.from("dv-trade-documents").createSignedUrl(file.storage_path,900);files.push({...file,download_url:linkError?null:link?.signedUrl||null})}
+      return json({emails:emails||[],uploads:files});
+    }
     if (action === "get_deposit_instructions_history") {
 let query = admin.from("dv_accounting_deposit_instruction_email_log")
         .select("id,listing_id,property_address,recipient_name,recipient_email,sent_by,sent_by_email,status,created_at,sent_at,link_expires_at,verified_at,opened_at,error_message")
@@ -445,14 +492,15 @@ let query = admin.from("dv_accounting_deposit_instruction_email_log")
         .eq("account_type","REAL_ESTATE_TRUST").limit(1);
       if(accountError)throw accountError;
       if(!accountRows?.length)return json({error:"Real Estate Trust deposit instructions have not been configured by an administrator."},409);
-      const token=randomHex(32),tokenHash=await sha256(token),now=new Date(),expires=new Date(now.getTime()+24*60*60*1000);
+      const token=randomHex(32),tokenHash=await sha256(token),now=new Date(),expires=new Date(now.getTime()+7*24*60*60*1000);
       const {data:created,error:createError}=await admin.from("dv_accounting_deposit_instruction_email_log").insert({
         listing_id:listing.id,property_address:propertyAddress,recipient_name:recipientName,recipient_email:recipientEmail,
         sent_by:actor.user.id,sent_by_email:actor.user.email||null,status:"PENDING",token_hash:tokenHash,
         link_expires_at:expires.toISOString(),otp_attempts:0
       }).select("id").single();
       if(createError)throw createError;
-      const html="<div style=\"font-family:Arial,sans-serif;max-width:620px;color:#172b4d\"><h2>Real Estate Trust deposit instructions</h2><p>Hello "+htmlEscape(recipientName)+",</p><p>Please find attached Dream Valley Realty's Real Estate Trust deposit instructions for the following property:</p><p><strong>"+htmlEscape(propertyAddress)+"</strong></p><p>Please forward the deposit receipt to <a href=\"mailto:frontdesk@dvrealty.ca\">frontdesk@dvrealty.ca</a> once the transfer has been arranged.</p><p>Regards,<br/>Dream Valley Realty Inc.</p></div>";
+      const uploadUrl=publicAppUrl.replace(/\/+$/,"")+"/deposit-receipt-upload?token="+encodeURIComponent(token);
+      const html="<div style=\"font-family:Arial,sans-serif;max-width:620px;color:#172b4d\"><h2>Real Estate Trust deposit instructions</h2><p>Hello "+htmlEscape(recipientName)+",</p><p>Please find attached Dream Valley Realty's Real Estate Trust deposit instructions for the following property:</p><p><strong>"+htmlEscape(propertyAddress)+"</strong></p><p>After arranging the deposit, use the secure link below to upload your deposit receipt or bank confirmation. You may upload multiple receipts for this property.</p><p><a href=\""+htmlEscape(uploadUrl)+"\" style=\"display:inline-block;background:#0f2141;color:#fff;padding:12px 18px;text-decoration:none;border-radius:5px\">Upload Deposit Receipt</a></p><p>This upload link expires in 7 days. You can upload multiple PDF or image files during that period.</p><p>Regards,<br/>Dream Valley Realty Inc.</p></div>";
       try{
         const messageId=await sendZohoWithPdfAttachment(admin,recipientEmail,"Real Estate Trust Deposit Instructions — "+propertyAddress,html);
         const {error:updateError}=await admin.from("dv_accounting_deposit_instruction_email_log").update({status:"SENT",sent_at:new Date().toISOString(),provider_message_id:JSON.stringify({pdf_attachment:messageId})}).eq("id",created.id);
