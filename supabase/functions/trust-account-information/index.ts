@@ -488,7 +488,7 @@ Deno.serve(async (req: Request) => {
       if(!/^[0-9a-f-]{36}$/i.test(listingId))return json({error:"Select a valid property."},400);
       const {data:listing,error:listingError}=await admin.from("dv_accounting_listing_submissions").select("id,agent_id,additional_agent_ids").eq("id",listingId).maybeSingle();
       if(listingError)throw listingError;if(!listing)return json({error:"Property not found."},404);
-      if(!isAdmin){
+      if(!isAdmin && actor.role!=="MANAGER"){
         if(actor.role!=="AGENT")return json({error:"You do not have access to these receipts."},403);
         const {data:agent,error:agentError}=await admin.from("dv_accounting_agents").select("id,user_id,email,active").eq("user_id",actor.user.id).maybeSingle();
         if(agentError)throw agentError;
@@ -501,7 +501,7 @@ Deno.serve(async (req: Request) => {
       if(emailError)throw emailError;if(uploadError)throw uploadError;
       const files=[];
       for(const file of uploads||[]){const {data:link,error:linkError}=await admin.storage.from("dv-trade-documents").createSignedUrl(file.storage_path,900);files.push({...file,download_url:linkError?null:link?.signedUrl||null})}
-      return json({emails:emails||[],uploads:files});
+      return json({emails:emails||[],uploads:files,can_delete:isAdmin});
     }
     if (action === "get_deposit_instructions_history") {
 let query = admin.from("dv_accounting_deposit_instruction_email_log")
