@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument, StandardFonts, rgb, degrees } from "https://esm.sh/pdf-lib@1.17.1";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -83,7 +83,7 @@ async function sendZoho(admin: any, to: string, subject: string, body: string) {
 async function buildTrustAccountPdf() {
   const document = await PDFDocument.create();
   const page = document.addPage([612, 792]);
-  page.drawSvgPath("M 66 117 L 72 116 L 81 112 L 87 108 L 95 100 L 91 112 L 92 113 L 102 113 L 103 114 L 103 117 Z M 1 3 L 2 2 L 46 2 L 47 3 L 62 4 L 66 6 L 69 6 L 79 11 L 86 16 L 95 26 L 84 60 L 82 40 L 78 27 L 75 22 L 67 14 L 59 10 L 53 8 L 48 8 L 47 7 L 34 7 L 33 8 L 33 112 L 34 113 L 50 113 L 51 112 L 55 112 L 61 110 L 66 107 L 75 98 L 79 91 L 81 82 L 84 75 L 84 72 L 86 68 L 86 65 L 88 61 L 88 58 L 92 49 L 92 46 L 94 43 L 107 3 L 109 1 L 111 1 L 114 5 L 123 32 L 123 35 L 125 38 L 126 44 L 147 105 L 147 108 L 150 113 L 162 113 L 163 115 L 162 117 L 131 117 L 130 115 L 131 113 L 142 113 L 143 111 L 138 99 L 138 96 L 135 90 L 135 87 L 133 84 L 117 36 L 115 39 L 99 89 L 94 98 L 87 105 L 73 113 L 63 115 L 59 117 L 2 117 L 1 115 L 3 113 L 13 113 L 14 112 L 14 8 L 13 7 L 2 7 Z M 5 146 L 5 139 L 78 193 L 81 194 L 173 119 L 173 9 L 172 8 L 122 8 L 122 2 L 179 2 L 179 122 L 81 202 L 35 168 L 31 166 L 20 157 L 16 155 Z", { x: 38, y: 684, scale: 0.333, color: rgb(158 / 255, 133 / 255, 86 / 255) });
+  page.drawSvgPath("M 66 117 L 72 116 L 81 112 L 87 108 L 95 100 L 91 112 L 92 113 L 102 113 L 103 114 L 103 117 Z M 1 3 L 2 2 L 46 2 L 47 3 L 62 4 L 66 6 L 69 6 L 79 11 L 86 16 L 95 26 L 84 60 L 82 40 L 78 27 L 75 22 L 67 14 L 59 10 L 53 8 L 48 8 L 47 7 L 34 7 L 33 8 L 33 112 L 34 113 L 50 113 L 51 112 L 55 112 L 61 110 L 66 107 L 75 98 L 79 91 L 81 82 L 84 75 L 84 72 L 86 68 L 86 65 L 88 61 L 88 58 L 92 49 L 92 46 L 94 43 L 107 3 L 109 1 L 111 1 L 114 5 L 123 32 L 123 35 L 125 38 L 126 44 L 147 105 L 147 108 L 150 113 L 162 113 L 163 115 L 162 117 L 131 117 L 130 115 L 131 113 L 142 113 L 143 111 L 138 99 L 138 96 L 135 90 L 135 87 L 133 84 L 117 36 L 115 39 L 99 89 L 94 98 L 87 105 L 73 113 L 63 115 L 59 117 L 2 117 L 1 115 L 3 113 L 13 113 L 14 112 L 14 8 L 13 7 L 2 7 Z M 5 146 L 5 139 L 78 193 L 81 194 L 173 119 L 173 9 L 172 8 L 122 8 L 122 2 L 179 2 L 179 122 L 81 202 L 35 168 L 31 166 L 20 157 L 16 155 Z", { x: 291, y: 748, scale: 0.16, rotate: degrees(180), color: rgb(158 / 255, 133 / 255, 86 / 255) });
   const regular = await document.embedFont(StandardFonts.Helvetica);
   const bold = await document.embedFont(StandardFonts.HelveticaBold);
   const navy = rgb(15 / 255, 33 / 255, 65 / 255);
@@ -91,10 +91,10 @@ async function buildTrustAccountPdf() {
   const center = (text: string, y: number, size = 10, font = regular, color = rgb(0, 0, 0)) => {
     page.drawText(text, { x: (612 - font.widthOfTextAtSize(text, size)) / 2, y, size, font, color });
   };
-  center("TRUST ACCOUNT INFORMATION", 744, 16, bold, navy);
-  center("(DEPOSIT ONLY)", 725, 10, bold, gold);
-  center("885 Progress Ave #109", 697);
-  center("Toronto. ON M1H 3G3", 682);
+  center("TRUST ACCOUNT INFORMATION", 710, 16, bold, navy);
+  center("(DEPOSIT ONLY)", 691, 10, bold, gold);
+  center("885 Progress Ave #109", 663);
+  center("Toronto. ON M1H 3G3", 648);
   const rows: [string, string][] = [
     ["Beneficiary Name:", "Dream Valley Realty Inc."],
     ["Bank Name:", "TD Canada Trust"],
@@ -104,7 +104,7 @@ async function buildTrustAccountPdf() {
     ["Branch Number:", "004"],
     ["Swift Code:", "TDOMCATTTOR"],
   ];
-  let y = 635;
+  let y = 615;
   for (const [label, value] of rows) {
     page.drawText(label, { x: 92, y, size: 10.5, font: bold });
     page.drawText(value, { x: 205, y, size: 10.5, font: regular });
