@@ -28,7 +28,7 @@ const statusLabel=s=>({DRAFT:"Draft",SUBMITTED:"Awaiting review",NEEDS_CHANGES:"
 function ListingDepositInstructions({ listings, agents, user, onBack }) {
  const [listingId,setListingId]=useState("");
  const [recipient,setRecipient]=useState({name:"",email:""});
- const [history,setHistory]=useState([]);
+ const [history,setHistory]=useState([]);\n const [propertyEmails,setPropertyEmails]=useState([]);\n const [propertyUploads,setPropertyUploads]=useState([]);\n const [propertyHistoryBusy,setPropertyHistoryBusy]=useState(false);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState("");
  const [message,setMessage]=useState("");
@@ -41,7 +41,7 @@ function ListingDepositInstructions({ listings, agents, user, onBack }) {
   if(e||data?.error){setError(data?.error||e?.message||"Could not load deposit-instructions history.");return}
   setHistory(data?.history||[]);
  }
- useEffect(()=>{loadHistory()},[]);
+ async function loadPropertyHistory(id){if(!id){setPropertyEmails([]);setPropertyUploads([]);return}setPropertyHistoryBusy(true);try{const {data,error}=await supabase.functions.invoke("trust-account-information",{body:{action:"get_deposit_receipt_uploads",listingId:id}});if(error||data?.error)throw new Error(data?.error||error?.message||"Could not load property deposit history.");setPropertyEmails(data?.emails||[]);setPropertyUploads(data?.uploads||[])}catch(err){setError(err?.message||"Could not load property deposit history.")}finally{setPropertyHistoryBusy(false)}}\n useEffect(()=>{loadHistory()},[]);\n useEffect(()=>{loadPropertyHistory(listingId)},[listingId]);
  async function send(e){
   e.preventDefault();setError("");setMessage("");
   if(!selected){setError("Select a listing first.");return}
@@ -71,7 +71,7 @@ function ListingDepositInstructions({ listings, agents, user, onBack }) {
     <label>Buyer's agent email *<input required type="email" maxLength={254} value={recipient.email} onChange={e=>setRecipient(v=>({...v,email:e.target.value}))} placeholder="agent@brokerage.ca"/></label>
    </div>
    {selected&&<div className="notice" style={{marginTop:12}}><strong>Property:</strong> {address(selected)}<div style={{marginTop:3}}><strong>Assigned agent:</strong> {agentName(selected)}</div></div>}
-   <p className="muted" style={{marginTop:12}}>The email will include the selected property address and the PDF attachment. No secure link or email verification code is required.</p>
+   <p className="muted" style={{marginTop:12}}>The email includes the property address, trust instructions PDF, and a secure receipt-upload link active for 7 days. The buyer’s agent can upload multiple PDF or image receipts.</p>
    {error&&<div className="error" role="alert" style={{marginBottom:12}}>{error}</div>}
    {message&&<div className="notice" role="status" style={{marginBottom:12}}>{message}</div>}
    <button className="primary" disabled={busy||!selected}>{busy?"Sending email with PDF…":"Send Deposit Instructions"}</button>
@@ -83,7 +83,19 @@ function ListingDepositInstructions({ listings, agents, user, onBack }) {
    {history.map(row=><tr key={row.id}><td>{row.sent_at?new Date(row.sent_at).toLocaleString():"—"}</td><td>{row.property_address||"—"}</td><td>{row.recipient_name}<div className="muted">{row.recipient_email}</div></td><td>{row.sent_by_email||"—"}</td><td>Trust Account Information PDF</td><td>{row.status}</td></tr>)}
    {!history.length&&<tr><td colSpan="6">No deposit instructions have been sent.</td></tr>}
   </tbody></table>
- </section></>;
+ </section>
+ {selected&&<section className="panel tablewrap" style={{maxWidth:1200,marginTop:18}}>
+  <div className="paneltitle"><div><h2>Property Email & Deposit Receipt History</h2><p className="muted">{address(selected)}</p></div><button type="button" className="secondary" onClick={()=>loadPropertyHistory(selected.id)} disabled={propertyHistoryBusy}>Refresh</button></div>
+  <h3>Deposit instruction emails</h3><table><thead><tr><th>Sent</th><th>Recipient</th><th>Sent by</th><th>Status</th><th>Upload link expiry</th></tr></thead><tbody>
+   {propertyEmails.map(row=><tr key={row.id}><td>{row.sent_at?new Date(row.sent_at).toLocaleString():"—"}</td><td>{row.recipient_name}<div className="muted">{row.recipient_email}</div></td><td>{row.sent_by_email||"—"}</td><td>{row.status}{row.error_message?<div className="muted">{row.error_message}</div>:null}</td><td>{row.link_expires_at?new Date(row.link_expires_at).toLocaleString():"—"}</td></tr>)}
+   {!propertyEmails.length&&<tr><td colSpan="5">No deposit instruction emails for this property.</td></tr>}
+  </tbody></table>
+  <h3 style={{marginTop:18}}>Uploaded deposit receipts</h3><table><thead><tr><th>Uploaded</th><th>File</th><th>Size</th><th></th></tr></thead><tbody>
+   {propertyUploads.map(file=><tr key={file.id}><td>{new Date(file.uploaded_at).toLocaleString()}</td><td>{file.file_name}</td><td>{Math.max(1,Math.round(Number(file.file_size||0)/1024))} KB</td><td>{file.download_url?<a href={file.download_url} target="_blank" rel="noreferrer">Open file</a>:"Unavailable"}</td></tr>)}
+   {!propertyUploads.length&&<tr><td colSpan="4">No receipts uploaded yet.</td></tr>}
+  </tbody></table>
+ </section>}
+ </>;
 }
 
 export default function Listings({user,agentId,adminMode=false,initialSubmissionId="",initialActiveTab="PROPERTY",canDeleteDocuments=false,canDeleteDraftListings=false,canReceiveDeposit=false}){
