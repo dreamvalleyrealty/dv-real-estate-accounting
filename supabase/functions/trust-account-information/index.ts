@@ -351,7 +351,7 @@ Deno.serve(async (req: Request) => {
       const token=String(body.token||"");
       if(!/^[a-f0-9]{64}$/i.test(token))return json({error:"This upload link is invalid or expired."},400);
       const tokenHash=await sha256(token);
-      const {data:log,error:logError}=await admin.from("dv_accounting_deposit_instruction_email_log").select("id,listing_id,property_address,recipient_email,status,link_expires_at").eq("token_hash",tokenHash).maybeSingle();
+      const {data:log,error:logError}=await admin.from("dv_accounting_deposit_instruction_email_log").select("id,listing_id,property_address,recipient_email,sent_by_email,status,link_expires_at").eq("token_hash",tokenHash).maybeSingle();
       if(logError||!log||!["SENT","VERIFIED","VIEWED"].includes(log.status)||new Date(log.link_expires_at).getTime()<=Date.now())return json({error:"This upload link is invalid or has expired."},410);
       const files=Array.isArray(body.files)?body.files:[];
       if(!files.length||files.length>10)return json({error:"Choose between 1 and 10 files per upload."},400);
