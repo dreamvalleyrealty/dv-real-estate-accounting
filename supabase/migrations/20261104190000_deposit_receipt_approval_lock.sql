@@ -17,7 +17,8 @@ create or replace function public.dv_accounting_guard_approved_deposit_receipt()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
   v_role text := public.dv_accounting_current_user_role();
-  v_trust_transaction_id uuid;
+  v_transaction_id uuid;
+  v_ledger_id uuid;
   v_is_approved boolean := false;
 begin
   if TG_TABLE_NAME = 'dv_accounting_deposit_receipt_issuances' then
@@ -47,24 +48,50 @@ begin
   if v_role = 'SUPERADMIN' then
     if TG_OP = 'DELETE' then return OLD; else return NEW; end if;
   end if;
-  if TG_OP = 'DELETE' then v_trust_transaction_id := OLD.transaction_id;
-  else v_trust_transaction_id := NEW.transaction_id; end if;
 
-  if v_trust_transaction_id is not null then
+  if TG_TABLE_NAME = 'dv_accounting_trust_transactions' then
+    if TG_OP = 'DELETE' then v_ledger_id := OLD.id; else v_ledger_id := NEW.id; end if;
     select exists (
       select 1 from public.dv_accounting_deposit_receipt_issuances i
-      join public.dv_accounting_trust_transactions t on t.id = i.trust_transaction_id
-      where i.transaction_id = v_trust_transaction_id and i.approval_status = 'APPROVED'
+      where i.trust_transaction_id = v_ledger_id and i.approval_status = 'APPROVED'
     ) into v_is_approved;
-    if v_is_approved then
-      raise exception 'This deposit receipt has been approved and is locked. Only a Super Admin can make changes.';
-    end if;
-    if TG_TABLE_NAME = 'dv_accounting_transaction_trust' and TG_OP = 'UPDATE' then
-      update public.dv_accounting_deposit_receipt_issuances i
-      set approval_status = 'PENDING', approved_by = null, approved_at = null, rejection_reason = null
-      where i.transaction_id = v_trust_transaction_id and i.approval_status = 'REJECTED';
+  else
+    if TG_OP = 'DELETE' then
+      v_transaction_id := OLD.transaction_id;
+      select exists (
+        select 1 from public.dv_accounting_deposit_receipt_issuances i
+        join public.dv_accounting_trust_transactions t on t.id = i.trust_transaction_id
+        where i.transaction_id = v_transaction_id and i.approval_status = 'APPROVED'
+          and t.amount = OLD.amount and t.ledger_date = OLD.deposit_date
+          and lower(coalesce(t.client_name,'')) = lower(coalesce(OLD.received_from,''))
+      ) into v_is_approved;
+    else
+      v_transaction_id := NEW.transaction_id;
+      select exists (
+        select 1 from public.dv_accounting_deposit_receipt_issuances i
+        join public.dv_accounting_trust_transactions t on t.id = i.trust_transaction_id
+        where i.transaction_id = v_transaction_id and i.approval_status = 'APPROVED'
+          and t.amount = OLD.amount and t.ledger_date = OLD.deposit_date
+          and lower(coalesce(t.client_name,'')) = lower(coalesce(OLD.received_from,''))
+      ) into v_is_approved;
     end if;
   end if;
+
+  if v_is_approved then
+    raise exception 'This deposit receipt has been approved and is locked. Only a Super Admin can make changes.';
+  end if;
+
+  if TG_TABLE_NAME = 'dv_accounting_transaction_trust' and TG_OP = 'UPDATE' then
+    update public.dv_accounting_deposit_receipt_issuances i
+    set approval_status = 'PENDING', approved_by = null, approved_at = null, rejection_reason = null
+    from public.dv_accounting_trust_transactions t
+    where t.id = i.trust_transaction_id
+      and i.transaction_id = NEW.transaction_id
+      and i.approval_status = 'REJECTED'
+      and t.amount = OLD.amount and t.ledger_date = OLD.deposit_date
+      and lower(coalesce(t.client_name,'')) = lower(coalesce(OLD.received_from,''));
+  end if;
+
   if TG_OP = 'DELETE' then return OLD; else return NEW; end if;
 end;
 $$;
