@@ -334,10 +334,10 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
      const source=await PDFDocument.load(await item.sourceFile.arrayBuffer());
      const output=await PDFDocument.create();
      const copied=await output.copyPages(source,Array.from({length:end-start+1},(_,i)=>start-1+i));copied.forEach(p=>output.addPage(p));
-     const base=item.sourceFile.name.replace(/\\.pdf$/i,"");
+     const base=item.sourceFile.name.replace(/\.pdf$/i,"");
      const typeLabel=requirements.find(r=>r.code===documentType)?.label||documentType;
      const customSupportingName=documentType==="OTHER"?String(item.document_name||"").trim():"";
-     documentName=customSupportingName?( /\\.pdf$/i.test(customSupportingName)?customSupportingName:customSupportingName+".pdf"):base+" - "+typeLabel+" - pages "+start+"-"+end+".pdf";
+     documentName=customSupportingName?( /\.pdf$/i.test(customSupportingName)?customSupportingName:customSupportingName+".pdf"):base+" - "+typeLabel+" - pages "+start+"-"+end+".pdf";
      f=new File([await output.save()],documentName,{type:"application/pdf"});
     }
     const safe=f.name.replace(/[^a-zA-Z0-9._-]/g,"_");
@@ -523,7 +523,7 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
    const recipientEmail=window.prompt("Enter the recipient email address for this deposit receipt:");
    if(recipientEmail===null)return;
    const email=recipientEmail.trim().toLowerCase();
-   if(!/^([^\\s@]+)@([^\\s@]+)\\.[^\\s@]+$/.test(email)){setDepositError("Enter a valid recipient email address.");return}
+   if(!/^([^\s@]+)@([^\s@]+)\.[^\s@]+$/.test(email)){setDepositError("Enter a valid recipient email address.");return}
    if(!isAdmin){setDepositError("Only an administrator can email a listing deposit receipt.");return}
    setDepositError("");setMessage("");setDepositEmailBusy(true);
    try{
