@@ -2001,13 +2001,17 @@ function DepositReceiptUploadPage(){
   if(!files.length){setError("Choose at least one receipt file.");return}
   if(files.length>10){setError("Upload up to 10 files at a time.");return}
   const allowed=["application/pdf","image/jpeg","image/png","image/webp"];
-  for(const file of files){if(!allowed.includes(file.type)){setError("Only PDF, JPG, PNG and WEBP files are accepted.");return}if(file.size>10*1024*1024){setError("Each file must be 10 MB or smaller.");return}}
+  for(const file of files){if(!allowed.includes(file.type)){setError("Only PDF, JPG, PNG and WEBP files are accepted.");return}if(file.size>4*1024*1024){setError("Each file must be 4 MB or smaller. Upload additional receipts in another batch.");return}}
   setBusy(true);
   try{
-   const encoded=await Promise.all(files.map(file=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve({name:file.name,type:file.type,data:reader.result});reader.onerror=()=>reject(new Error("Could not read "+file.name));reader.readAsDataURL(file)})));
-   const {data,error:e}=await supabase.functions.invoke("trust-account-information",{body:{action:"upload_deposit_receipts",token,files:encoded}});
-   if(e)throw e;if(data?.error)throw new Error(data.error);
-   setMessage(data?.message||"Receipt files uploaded successfully.");setFiles([]);
+   let uploaded=0;
+   for(const file of files){
+    const encoded=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve({name:file.name,type:file.type,data:reader.result});reader.onerror=()=>reject(new Error("Could not read "+file.name));reader.readAsDataURL(file)});
+    const {data,error:e}=await supabase.functions.invoke("trust-account-information",{body:{action:"upload_deposit_receipts",token,files:[encoded]}});
+    if(e)throw e;if(data?.error)throw new Error(data.error);uploaded+=Number(data?.uploaded||1);
+    setMessage(uploaded+" of "+files.length+" receipt file(s) uploaded…");
+   }
+   setMessage(uploaded+" receipt file(s) uploaded successfully.");setFiles([]);
    const input=document.getElementById("deposit-receipt-files");if(input)input.value="";
   }catch(err){setError(err?.message||"Could not upload receipt files.")}
   finally{setBusy(false)}
