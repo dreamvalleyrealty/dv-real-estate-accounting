@@ -510,7 +510,7 @@ Deno.serve(async (req: Request) => {
     if (action === "send_deposit_receipt") {
       if (!["SUPERADMIN","ADMIN","MANAGER","STAFF"].includes(actor.role)) return json({ error: "Only brokerage staff can email a listing deposit receipt." }, 403);
       const trustTransactionId = String(body.trustTransactionId || "").trim();
-      const recipientEmails = [...new Set((Array.isArray(body.recipientEmails) ? body.recipientEmails : String(body.recipientEmails || body.recipientEmail || "").split(/[;,\\s]+/)).map((value: any) => String(value || "").trim().toLowerCase()).filter(Boolean))];
+      const recipientEmails = [...new Set((Array.isArray(body.recipientEmails) ? body.recipientEmails : String(body.recipientEmails || body.recipientEmail || "").split(/[;,\s]+/)).map((value: any) => String(value || "").trim().toLowerCase()).filter(Boolean))];
       if (!/^[0-9a-f-]{36}$/i.test(trustTransactionId)) return json({ error: "Select a valid deposit receipt." }, 400);
       if (!recipientEmails.length || recipientEmails.length > 20 || recipientEmails.some((email: string) => !validEmail(email) || email.length > 254)) return json({ error: "Enter between 1 and 20 valid email addresses, separated by commas or new lines." }, 400);
       const { data: ledger, error: ledgerError } = await admin.from("dv_accounting_trust_transactions")
