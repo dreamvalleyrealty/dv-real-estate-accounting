@@ -508,11 +508,11 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "send_deposit_receipt") {
-      if (!["SUPERADMIN","ADMIN","MANAGER"].includes(actor.role)) return json({ error: "Only authorized brokerage staff can email a listing deposit receipt." }, 403);
+      if (!["SUPERADMIN","ADMIN","MANAGER","STAFF"].includes(actor.role)) return json({ error: "Only brokerage staff can email a listing deposit receipt." }, 403);
       const trustTransactionId = String(body.trustTransactionId || "").trim();
-      const recipientEmail = String(body.recipientEmail || "").trim().toLowerCase();
+      const recipientEmails = [...new Set((Array.isArray(body.recipientEmails) ? body.recipientEmails : String(body.recipientEmails || body.recipientEmail || "").split(/[;,\\s]+/)).map((value: any) => String(value || "").trim().toLowerCase()).filter(Boolean))];
       if (!/^[0-9a-f-]{36}$/i.test(trustTransactionId)) return json({ error: "Select a valid deposit receipt." }, 400);
-      if (!validEmail(recipientEmail) || recipientEmail.length > 254) return json({ error: "Enter a valid recipient email address." }, 400);
+      if (!recipientEmails.length || recipientEmails.length > 20 || recipientEmails.some((email: string) => !validEmail(email) || email.length > 254)) return json({ error: "Enter between 1 and 20 valid email addresses, separated by commas or new lines." }, 400);
       const { data: ledger, error: ledgerError } = await admin.from("dv_accounting_trust_transactions")
         .select("id,transaction_id,ledger_date,client_name,amount,reference,bank_account_id,trust_account_type,direction,status")
         .eq("id", trustTransactionId).eq("trust_account_type", "REAL_ESTATE_TRUST").eq("direction", "DEPOSIT").eq("status", "POSTED").maybeSingle();
@@ -529,7 +529,7 @@ Deno.serve(async (req: Request) => {
       if (listingError) throw listingError;
       if (!listing) return json({ error: "The listing linked to this receipt could not be found." }, 404);
       const { data: issuance, error: issuanceError } = await admin.from("dv_accounting_deposit_receipt_issuances")
-        .select("issuer_name,issuer_signature_path,issued_at").eq("trust_transaction_id", ledger.id).maybeSingle();
+        .select("issuer_name,issuer_signature_path,issued_at,approval_status").eq("trust_transaction_id", ledger.id).maybeSingle();
       if (issuanceError) throw issuanceError;
       if (!issuance?.issuer_name) return json({ error: "This receipt has no authorized issuer record. Open and verify the receipt before emailing it." }, 409);
       if (issuance.approval_status !== "APPROVED") return json({ error: "This deposit receipt must be approved by an Admin before it can be emailed." }, 409);
@@ -595,24 +595,40 @@ Deno.serve(async (req: Request) => {
       const subject = "Deposit Receipt " + receiptNumber + " — " + address;
       const html = "<div style='font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:0 auto;color:#243247;border:1px solid #d8dde5;border-radius:8px;overflow:hidden'><div style='background:#0f2141;color:#9e8556;text-align:center;padding:24px 18px'><div style='font-size:26px;font-weight:bold;letter-spacing:2px'>DV</div><div style='font-size:17px;font-weight:bold;letter-spacing:2px;margin-top:8px'>DREAM VALLEY REALTY</div><div style='font-size:11px;letter-spacing:1px;margin-top:4px;color:#fff'>DEPOSIT RECEIPT</div></div><div style='padding:24px 28px'><p>Please find your official deposit receipt details below. The full receipt is attached as a PDF for your records.</p><h3 style='font-size:14px;color:#0f2141;text-decoration:underline;margin:18px 0 8px'>Deposit Receipt</h3><table style='border-collapse:collapse;width:100%;font-size:12px'><tr><td style='font-weight:bold;padding:2px 6px'>Receipt No</td><td style='padding:2px 6px'>"+htmlEscape(receiptNumber)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Date</td><td style='padding:2px 6px'>"+htmlEscape(date)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Property Address</td><td style='padding:2px 6px'>"+htmlEscape(address)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Received From</td><td style='padding:2px 6px'>"+htmlEscape(receivedFrom)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Type of Payment</td><td style='padding:2px 6px'>Deposit</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Payment Method</td><td style='padding:2px 6px'>"+htmlEscape(paymentMethod)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Transaction No</td><td style='padding:2px 6px'>"+htmlEscape(String(transactionNumber))+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Amount Received</td><td style='padding:2px 6px;font-weight:bold'>"+htmlEscape(amount.toLocaleString("en-CA",{style:"currency",currency:"CAD"}))+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Received By</td><td style='padding:2px 6px'>"+htmlEscape(issuerName)+"</td></tr></table></div><div style='border-top:1px solid #e5e7eb;padding:18px 28px;color:#555;font-size:12px'><p>Thank you for your prompt attention.</p><p>Best regards,<br/><strong>The Dream Valley Realty Admin Team</strong></p></div><div style='background:#0f2141;color:#9e8556;text-align:center;padding:12px;font-size:10px'>© "+new Date().getFullYear()+" Dream Valley Realty. All rights reserved.<br/><span style='color:#aab3c2'>This is an automated message. Please do not reply to this email.</span></div></div>";
       const fileName = receiptNumber + ".pdf";
-      const { data: emailLog, error: emailLogError } = await admin.from("dv_accounting_email_log").insert({
-        transaction_id: transaction.id, document_type: "DEPOSIT_RECEIPT", recipient_email: recipientEmail,
-        subject, attachment_name: fileName, status: "PENDING", sent_by: actor.user.id,
-        sent_by_email: actor.user.email || null,
-      }).select("id").single();
-      if (emailLogError) throw emailLogError;
-      try {
-        const providerId = await sendZohoWithAttachmentBytes(admin, recipientEmail, subject, html, pdfBytes, fileName);
-        const { error: updateLogError } = await admin.from("dv_accounting_email_log").update({
-          status: "SENT", provider_message_id: providerId, sent_at: new Date().toISOString(),
-        }).eq("id", emailLog.id);
-        if (updateLogError) throw updateLogError;
-        return json({ ok: true, status: "SENT", message: "Deposit receipt PDF emailed to " + recipientEmail + "." });
-      } catch (sendError) {
-        const message = String((sendError as Error)?.message || "Email sending failed").slice(0, 350);
-        await admin.from("dv_accounting_email_log").update({ status: "FAILED", error_message: message }).eq("id", emailLog.id);
-        return json({ error: message }, 502);
+      const results: any[] = [];
+      for (const recipientEmail of recipientEmails) {
+        const { data: emailLog, error: emailLogError } = await admin.from("dv_accounting_email_log").insert({
+          transaction_id: transaction.id, trust_transaction_id: ledger.id, property_address: address,
+          document_type: "DEPOSIT_RECEIPT", recipient_email: recipientEmail,
+          subject, attachment_name: fileName, status: "PENDING", sent_by: actor.user.id,
+          sent_by_email: actor.user.email || null,
+        }).select("id").single();
+        if (emailLogError) {
+          results.push({ email: recipientEmail, status: "FAILED", error: "Could not create email audit record: " + emailLogError.message });
+          continue;
+        }
+        try {
+          const providerId = await sendZohoWithAttachmentBytes(admin, recipientEmail, subject, html, pdfBytes, fileName);
+          const { error: updateLogError } = await admin.from("dv_accounting_email_log").update({
+            status: "SENT", provider_message_id: providerId, sent_at: new Date().toISOString(),
+          }).eq("id", emailLog.id);
+          if (updateLogError) throw updateLogError;
+          results.push({ email: recipientEmail, status: "SENT" });
+        } catch (sendError) {
+          const message = String((sendError as Error)?.message || "Email sending failed").slice(0, 350);
+          await admin.from("dv_accounting_email_log").update({ status: "FAILED", error_message: message }).eq("id", emailLog.id);
+          results.push({ email: recipientEmail, status: "FAILED", error: message });
+        }
       }
+      const sent = results.filter((result) => result.status === "SENT").length;
+      const failed = results.length - sent;
+      return json({
+        ok: sent > 0, status: failed ? (sent ? "PARTIAL" : "FAILED") : "SENT",
+        sent, failed, results,
+        message: sent === recipientEmails.length
+          ? "Deposit receipt emailed successfully to " + sent + " recipient(s)."
+          : sent + " email(s) sent; " + failed + " failed. See the email log for details.",
+      }, sent ? 200 : 502);
     }
     if (action === "delete_deposit_receipt_upload") {
       if (!isAdmin) return json({error:"Only an administrator can delete uploaded deposit receipts."},403);
