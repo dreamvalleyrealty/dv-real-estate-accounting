@@ -129,12 +129,16 @@ async function sendZohoWithPdfAttachment(admin: any, to: string, subject: string
   const z = await getZohoSecrets(admin);
   const fileName = "DREAM VALLEY - TRUST ACCOUNT INFORMATION.pdf";
   const pdfBytes = await buildTrustAccountPdf();
+  // Zoho's raw upload endpoint is returning HTTP 415 for this PDF.
+  // Use the documented multipart upload flow and let fetch set the boundary.
+  const form = new FormData();
+  form.append("attach", new Blob([pdfBytes], { type: "application/pdf" }), fileName);
   const uploadResponse = await fetch(
-    z.mailBase + "/api/accounts/" + encodeURIComponent(z.accountId) + "/messages/attachments?fileName=" + encodeURIComponent(fileName) + "&isInline=false",
-    { method: "POST", headers: { ...z.headers, "Content-Type": "application/json" }, body: pdfBytes },
+    z.mailBase + "/api/accounts/" + encodeURIComponent(z.accountId) + "/messages/attachments?uploadType=multipart&isInline=false",
+    { method: "POST", headers: z.headers, body: form },
   );
   const uploadResult = await uploadResponse.json().catch(() => ({}));
-  const attachment = uploadResult?.data;
+  const attachment = Array.isArray(uploadResult?.data) ? uploadResult.data[0] : uploadResult?.data;
   if (!uploadResponse.ok || (uploadResult?.status?.code && Number(uploadResult.status.code) >= 400)
       || !attachment?.storeName || !attachment?.attachmentPath || !attachment?.attachmentName) {
     const detail = String(uploadResult?.status?.description || uploadResult?.message || uploadResult?.error || "Zoho did not return the required attachment details").slice(0, 220);
