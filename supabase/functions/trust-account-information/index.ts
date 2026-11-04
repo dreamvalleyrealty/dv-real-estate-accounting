@@ -169,20 +169,17 @@ async function sendZohoWithPdfAttachment(admin: any, to: string, subject: string
 }
 async function sendZohoWithAttachmentBytes(admin: any, to: string, subject: string, body: string, pdfBytes: Uint8Array, fileName: string) {
   const z = await getZohoSecrets(admin);
-  const logoForm = new FormData();
+  // Serve the actual PNG from a public bucket so recipients' email clients can load it.
   const logoBytes = Uint8Array.from(atob(DV_LOGO_PNG_BASE64), (char) => char.charCodeAt(0));
-  logoForm.append("attach", new Blob([logoBytes], { type: "image/png" }), "dream-valley-logo.png");
-  const logoResponse = await fetch(z.mailBase + "/api/accounts/" + encodeURIComponent(z.accountId) + "/messages/attachments?uploadType=multipart&isInline=true", {
-    method: "POST", headers: z.headers, body: logoForm,
-  });
-  const logoResult = await logoResponse.json().catch(() => ({}));
-  const logoAttachment = Array.isArray(logoResult?.data) ? logoResult.data[0] : logoResult?.data;
-  if (!logoResponse.ok || (logoResult?.status?.code && Number(logoResult.status.code) >= 400) || !logoAttachment?.url) {
-    throw new Error("Zoho could not prepare the Dream Valley logo for the email body.");
-  }
-  const rawLogoUrl = String(logoAttachment.url);
-  const logoUrl = (rawLogoUrl.startsWith("https://") || rawLogoUrl.startsWith("http://")) ? rawLogoUrl : (z.mailBase.endsWith("/") ? z.mailBase.slice(0, -1) : z.mailBase) + (rawLogoUrl.startsWith("/") ? rawLogoUrl : "/" + rawLogoUrl);
-  const emailBody = body.replace("__DV_LOGO_INLINE_URL__", htmlEscape(logoUrl));
+  const logoPath = "branding/dream-valley-logo.png";
+  const { error: logoUploadError } = await admin.storage.from("dv-inventory-images").upload(
+    logoPath, logoBytes, { contentType: "image/png", upsert: true },
+  );
+  if (logoUploadError) throw new Error("Could not publish the Dream Valley email logo: " + logoUploadError.message);
+  const { data: logoPublic } = admin.storage.from("dv-inventory-images").getPublicUrl(logoPath);
+  const logoUrl = String(logoPublic?.publicUrl || "");
+  if (!logoUrl) throw new Error("Could not create the public Dream Valley email logo URL.");
+  const emailBody = body.replaceAll("__DV_LOGO_INLINE_URL__", htmlEscape(logoUrl));
   const form = new FormData();
   form.append("attach", new Blob([pdfBytes], { type: "application/pdf" }), fileName);
   const uploadResponse = await fetch(
@@ -549,7 +546,8 @@ Deno.serve(async (req: Request) => {
       if (!issuance?.issuer_name) return json({ error: "This receipt has no authorized issuer record. Open and verify the receipt before emailing it." }, 409);
       if (issuance.approval_status !== "APPROVED") return json({ error: "This deposit receipt must be approved by an Admin before it can be emailed." }, 409);
       const { data: trustMeta, error: trustMetaError } = await admin.from("dv_accounting_transaction_trust")
-        .select("payment_type,received_from,reference_number").eq("transaction_id", transaction.id).maybeSingle();
+        .select("payment_type,received_from,reference_number,receipt_attachment_path,receipt_attachment_name,receipt_attachment_mime_type")
+        .eq("transaction_id", transaction.id).maybeSingle();
       if (trustMetaError) throw trustMetaError;
       const { data: bank, error: bankError } = await admin.from("dv_accounting_bank_accounts")
         .select("name").eq("id", ledger.bank_account_id).maybeSingle();
@@ -563,104 +561,97 @@ Deno.serve(async (req: Request) => {
       const amount = Number(ledger.amount || 0);
       const date = String(ledger.ledger_date || "").slice(0, 10);
       const issuerName = String(issuance.issuer_name);
+
+      // Reproduce the exact View / Reprint structure: three-part header, nine-row
+      // receipt table, issuer signature, and the one proof file attached to this receipt.
       const document = await PDFDocument.create();
       const page = document.addPage([612, 792]);
       const regular = await document.embedFont(StandardFonts.Helvetica);
       const bold = await document.embedFont(StandardFonts.HelveticaBold);
-      const navy = rgb(15 / 255, 33 / 255, 65 / 255);
+      const navy = rgb(20 / 255, 33 / 255, 61 / 255);
       const gold = rgb(158 / 255, 133 / 255, 86 / 255);
-      page.drawRectangle({ x: 0, y: 650, width: 612, height: 142, color: navy });
-      const receiptLogoBase64 = "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";
-      const receiptLogoBytes = Uint8Array.from(atob(receiptLogoBase64), (char) => char.charCodeAt(0));
+      const muted = rgb(100 / 255, 116 / 255, 139 / 255);
+      const line = rgb(203 / 255, 213 / 255, 225);
+      const light = rgb(248 / 255, 250 / 255, 252);
+      const receiptLogoBytes = Uint8Array.from(atob(DV_LOGO_PNG_BASE64), (char) => char.charCodeAt(0));
       const receiptLogo = await document.embedPng(receiptLogoBytes);
-      const receiptLogoWidth = 68;
-      const receiptLogoHeight = receiptLogoWidth * receiptLogo.height / receiptLogo.width;
-      page.drawImage(receiptLogo, { x: (612 - receiptLogoWidth) / 2, y: 710, width: receiptLogoWidth, height: receiptLogoHeight });
-      page.drawText("DREAM VALLEY REALTY INC.", { x: 165, y: 704, size: 17, font: bold, color: gold });
-      page.drawText("TRUST DEPOSIT RECEIPT", { x: 225, y: 680, size: 11, font: bold, color: rgb(1,1,1) });
-      page.drawText("Official receipt for funds received into the Real Estate Trust account", { x: 72, y: 620, size: 10, font: regular, color: navy });
+      const logoScale = Math.min(82 / receiptLogo.width, 94 / receiptLogo.height);
+      const logoW = receiptLogo.width * logoScale, logoH = receiptLogo.height * logoScale;
+      page.drawImage(receiptLogo, { x: 34, y: 686, width: logoW, height: logoH });
+      page.drawText("Dream Valley", { x: 136, y: 733, size: 15, font: bold, color: navy });
+      page.drawText("Realty Inc.", { x: 136, y: 713, size: 15, font: bold, color: navy });
+      page.drawText("Trust Deposit", { x: 286, y: 729, size: 17, font: bold, color: navy });
+      page.drawText("Receipt", { x: 286, y: 708, size: 17, font: bold, color: navy });
+      page.drawText("Receipt for funds received into the Real", { x: 432, y: 729, size: 8.5, font: regular, color: navy });
+      page.drawText("Estate Trust account", { x: 432, y: 716, size: 8.5, font: regular, color: navy });
+      page.drawLine({ start: { x: 34, y: 674 }, end: { x: 578, y: 674 }, thickness: 2, color: gold });
+
       const rows: [string,string][] = [
-        ["Receipt No.", receiptNumber], ["Date", date], ["Property Address", address],
-        ["Received From", receivedFrom], ["Type of Payment", "Deposit"], ["Payment Method", paymentMethod],
-        ["Transaction No.", String(transactionNumber)], ["Reference", reference],
-        ["Trust Account", String(bank?.name || "Real Estate Trust")],
-        ["Amount Received", "CAD " + amount.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })],
-        ["Received By", issuerName],
+        ["Receipt Number", receiptNumber],
+        ["Transaction Number", String(transactionNumber)],
+        ["Property", address],
+        ["Received From", receivedFrom],
+        ["Date Received", date],
+        ["Payment Method", paymentMethod],
+        ["Cheque / Reference", reference || "—"],
+        ["Real Estate Trust Account", String(bank?.name || "REAL ESTATE TRUST")],
+        ["Deposit Amount", amount.toLocaleString("en-CA", { style: "currency", currency: "CAD" })],
       ];
-      let y = 580;
-      for (const [label, value] of rows) {
-        page.drawRectangle({ x: 72, y: y - 9, width: 468, height: 29, color: y % 2 === 0 ? rgb(0.97,0.98,0.99) : rgb(1,1,1), borderColor: rgb(0.82,0.85,0.89), borderWidth: 0.5 });
-        page.drawText(label, { x: 84, y, size: 9.5, font: bold, color: navy });
-        const textValue = value.length > 65 ? value.slice(0, 62) + "..." : value;
-        page.drawText(textValue, { x: 205, y, size: 9.2, font: regular, color: rgb(0.12,0.16,0.22) });
-        y -= 34;
+      let rowY = 654;
+      for (let i = 0; i < rows.length; i++) {
+        const [label, value] = rows[i];
+        const y = rowY - i * 26;
+        page.drawRectangle({ x: 34, y: y - 18, width: 544, height: 26, color: i % 2 === 0 ? light : rgb(1,1,1), borderColor: line, borderWidth: 0.7 });
+        page.drawText(label, { x: 43, y: y - 1, size: 9.2, font: bold, color: navy });
+        const val = value.length > 72 ? value.slice(0, 69) + "..." : value;
+        page.drawText(val, { x: 274, y: y - 1, size: label === "Deposit Amount" ? 13 : 9.1, font: label === "Deposit Amount" ? bold : regular, color: navy, maxWidth: 294 });
       }
+
+      page.drawText("Issued by", { x: 34, y: 397, size: 9.5, font: bold, color: navy });
       if (issuance.issuer_signature_path) {
         const { data: signatureFile, error: signatureError } = await admin.storage.from("dv-user-signatures").download(issuance.issuer_signature_path);
         if (!signatureError && signatureFile) {
           const signatureBytes = new Uint8Array(await signatureFile.arrayBuffer());
           try {
-            const signatureImage = /\.jpe?g$/i.test(issuance.issuer_signature_path) ? await document.embedJpg(signatureBytes) : await document.embedPng(signatureBytes);
-            const dims = signatureImage.scale(Math.min(130 / signatureImage.width, 38 / signatureImage.height));
-            page.drawImage(signatureImage, { x: 84, y: 74, width: dims.width, height: dims.height });
+            const signatureImage = /\\.jpe?g$/i.test(issuance.issuer_signature_path) ? await document.embedJpg(signatureBytes) : await document.embedPng(signatureBytes);
+            const dims = signatureImage.scale(Math.min(205 / signatureImage.width, 48 / signatureImage.height));
+            page.drawImage(signatureImage, { x: 34, y: 341, width: dims.width, height: dims.height });
           } catch (imageError) { console.warn("Could not embed issuer signature in receipt PDF", String(imageError)); }
         }
       }
-      page.drawLine({ start: { x: 78, y: 70 }, end: { x: 230, y: 70 }, thickness: 0.8, color: navy });
-      page.drawText(issuerName, { x: 84, y: 55, size: 9, font: bold, color: navy });
-      page.drawText("Authorized issuer", { x: 84, y: 42, size: 8, font: regular, color: rgb(0.4,0.44,0.5) });
-      page.drawLine({ start: { x: 72, y: 28 }, end: { x: 540, y: 28 }, thickness: 0.6, color: gold });
-      page.drawText("Dream Valley Realty Inc. | 885 Progress Ave. Suite 109, Toronto, ON M1H 3G3", { x: 72, y: 14, size: 7, font: regular, color: rgb(0.4,0.44,0.5) });
-      // Supporting confirmations are uploaded under the transaction folder in Storage.
-      // The receipt-upload UI stores these files directly and does not create rows in
-      // dv_accounting_deposit_receipt_uploads, so read the actual Storage folder.
-      const supportingFolder = "listings/" + transaction.id + "/listing-deposit-receipts";
-      const { data: storedFiles, error: supportingListError } = await admin.storage
-        .from("dv-trade-documents").list(supportingFolder, { limit: 100, sortBy: { column: "name", order: "asc" } });
-      if (supportingListError) throw supportingListError;
-      const newestByOriginalName = new Map<string, any>();
-      for (const stored of (storedFiles || []).filter((item: any) => item.name && item.id)) {
-        const originalName = String(stored.name).replace(/^\d+-/, "");
-        const previous = newestByOriginalName.get(originalName);
-        if (!previous || String(stored.created_at || "") > String(previous.created_at || "")) {
-          newestByOriginalName.set(originalName, stored);
-        }
-      }
-      const supportingDocs = [...newestByOriginalName.values()];
-      for (const supportingDoc of supportingDocs) {
-        const supportingPath = supportingFolder + "/" + supportingDoc.name;
-        const { data: supportingFile, error: supportingFileError } = await admin.storage.from("dv-trade-documents").download(supportingPath);
-        if (supportingFileError || !supportingFile) {
-          console.warn("Could not load deposit supporting document", supportingDoc.name, String(supportingFileError?.message || ""));
-          continue;
-        }
-        const supportingBytes = new Uint8Array(await supportingFile.arrayBuffer());
-        const mime = String(supportingDoc.metadata?.mimetype || "").toLowerCase();
-        const titlePage = document.addPage([612, 792]);
-        titlePage.drawRectangle({ x: 0, y: 720, width: 612, height: 72, color: navy });
-        titlePage.drawText("SUPPORTING DOCUMENT", { x: 72, y: 750, size: 16, font: bold, color: rgb(1,1,1) });
-        titlePage.drawText(String(supportingDoc.name || "Supporting document").replace(/^\d+-/, "").slice(0, 90), { x: 72, y: 690, size: 11, font: bold, color: navy, maxWidth: 468 });
-        titlePage.drawText("Attached to deposit receipt " + receiptNumber, { x: 72, y: 670, size: 9, font: regular, color: rgb(0.4,0.44,0.5) });
-        if (mime === "application/pdf" || /\.pdf$/i.test(String(supportingDoc.name || ""))) {
-          const sourcePdf = await PDFDocument.load(supportingBytes);
-          const copiedPages = await document.copyPages(sourcePdf, sourcePdf.getPageIndices());
-          for (const copiedPage of copiedPages) document.addPage(copiedPage);
-        } else if (mime === "image/jpeg" || mime === "image/jpg" || mime === "image/png" || mime === "image/webp") {
-          try {
-            const image = mime === "image/png" ? await document.embedPng(supportingBytes) : await document.embedJpg(supportingBytes);
-            const imagePage = document.addPage([612, 792]);
-            imagePage.drawText(String(supportingDoc.name || "Supporting document").slice(0, 90), { x: 72, y: 755, size: 10, font: bold, color: navy, maxWidth: 468 });
-            const scale = Math.min(468 / image.width, 680 / image.height);
-            const width = image.width * scale, height = image.height * scale;
-            imagePage.drawImage(image, { x: (612 - width) / 2, y: 48 + (680 - height) / 2, width, height });
-          } catch (imageError) {
-            console.warn("Could not append deposit supporting image", supportingDoc.name, String(imageError));
-          }
+      page.drawLine({ start: { x: 34, y: 338 }, end: { x: 240, y: 338 }, thickness: 0.8, color: navy });
+      page.drawText(issuerName, { x: 34, y: 324, size: 9.2, font: bold, color: navy });
+      page.drawText("Authorized issuer · " + new Date(issuance.issued_at || Date.now()).toLocaleString("en-CA"), { x: 34, y: 311, size: 8, font: regular, color: muted });
+      page.drawLine({ start: { x: 34, y: 302 }, end: { x: 578, y: 302 }, thickness: 1, color: gold });
+
+      // View / Reprint uses the receipt's own linked proof file, never every file
+      // found in the transaction folder. This prevents duplicates and unrelated uploads.
+      if (trustMeta?.receipt_attachment_path) {
+        const { data: proofFile, error: proofError } = await admin.storage.from("dv-trade-documents").download(trustMeta.receipt_attachment_path);
+        if (proofError || !proofFile) throw new Error("Could not load the supporting deposit attachment shown in View / Reprint: " + (proofError?.message || "file unavailable"));
+        const proofBytes = new Uint8Array(await proofFile.arrayBuffer());
+        const proofMime = String(trustMeta.receipt_attachment_mime_type || "").toLowerCase();
+        const proofName = String(trustMeta.receipt_attachment_name || trustMeta.receipt_attachment_path.split("/").pop() || "Supporting deposit proof");
+        if (proofMime === "image/png" || /\\.png$/i.test(proofName)) {
+          const proofImage = await document.embedPng(proofBytes);
+          const dims = proofImage.scale(Math.min(544 / proofImage.width, 258 / proofImage.height));
+          page.drawImage(proofImage, { x: (612 - dims.width) / 2, y: 36 + (258 - dims.height) / 2, width: dims.width, height: dims.height });
+        } else if (proofMime === "image/jpeg" || proofMime === "image/jpg" || /\\.(jpe?g)$/i.test(proofName)) {
+          const proofImage = await document.embedJpg(proofBytes);
+          const dims = proofImage.scale(Math.min(544 / proofImage.width, 258 / proofImage.height));
+          page.drawImage(proofImage, { x: (612 - dims.width) / 2, y: 36 + (258 - dims.height) / 2, width: dims.width, height: dims.height });
+        } else if (proofMime === "application/pdf" || /\\.pdf$/i.test(proofName)) {
+          const sourcePdf = await PDFDocument.load(proofBytes);
+          const firstPage = (await document.copyPages(sourcePdf, [0]))[0];
+          // A PDF proof cannot be rasterized by pdf-lib; append its first page only.
+          document.addPage(firstPage);
+        } else {
+          throw new Error("The supporting deposit attachment type cannot be included in the emailed receipt: " + proofMime);
         }
       }
       const pdfBytes = await document.save();
       const subject = "Deposit Receipt " + receiptNumber + " — " + address;
-      const html = "<div style='font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:0 auto;color:#243247;border:1px solid #d8dde5;border-radius:8px;overflow:hidden'><div style='background:#0f2141;color:#9e8556;text-align:center;padding:24px 18px'><img src='__DV_LOGO_INLINE_URL__' alt='Dream Valley Realty' width='88' style='display:block;width:88px;height:auto;margin:0 auto 8px auto;border:0;outline:none;text-decoration:none'><div style='font-size:17px;font-weight:bold;letter-spacing:2px;margin-top:8px'>DREAM VALLEY REALTY</div><div style='font-size:11px;letter-spacing:1px;margin-top:4px;color:#fff'>DEPOSIT RECEIPT</div></div><div style='padding:24px 28px'><p>Please find your official deposit receipt details below. The full receipt is attached as a PDF for your records.</p><h3 style='font-size:14px;color:#0f2141;text-decoration:underline;margin:18px 0 8px'>Deposit Receipt</h3><table style='border-collapse:collapse;width:100%;font-size:12px'><tr><td style='font-weight:bold;padding:2px 6px'>Receipt No</td><td style='padding:2px 6px'>"+htmlEscape(receiptNumber)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Date</td><td style='padding:2px 6px'>"+htmlEscape(date)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Property Address</td><td style='padding:2px 6px'>"+htmlEscape(address)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Received From</td><td style='padding:2px 6px'>"+htmlEscape(receivedFrom)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Type of Payment</td><td style='padding:2px 6px'>Deposit</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Payment Method</td><td style='padding:2px 6px'>"+htmlEscape(paymentMethod)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Transaction No</td><td style='padding:2px 6px'>"+htmlEscape(String(transactionNumber))+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Amount Received</td><td style='padding:2px 6px;font-weight:bold'>"+htmlEscape(amount.toLocaleString("en-CA",{style:"currency",currency:"CAD"}))+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Received By</td><td style='padding:2px 6px'>"+htmlEscape(issuerName)+"</td></tr></table></div><div style='border-top:1px solid #e5e7eb;padding:18px 28px;color:#555;font-size:12px'><p>Thank you for your prompt attention.</p><p>Best regards,<br/><strong>The Dream Valley Realty Admin Team</strong></p></div><div style='background:#0f2141;color:#9e8556;text-align:center;padding:12px;font-size:10px'>© "+new Date().getFullYear()+" Dream Valley Realty. All rights reserved.<br/><span style='color:#aab3c2'>This is an automated message. Please do not reply to this email.</span></div></div>";
+      const html = "<div style='font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:0 auto;color:#243247;border:1px solid #d8dde5;border-radius:8px;overflow:hidden'><div style='background:#0f2141;text-align:center;padding:18px 16px'><img src='__DV_LOGO_INLINE_URL__' alt='Dream Valley Realty logo' width='68' height='82' style='display:block;width:68px;height:82px;max-width:68px;margin:0 auto 7px auto;border:0;outline:none;text-decoration:none'><div style='font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:20px;font-weight:bold;letter-spacing:1px;color:#9e8556'>DREAM VALLEY REALTY INC.</div><div style='font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;letter-spacing:1px;margin-top:5px;color:#ffffff'>TRUST DEPOSIT RECEIPT</div></div><div style='padding:24px 28px'><p>Please find your official deposit receipt details below. The full receipt is attached as a PDF for your records.</p><h3 style='font-size:14px;color:#0f2141;text-decoration:underline;margin:18px 0 8px'>Deposit Receipt</h3><table style='border-collapse:collapse;width:100%;font-size:12px'><tr><td style='font-weight:bold;padding:2px 6px'>Receipt No</td><td style='padding:2px 6px'>"+htmlEscape(receiptNumber)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Date</td><td style='padding:2px 6px'>"+htmlEscape(date)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Property Address</td><td style='padding:2px 6px'>"+htmlEscape(address)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Received From</td><td style='padding:2px 6px'>"+htmlEscape(receivedFrom)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Type of Payment</td><td style='padding:2px 6px'>Deposit</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Payment Method</td><td style='padding:2px 6px'>"+htmlEscape(paymentMethod)+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Transaction No</td><td style='padding:2px 6px'>"+htmlEscape(String(transactionNumber))+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Amount Received</td><td style='padding:2px 6px;font-weight:bold'>"+htmlEscape(amount.toLocaleString("en-CA",{style:"currency",currency:"CAD"}))+"</td></tr><tr><td style='font-weight:bold;padding:2px 6px'>Received By</td><td style='padding:2px 6px'>"+htmlEscape(issuerName)+"</td></tr></table></div><div style='border-top:1px solid #e5e7eb;padding:18px 28px;color:#555;font-size:12px'><p>Thank you for your prompt attention.</p><p>Best regards,<br/><strong>The Dream Valley Realty Admin Team</strong></p></div><div style='background:#0f2141;color:#9e8556;text-align:center;padding:12px;font-size:10px'>© "+new Date().getFullYear()+" Dream Valley Realty. All rights reserved.<br/><span style='color:#aab3c2'>This is an automated message. Please do not reply to this email.</span></div></div>";
       const fileName = receiptNumber + ".pdf";
       const results: any[] = [];
       for (const recipientEmail of recipientEmails) {
