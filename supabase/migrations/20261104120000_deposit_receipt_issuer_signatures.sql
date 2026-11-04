@@ -10,8 +10,32 @@ SECURITY DEFINER
 SET search_path TO 'public'
 AS $function$
   SELECT CASE
-    WHEN EXISTS (SELECT 1 FROM public.dv_accounting_user_profiles p WHERE p.user_id=auth.uid() AND p.active=false) THEN 'DISABLED'
-    ELSE coalesce((SELECT upper(p.role) FROM public.dv_accounting_user_profiles p WHERE p.user_id=auth.uid() AND p.active=true LIMIT 1), 'STAFF')
+    WHEN EXISTS (
+      SELECT 1 FROM public.dv_accounting_user_profiles p
+      WHERE p.user_id = auth.uid() AND p.active = false
+    ) THEN 'DISABLED'
+    WHEN EXISTS (
+      SELECT 1 FROM public.dv_accounting_user_profiles p
+      WHERE p.user_id = auth.uid() AND p.active = true
+    ) THEN (
+      SELECT upper(p.role) FROM public.dv_accounting_user_profiles p
+      WHERE p.user_id = auth.uid() AND p.active = true
+      LIMIT 1
+    )
+    ELSE upper(coalesce(
+      CASE lower(coalesce(auth.jwt()->'app_metadata'->>'role',''))
+        WHEN 'superadmin' THEN 'SUPERADMIN'
+        WHEN 'super_admin' THEN 'SUPERADMIN'
+        WHEN 'admin' THEN 'ADMIN'
+        WHEN 'manager' THEN 'MANAGER'
+        WHEN 'accountant' THEN 'ACCOUNTANT'
+        WHEN 'viewer' THEN 'VIEWER'
+        WHEN 'agent' THEN 'AGENT'
+        WHEN 'staff' THEN 'STAFF'
+        ELSE NULL
+      END,
+      'STAFF'
+    ))
   END
 $function$;
 
