@@ -538,8 +538,8 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
 async function emailListingDepositReceipt(item){
    const recipientInput=window.prompt("Enter one or more recipient email addresses, separated by commas or new lines:");
    if(recipientInput===null)return;
-   const recipientEmails=[...new Set(recipientInput.split(/[;,\\s]+/).map(value=>value.trim().toLowerCase()).filter(Boolean))];
-   if(!recipientEmails.length||recipientEmails.length>20||recipientEmails.some(email=>!/^([^\\s@]+)@([^\\s@]+)\\.[^\\s@]+$/.test(email))){setDepositError("Enter between 1 and 20 valid email addresses, separated by commas or new lines.");return}
+   const recipientEmails=[...new Set(recipientInput.split(/[;,\s]+/).map(value=>value.trim().toLowerCase()).filter(Boolean))];
+   if(!recipientEmails.length||recipientEmails.length>20||recipientEmails.some(email=>!/^([^\s@]+)@([^\s@]+)\.[^\s@]+$/.test(email))){setDepositError("Enter between 1 and 20 valid email addresses, separated by commas or new lines.");return}
    if(!["ADMIN","SUPERADMIN","MANAGER","STAFF"].includes(receiptIssuerProfile.role)){setDepositError("Only authorized brokerage staff can email deposit receipts.");return}
    setDepositError("");setMessage("");setDepositEmailBusy(true);
    try{
