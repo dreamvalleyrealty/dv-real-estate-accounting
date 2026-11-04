@@ -452,6 +452,37 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, message: "Both trust account instructions were saved securely." });
     }
 
+    if (action === "delete_deposit_receipt_upload") {
+      if (!isAdmin) return json({error:"Only an administrator can delete uploaded deposit receipts."},403);
+      const uploadId=String(body.uploadId||"");
+      if(!/^[0-9a-f-]{36}$/i.test(uploadId))return json({error:"Select a valid receipt upload."},400);
+      const {data:file,error:fileError}=await admin.from("dv_accounting_deposit_receipt_uploads").select("id,storage_path,listing_id").eq("id",uploadId).maybeSingle();
+      if(fileError)throw fileError;
+      if(!file)return json({error:"The uploaded receipt was not found."},404);
+      const {error:storageError}=await admin.storage.from("dv-trade-documents").remove([file.storage_path]);
+      if(storageError)throw new Error("Could not delete the receipt file from storage: "+storageError.message);
+      const {error:deleteError}=await admin.from("dv_accounting_deposit_receipt_uploads").delete().eq("id",uploadId);
+      if(deleteError)throw deleteError;
+      return json({ok:true,listingId:file.listing_id,message:"Uploaded receipt deleted."});
+    }
+    if (action === "delete_deposit_instruction_email_log") {
+      if (!isAdmin) return json({error:"Only an administrator can delete deposit-instruction email logs."},403);
+      const emailLogId=String(body.emailLogId||"");
+      if(!/^[0-9a-f-]{36}$/i.test(emailLogId))return json({error:"Select a valid email log."},400);
+      const {data:log,error:logError}=await admin.from("dv_accounting_deposit_instruction_email_log").select("id,listing_id").eq("id",emailLogId).maybeSingle();
+      if(logError)throw logError;
+      if(!log)return json({error:"The email log was not found."},404);
+      const {data:files,error:filesError}=await admin.from("dv_accounting_deposit_receipt_uploads").select("id,storage_path").eq("email_log_id",emailLogId);
+      if(filesError)throw filesError;
+      const paths=(files||[]).map((file:any)=>file.storage_path).filter(Boolean);
+      if(paths.length){
+        const {error:storageError}=await admin.storage.from("dv-trade-documents").remove(paths);
+        if(storageError)throw new Error("Could not delete the linked receipt files: "+storageError.message);
+      }
+      const {error:deleteError}=await admin.from("dv_accounting_deposit_instruction_email_log").delete().eq("id",emailLogId);
+      if(deleteError)throw deleteError;
+      return json({ok:true,listingId:log.listing_id,deletedReceipts:paths.length,message:"Email log and "+paths.length+" linked receipt file(s) deleted."});
+    }
     if (action === "get_deposit_receipt_uploads") {
       const listingId=String(body.listingId||"");
       if(!/^[0-9a-f-]{36}$/i.test(listingId))return json({error:"Select a valid property."},400);
