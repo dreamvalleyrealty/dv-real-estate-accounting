@@ -227,6 +227,7 @@ Deno.serve(async (req: Request) => {
         const otp=String(body.otp||"").trim();
         if(!/^\d{6}$/.test(otp))return json({error:"Enter the six-digit code."},400);
         if(!log.otp_hash||!log.otp_expires_at||new Date(log.otp_expires_at).getTime()<=Date.now())return json({error:"The code has expired. Ask the sender to issue a new secure link."},410);
+        if (log.token_verified) return json({error:"This secure link has already been verified."},409);
         if(Number(log.otp_attempts||0)>=5)return json({error:"Too many attempts. Ask the sender to issue a new secure link."},429);
         if(await sha256(token+":"+otp)!==log.otp_hash){await admin.from("dv_accounting_deposit_instruction_email_log").update({otp_attempts:Number(log.otp_attempts||0)+1}).eq("id",log.id);return json({error:"The code does not match. Check the email and try again."},401)}
         await admin.from("dv_accounting_deposit_instruction_email_log").update({status:"VERIFIED",token_verified:true,verified_at:new Date().toISOString()}).eq("id",log.id);
@@ -340,11 +341,16 @@ let query = admin.from("dv_accounting_deposit_instruction_email_log")
         .eq("id",listingId).maybeSingle();
       if(listingError)throw listingError;
       if(!listing)return json({error:"The selected listing could not be found."},404);
-      if(!isAdmin && !(listing.agent_id && actor.role==="AGENT" && await (async()=>{
-        const {data:agent}=await admin.from("dv_accounting_agents").select("id").eq("user_id",actor.user.id).eq("id",listing.agent_id).maybeSingle();
-        const allowed=!!agent||(Array.isArray(listing.additional_agent_ids)&&actor.role==="AGENT"&&await (async()=>{const {data:me}=await admin.from("dv_accounting_agents").select("id").eq("user_id",actor.user.id).maybeSingle();return !!me&&listing.additional_agent_ids.includes(me.id)})());
-        return allowed;
-      })())) return json({error:"You may send instructions only for listings assigned to you."},403);
+      if (!isAdmin) {
+        if (actor.role !== "AGENT") return json({error:"Only agents and administrators may send deposit instructions."},403);
+        const {data:linkedAgent,error:agentLookupError}=await admin.from("dv_accounting_agents")
+          .select("id,user_id,email,active").eq("user_id",actor.user.id).maybeSingle();
+        if (agentLookupError) throw agentLookupError;
+        const assigned = !!linkedAgent && linkedAgent.active !== false
+          && String(linkedAgent.email||"").trim().toLowerCase() === String(actor.user.email||"").trim().toLowerCase()
+          && (listing.agent_id===linkedAgent.id || (Array.isArray(listing.additional_agent_ids)&&listing.additional_agent_ids.includes(linkedAgent.id)));
+        if (!assigned) return json({error:"You may send instructions only for listings assigned to you."},403);
+      }
       const propertyAddress=[listing.property_address,listing.unit_number?"Unit "+listing.unit_number:"",listing.city,listing.province,listing.postal_code].filter(Boolean).join(", ");
       if(!propertyAddress.trim())return json({error:"The selected listing does not have a complete property address."},400);
       const {data:accountRows,error:accountError}=await admin.from("dv_accounting_trust_account_instructions")
