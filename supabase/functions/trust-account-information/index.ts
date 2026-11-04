@@ -137,7 +137,9 @@ async function sendZohoWithPdfAttachment(admin: any, to: string, subject: string
   const attachment = uploadResult?.data;
   if (!uploadResponse.ok || (uploadResult?.status?.code && Number(uploadResult.status.code) >= 400)
       || !attachment?.storeName || !attachment?.attachmentPath || !attachment?.attachmentName) {
-    throw new Error("Zoho could not upload the deposit-instructions PDF attachment (HTTP " + uploadResponse.status + ").");
+    const detail = String(uploadResult?.status?.description || uploadResult?.message || uploadResult?.error || "Zoho did not return the required attachment details").slice(0, 220);
+    console.error("Zoho PDF attachment upload failed", { httpStatus: uploadResponse.status, zohoStatus: uploadResult?.status?.code, detail });
+    throw new Error("Zoho PDF attachment upload failed (HTTP " + uploadResponse.status + ", Zoho " + String(uploadResult?.status?.code || "unknown") + "): " + detail);
   }
   const response = await fetch(z.mailBase + "/api/accounts/" + encodeURIComponent(z.accountId) + "/messages", {
     method: "POST",
@@ -149,7 +151,9 @@ async function sendZohoWithPdfAttachment(admin: any, to: string, subject: string
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || (result?.status?.code && Number(result.status.code) >= 400)) {
-    throw new Error("Zoho rejected the deposit-instructions email (HTTP " + response.status + ").");
+    const detail = String(result?.status?.description || result?.message || result?.error || "Zoho rejected the message").slice(0, 220);
+    console.error("Zoho deposit-instructions email failed", { httpStatus: response.status, zohoStatus: result?.status?.code, detail });
+    throw new Error("Zoho email send failed (HTTP " + response.status + ", Zoho " + String(result?.status?.code || "unknown") + "): " + detail);
   }
   return result?.data?.messageId || result?.data?.message_id || result?.messageId || null;
 }
