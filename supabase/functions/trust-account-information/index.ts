@@ -131,7 +131,7 @@ async function sendZohoWithPdfAttachment(admin: any, to: string, subject: string
   const pdfBytes = await buildTrustAccountPdf();
   const uploadResponse = await fetch(
     z.mailBase + "/api/accounts/" + encodeURIComponent(z.accountId) + "/messages/attachments?fileName=" + encodeURIComponent(fileName) + "&isInline=false",
-    { method: "POST", headers: { ...z.headers, "Content-Type": "application/pdf" }, body: pdfBytes },
+    { method: "POST", headers: { ...z.headers, "Content-Type": "application/json" }, body: pdfBytes },
   );
   const uploadResult = await uploadResponse.json().catch(() => ({}));
   const attachment = uploadResult?.data;
