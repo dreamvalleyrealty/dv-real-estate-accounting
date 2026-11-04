@@ -529,7 +529,7 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
     supabase.from("dv_accounting_trust_transactions").select("*").in("transaction_id",ids).eq("direction","DEPOSIT").eq("trust_account_type","REAL_ESTATE_TRUST").eq("status","POSTED").order("ledger_date",{ascending:false}).order("created_at",{ascending:false}),
     supabase.from("dv_accounting_deposit_receipt_issuances").select("trust_transaction_id,issued_by,issuer_name,issuer_signature_path,issued_at").in("transaction_id",ids)
    ]);
-   if(trustError)throw trustError;if(bankError)throw bankError;if(ledgerError)throw ledgerError;if(issuanceError)throw issuanceError;
+   if(trustError)throw trustError;if(bankError)throw bankError;if(ledgerError)throw ledgerError;if(issuanceError)throw issuanceError;if(issuanceError)throw issuanceError;
    const txById=new Map(transactions.map(t=>[t.id,t]));
    const trustByTransaction=new Map((trustRows||[]).map(t=>[t.transaction_id,t]));
    const bankById=new Map((bankRows||[]).map(b=>[b.id,b]));
