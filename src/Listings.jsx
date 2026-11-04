@@ -509,7 +509,8 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
    if(issuanceError)throw new Error("The deposit was posted, but its receipt issuer record could not be saved. Do not record the deposit again. Ask an administrator to review. Details: "+issuanceError.message);
    let issuerSignatureUrl="";if(issuance.issuer_signature_path){const{data:signatureData}=await supabase.storage.from("dv-user-signatures").createSignedUrl(issuance.issuer_signature_path,3600);issuerSignatureUrl=signatureData?.signedUrl||""}
    const receipt={transaction_id:transaction.id,transaction_number:transaction.transaction_number||"—",property_address:[selected.property_address,selected.unit_number?"Unit "+selected.unit_number:"",selected.city,selected.province,selected.postal_code].filter(Boolean).join(", "),received_from:depositForm.received_from.trim(),date:depositForm.date,payment_type:depositForm.payment_type,reference_number:depositForm.reference_number.trim(),amount,bank_name:bank.name,receipt_number:"DR-"+String(transaction.transaction_number||transaction.id).replace(/[^A-Za-z0-9-]/g,""),issuer_name:issuance.issuer_name,issuer_signature_path:issuance.issuer_signature_path,issuer_signature_url:issuerSignatureUrl,issued_at:issuance.issued_at};
-   setDepositReceipt(receipt);setMessage("Deposit received, transaction linked, and deposit posted to Real Estate Trust. You can now issue the receipt.");
+   receipt.issuer_name=issuance.issuer_name;receipt.issuer_signature_path=issuance.issuer_signature_path;receipt.issuer_signature_url=issuerSignatureUrl;receipt.issued_at=issuance.issued_at;
+   setDepositReceipt(receipt);setMessage("Deposit received, linked to the signed-in issuer, and posted to Real Estate Trust. You can now print the receipt.");
    await load(true);
   }catch(err){setDepositError(err?.message||String(err))}
   finally{setDepositSaving(false)}
