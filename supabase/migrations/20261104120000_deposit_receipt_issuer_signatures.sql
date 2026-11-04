@@ -75,6 +75,9 @@ BEGIN
   IF fallback_role = 'DISABLED' THEN
     RAISE EXCEPTION 'This account is disabled';
   END IF;
+  IF fallback_role NOT IN ('SUPERADMIN','ADMIN','MANAGER') THEN
+    RAISE EXCEPTION 'Only brokerage administrators can manage deposit receipt signatures';
+  END IF;
   IF safe_path IS NOT NULL AND (
     safe_path !~ ('^' || auth.uid()::text || '/[A-Za-z0-9._/-]+$')
     OR position('..' in safe_path) > 0
