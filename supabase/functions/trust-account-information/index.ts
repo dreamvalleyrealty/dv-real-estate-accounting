@@ -618,7 +618,7 @@ Deno.serve(async (req: Request) => {
         const supportingPath = supportingFolder + "/" + supportingDoc.name;
         const { data: supportingFile, error: supportingFileError } = await admin.storage.from("dv-trade-documents").download(supportingPath);
         if (supportingFileError || !supportingFile) {
-          console.warn("Could not load deposit supporting document", supportingDoc.file_name, String(supportingFileError?.message || ""));
+          console.warn("Could not load deposit supporting document", supportingDoc.name, String(supportingFileError?.message || ""));
           continue;
         }
         const supportingBytes = new Uint8Array(await supportingFile.arrayBuffer());
@@ -636,12 +636,12 @@ Deno.serve(async (req: Request) => {
           try {
             const image = mime === "image/png" ? await document.embedPng(supportingBytes) : await document.embedJpg(supportingBytes);
             const imagePage = document.addPage([612, 792]);
-            imagePage.drawText(String(supportingDoc.file_name || "Supporting document").slice(0, 90), { x: 72, y: 755, size: 10, font: bold, color: navy, maxWidth: 468 });
+            imagePage.drawText(String(supportingDoc.name || "Supporting document").slice(0, 90), { x: 72, y: 755, size: 10, font: bold, color: navy, maxWidth: 468 });
             const scale = Math.min(468 / image.width, 680 / image.height);
             const width = image.width * scale, height = image.height * scale;
             imagePage.drawImage(image, { x: (612 - width) / 2, y: 48 + (680 - height) / 2, width, height });
           } catch (imageError) {
-            console.warn("Could not append deposit supporting image", supportingDoc.file_name, String(imageError));
+            console.warn("Could not append deposit supporting image", supportingDoc.name, String(imageError));
           }
         }
       }
