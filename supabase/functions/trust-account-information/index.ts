@@ -215,6 +215,50 @@ Deno.serve(async (req: Request) => {
       return json({ accounts: result });
     }
 
+
+    if (["request_deposit_otp","verify_deposit_otp","view_deposit_instructions"].includes(action)) {
+      const token=String(body.token||"");
+      if(!/^[a-f0-9]{64}$/i.test(token))return json({error:"This secure link is invalid or expired."},400);
+      const tokenHash=await sha256(token);
+      const {data:log,error:logError}=await admin.from("dv_accounting_deposit_instruction_email_log").select("*").eq("token_hash",tokenHash).maybeSingle();
+      const expectedStatus=action==="view_deposit_instructions"?"VERIFIED":"SENT";
+      if(logError||!log||log.status!==expectedStatus||new Date(log.link_expires_at).getTime()<=Date.now())return json({error:"This secure link is invalid or expired."},410);
+      if(action==="verify_deposit_otp"){
+        const otp=String(body.otp||"").trim();
+        if(!/^\d{6}$/.test(otp))return json({error:"Enter the six-digit code."},400);
+        if(!log.otp_hash||!log.otp_expires_at||new Date(log.otp_expires_at).getTime()<=Date.now())return json({error:"The code has expired. Ask the sender to issue a new secure link."},410);
+        if(Number(log.otp_attempts||0)>=5)return json({error:"Too many attempts. Ask the sender to issue a new secure link."},429);
+        if(await sha256(token+":"+otp)!==log.otp_hash){await admin.from("dv_accounting_deposit_instruction_email_log").update({otp_attempts:Number(log.otp_attempts||0)+1}).eq("id",log.id);return json({error:"The code does not match. Check the email and try again."},401)}
+        await admin.from("dv_accounting_deposit_instruction_email_log").update({status:"VERIFIED",token_verified:true,verified_at:new Date().toISOString()}).eq("id",log.id);
+        return json({ok:true,verified:true});
+      }
+      if(action==="request_deposit_otp"){
+        if(log.token_verified)return json({error:"This secure link has already been verified."},409);
+        if(log.otp_sent_at&&Date.now()-new Date(log.otp_sent_at).getTime()<60_000)return json({error:"Please wait one minute before requesting another code."},429);
+        const otp=String(crypto.getRandomValues(new Uint32Array(1))[0]%1000000).padStart(6,"0");
+        const otpHtml="<div style=\"font-family:Arial,sans-serif;max-width:620px;color:#172b4d\"><h2>Your verification code</h2><p>Hello "+htmlEscape(log.recipient_name)+",</p><p>Your one-time code is:</p><p style=\"font-size:30px;font-weight:bold;letter-spacing:6px\">"+otp+"</p><p>This code expires in 15 minutes. Do not share it with anyone.</p></div>";
+        const {error:updateError}=await admin.from("dv_accounting_deposit_instruction_email_log").update({otp_hash:await sha256(token+":"+otp),otp_expires_at:new Date(Date.now()+15*60*1000).toISOString(),otp_sent_at:new Date().toISOString(),otp_attempts:0}).eq("id",log.id);
+        if(updateError)throw updateError;
+        try{await sendZoho(admin,log.recipient_email,"Your Dream Valley Realty verification code",otpHtml);return json({ok:true,message:"A verification code has been sent to the email address this link was issued to."})}
+        catch(sendError){await admin.from("dv_accounting_deposit_instruction_email_log").update({otp_hash:null,otp_expires_at:null,otp_sent_at:null}).eq("id",log.id);throw sendError}
+      }
+      if(!log.token_verified)return json({error:"Verify your email code before viewing deposit instructions."},403);
+      if(log.opened_at)return json({error:"These deposit instructions have already been viewed. Request a new secure link if you need access again."},410);
+      const {data:instructions,error:instructionError}=await admin.from("dv_accounting_trust_account_instructions").select("account_type,institution,institution_number,transit_number,account_number_ciphertext,account_name,bank_address").eq("account_type","REAL_ESTATE_TRUST").maybeSingle();
+      if(instructionError||!instructions)return json({error:"Real Estate Trust deposit instructions are not available."},503);
+      let encrypted:Uint8Array,accountNumber:string;
+      try{
+        const raw=instructions.account_number_ciphertext;
+        if(raw instanceof Uint8Array)encrypted=raw;
+        else if(Array.isArray(raw))encrypted=new Uint8Array(raw);
+        else{const encoded=String(raw||"");const hex=encoded.startsWith("\\x")?encoded.slice(2):encoded;if(!/^[0-9a-f]+$/i.test(hex)||hex.length%2!==0)throw new Error("Invalid encrypted account data.");encrypted=new Uint8Array(hex.length/2);for(let i=0;i<encrypted.length;i++)encrypted[i]=Number.parseInt(hex.slice(i*2,i*2+2),16)}
+        accountNumber=await decrypt(encrypted,encryptionSecret);
+      }catch{return json({error:"Banking instructions could not be decrypted."},500)}
+      const {data:claimed,error:claimError}=await admin.from("dv_accounting_deposit_instruction_email_log").update({status:"VIEWED",opened_at:new Date().toISOString()}).eq("id",log.id).is("opened_at",null).eq("token_verified",true).select("id").maybeSingle();
+      if(claimError||!claimed)return json({error:"These deposit instructions have already been viewed. Request a new secure link if you need access again."},409);
+      return json({property_address:log.property_address,instructions:{institution:instructions.institution,institution_number:instructions.institution_number,transit_number:instructions.transit_number,account_number:accountNumber,account_name:instructions.account_name,bank_address:instructions.bank_address}});
+    }
+
     const actor = await requireActor(req, admin, supabaseUrl, anonKey);
     const isAdmin = ["SUPERADMIN","ADMIN"].includes(actor.role);
     if (action === "get_settings") {
@@ -275,6 +319,60 @@ Deno.serve(async (req: Request) => {
       }
       return json({ ok: true, message: "Both trust account instructions were saved securely." });
     }
+
+    if (action === "get_deposit_instructions_history") {
+let query = admin.from("dv_accounting_deposit_instruction_email_log")
+        .select("id,listing_id,property_address,recipient_name,recipient_email,sent_by,sent_by_email,status,created_at,sent_at,link_expires_at,verified_at,opened_at,error_message")
+        .order("created_at", {ascending:false}).limit(100);
+      if (!isAdmin) query = query.eq("sent_by", actor.user.id);
+      const { data: rows, error: historyError } = await query;
+      if (historyError) throw historyError;
+      return json({history:rows||[]});
+    }
+    if (action === "send_deposit_instructions") {
+      const listingId=String(body.listingId||"").trim();
+      const recipientName=String(body.recipientName||"").trim();
+      const recipientEmail=String(body.recipientEmail||"").trim().toLowerCase();
+      if(!/^[0-9a-f-]{36}$/i.test(listingId))return json({error:"Select a valid listing."},400);
+      if(recipientName.length<2||recipientName.length>160||!validEmail(recipientEmail)||recipientEmail.length>254)return json({error:"Enter the buyer's agent name and a valid email address."},400);
+      const {data:listing,error:listingError}=await admin.from("dv_accounting_listing_submissions")
+        .select("id,agent_id,additional_agent_ids,property_address,unit_number,city,province,postal_code,mls_number,status")
+        .eq("id",listingId).maybeSingle();
+      if(listingError)throw listingError;
+      if(!listing)return json({error:"The selected listing could not be found."},404);
+      if(!isAdmin && !(listing.agent_id && actor.role==="AGENT" && await (async()=>{
+        const {data:agent}=await admin.from("dv_accounting_agents").select("id").eq("user_id",actor.user.id).eq("id",listing.agent_id).maybeSingle();
+        const allowed=!!agent||(Array.isArray(listing.additional_agent_ids)&&actor.role==="AGENT"&&await (async()=>{const {data:me}=await admin.from("dv_accounting_agents").select("id").eq("user_id",actor.user.id).maybeSingle();return !!me&&listing.additional_agent_ids.includes(me.id)})());
+        return allowed;
+      })())) return json({error:"You may send instructions only for listings assigned to you."},403);
+      const propertyAddress=[listing.property_address,listing.unit_number?"Unit "+listing.unit_number:"",listing.city,listing.province,listing.postal_code].filter(Boolean).join(", ");
+      if(!propertyAddress.trim())return json({error:"The selected listing does not have a complete property address."},400);
+      const {data:accountRows,error:accountError}=await admin.from("dv_accounting_trust_account_instructions")
+        .select("account_type,institution,institution_number,transit_number,account_number_ciphertext,account_name,bank_address")
+        .eq("account_type","REAL_ESTATE_TRUST").limit(1);
+      if(accountError)throw accountError;
+      if(!accountRows?.length)return json({error:"Real Estate Trust deposit instructions have not been configured by an administrator."},409);
+      const token=randomHex(32),tokenHash=await sha256(token),now=new Date(),expires=new Date(now.getTime()+24*60*60*1000);
+      const {data:created,error:createError}=await admin.from("dv_accounting_deposit_instruction_email_log").insert({
+        listing_id:listing.id,property_address:propertyAddress,recipient_name:recipientName,recipient_email:recipientEmail,
+        sent_by:actor.user.id,sent_by_email:actor.user.email||null,status:"PENDING",token_hash:tokenHash,
+        link_expires_at:expires.toISOString(),otp_attempts:0
+      }).select("id").single();
+      if(createError)throw createError;
+      const link=publicAppUrl.replace(/\/$/,"")+"/deposit-instructions?token="+token;
+      const html="<div style=\"font-family:Arial,sans-serif;max-width:620px;color:#172b4d\"><h2>Real Estate Trust deposit instructions</h2><p>Hello "+htmlEscape(recipientName)+",</p><p>"+htmlEscape(actor.user.email||"A Dream Valley Realty team member")+" has shared deposit instructions for this property:</p><p><strong>"+htmlEscape(propertyAddress)+"</strong></p><p><a href=\""+link+"\" style=\"display:inline-block;background:#0f2141;color:#fff;padding:12px 18px;text-decoration:none;border-radius:6px\">View secure deposit instructions</a></p><p>This link expires in 24 hours. Open it and request a separate six-digit code sent to this same email address.</p><p>For security, banking numbers are not included in this email.</p></div>";
+      try{
+        const messageId=await sendZoho(admin,recipientEmail,"Secure deposit instructions — "+propertyAddress,html);
+        const {error:updateError}=await admin.from("dv_accounting_deposit_instruction_email_log").update({status:"SENT",sent_at:new Date().toISOString(),provider_message_id:JSON.stringify({secure_link:messageId})}).eq("id",created.id);
+        if(updateError)throw updateError;
+        return json({ok:true,status:"SENT",logId:created.id,message:"Secure deposit instructions link sent to the buyer's agent."});
+      }catch(error){
+        const message=String((error as Error)?.message||"Email sending failed").slice(0,350);
+        await admin.from("dv_accounting_deposit_instruction_email_log").update({status:"FAILED",error_message:message}).eq("id",created.id);
+        return json({error:message,logId:created.id},502);
+      }
+    }
+
     if (action === "get_history") {
       const isAdmin = ["SUPERADMIN","ADMIN"].includes(actor.role);
       const isAgent = actor.role === "AGENT";

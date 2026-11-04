@@ -51,3 +51,12 @@ Before production use, verify the deployed Edge Function secrets, apply the SQL 
 - Open a valid recipient link, request the OTP, and confirm the code arrives at the target email address.
 - Confirm an incorrect code is rejected, the code expires after 15 minutes, the link expires after 24 hours, and the same link cannot reveal instructions a second time.
 - Confirm the audit history records sender, recipient, shared account type(s), send status, verification time and first-view time.
+
+ 
+## Listing-specific deposit instructions
+
+The separate **Send Deposit Instructions** workflow is exposed from the Listings workspace for both agents and administrators. Agents can select only listings assigned to their linked agent profile; administrators can select any brokerage listing. The Edge Function independently enforces this rule.
+
+The workflow sends the Real Estate Trust account instructions for the selected property to the buyer's agent. The email contains a 24-hour secure link, and the recipient must request a six-digit OTP at the same email address before opening the instructions. OTPs expire after 15 minutes, resend requests are throttled to one per minute, five incorrect attempts are allowed, and the secure link can be viewed only once.
+
+Apply `supabase/migrations/20261103200000_secure_listing_deposit_instructions.sql` in the Supabase SQL Editor and deploy the updated `trust-account-information` Edge Function. No new environment secrets are required; it reuses the existing encryption key, Zoho credentials, public URL, and secure sharing function.
