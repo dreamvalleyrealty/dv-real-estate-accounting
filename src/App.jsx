@@ -831,6 +831,7 @@ function AgentRankings(){
    commissionByTx.get(key).push(c);
   }
   const infoByTx=new Map(agentInfo.rows.filter(x=>x.transaction_id).map(x=>[String(x.transaction_id),x]));
+  const sideLabel=side=>["SELLER","LANDLORD","LISTING","LISTINGSIDE"].includes(String(side||"").toUpperCase())?"Sell":"Buy";
   const eligibleStatus=s=>["CLOSED","COMPLETED","FINALIZED","CLOSEDWON","PAID"].includes(String(s||"").toUpperCase().replace(/[^A-Z]/g,""));
   for(const tx of transactions.rows){
    if(!eligibleStatus(tx.status))continue;
@@ -860,7 +861,6 @@ function AgentRankings(){
     row.transactionDetails.push({id:String(tx.id),date,type:isLease?"Lease":sideLabel(side),side:side||"—",address:tx.property_address||tx.address||tx.property||"—",transactionNumber:tx.transaction_number||tx.trade_number||tx.id,amount,gci:agentGci,status:tx.status||"—"});
    }
   }
-  const sideLabel=side=>["SELLER","LANDLORD","LISTING","LISTINGSIDE"].includes(String(side||"").toUpperCase())?"Sell":"Buy";
   const countListing=(listing,dateValue,typeValue,agentIds,source)=>{
    const date=String(dateValue||"").slice(0,10);
    const status=String(listing.status||"").toUpperCase().replace(/[^A-Z]/g,"");
