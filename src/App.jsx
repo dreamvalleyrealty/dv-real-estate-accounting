@@ -798,6 +798,7 @@ function AgentRankings(){
  const[end,setEnd]=useState(iso(now));
  const[metric,setMetric]=useState("UNITS");
  const[search,setSearch]=useState("");
+ const[selectedAgent,setSelectedAgent]=useState(null);
  function choosePeriod(value){
   setPeriod(value);const n=new Date(),y=n.getFullYear(),m=n.getMonth();let a=new Date(y,0,1),b=n;
   if(value==="MONTH")a=new Date(y,m,1);
@@ -813,7 +814,7 @@ function AgentRankings(){
   const agentMap=new Map(agents.rows.map(a=>[String(a.id),{
    id:String(a.id),name:[a.first_name,a.last_name].filter(Boolean).join(" ").trim()||a.name||a.legal_name||"Unnamed agent",
    agentNumber:a.agent_number||"",buyUnits:0,sellUnits:0,leaseUnits:0,units:0,volume:0,gci:0,
-   listings:0,saleListings:0,leaseListings:0,tradeIds:new Set()
+   listings:0,saleListings:0,leaseListings:0,tradeIds:new Set(),transactionDetails:[],listingDetails:[]
   }]));
   const linksByTx=new Map();
   for(const link of transactionAgents.rows){
@@ -854,31 +855,28 @@ function AgentRankings(){
     row.volume+=amount;
     row.tradeIds.add(String(tx.id));
     const assignedCommission=commissionRows.find(c=>String(c.agent_id)===String(link.agent_id));
-    if(assignedCommission){
-     row.gci+=Math.max(0,Number(assignedCommission.gross_commission??assignedCommission.agent_share??0)||0);
-    }else if(String(link.agent_id)===String(info?.agent_id||"")){
-     row.gci+=Math.max(0,Number(info?.agent_gross??tx.agent_commission??0)||0);
-    }else{
-     row.gci+=Math.max(0,Number(link.commission_base||0)||0);
-    }
+    const agentGci=assignedCommission?Math.max(0,Number(assignedCommission.gross_commission??assignedCommission.agent_share??0)||0):String(link.agent_id)===String(info?.agent_id||"")?Math.max(0,Number(info?.agent_gross??tx.agent_commission??0)||0):Math.max(0,Number(link.commission_base||0)||0);
+    row.gci+=agentGci;
+    row.transactionDetails.push({id:String(tx.id),date,type:isLease?"Lease":sideLabel(side),side:side||"—",address:tx.property_address||tx.address||tx.property||"—",transactionNumber:tx.transaction_number||tx.trade_number||tx.id,amount,gci:agentGci,status:tx.status||"—"});
    }
   }
-  const countListing=(listing,dateValue,typeValue,agentIds)=>{
+  const sideLabel=side=>["SELLER","LANDLORD","LISTING","LISTINGSIDE"].includes(String(side||"").toUpperCase())?"Sell":"Buy";
+  const countListing=(listing,dateValue,typeValue,agentIds,source)=>{
    const date=String(dateValue||"").slice(0,10);
    const status=String(listing.status||"").toUpperCase().replace(/[^A-Z]/g,"");
    const rawType=String(typeValue||"").toUpperCase().replace(/[^A-Z]/g,"");
    const type=rawType.includes("LEASE")||rawType.includes("RENT")?"LEASE":rawType.includes("SALE")||rawType.includes("SELL")?"SALE":"";
    if(!date||date<start||date>end||["DRAFT","REJECTED","CANCELLED","DELETED","WITHDRAWN"].includes(status)||!type)return;
    const ids=[...new Set(agentIds.filter(Boolean).map(String))];
-   for(const id of ids){const row=agentMap.get(id);if(!row)continue;row.listings++;if(type==="LEASE")row.leaseListings++;else row.saleListings++;}
+   for(const id of ids){const row=agentMap.get(id);if(!row)continue;row.listings++;if(type==="LEASE")row.leaseListings++;else row.saleListings++;row.listingDetails.push({date,type,address:listing.property_address||listing.address||listing.street_address||"—",listingNumber:listing.listing_number||listing.mls_number||listing.mls||listing.id,status:listing.status||"—",source});}
   };
   for(const listing of listingSubmissions.rows){
    countListing(listing,listing.listing_start_date||listing.original_listing_date,listing.listing_type||listing.property_type,
-    [listing.agent_id,...(Array.isArray(listing.additional_agent_ids)?listing.additional_agent_ids:[])]);
+    [listing.agent_id,...(Array.isArray(listing.additional_agent_ids)?listing.additional_agent_ids:[])],"Listing submission");
   }
   for(const listing of legacyListings.rows){
    countListing(listing,listing.listing_start_date||listing.list_date||listing.listing_date,listing.listing_type||listing.type||listing.transaction_type,
-    [listing.agent_id,listing.listing_agent_id,...(Array.isArray(listing.additional_agent_ids)?listing.additional_agent_ids:[])]);
+    [listing.agent_id,listing.listing_agent_id,...(Array.isArray(listing.additional_agent_ids)?listing.additional_agent_ids:[])],"Legacy listing");
   }
   const key=metric==="LISTINGS"?"listings":metric==="VOLUME"?"volume":metric==="GCI"?"gci":"units";
   return [...agentMap.values()].sort((a,b)=>Number(b[key]||0)-Number(a[key]||0)||b.units-a.units||b.volume-a.volume||b.gci-a.gci||a.name.localeCompare(b.name))
@@ -906,7 +904,9 @@ function AgentRankings(){
  <div className="grid3"><Card title="Buy Units" value={ranking.reduce((n,x)=>n+x.buyUnits,0)} sub="Buyer / tenant representation"/><Card title="Sell Units" value={ranking.reduce((n,x)=>n+x.sellUnits,0)} sub="Seller / landlord representation"/><Card title="Lease Units" value={ranking.reduce((n,x)=>n+x.leaseUnits,0)} sub="Lease transactions"/></div>
  <section className="panel"><div className="paneltitle"><div><h2>Independent Rankings</h2><p className="panelhint">{start||"—"} to {end||"—"} · ranked by {metricLabel}</p></div><span className="pill">{visible.length} agents</span></div>
  <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>{[["UNITS","Number of units"],["VOLUME","Transaction volume"],["LISTINGS","Number of listings"],["GCI","GCI"]].map(([value,label])=><button key={value} type="button" className={metric===value?"primary":"secondary"} onClick={()=>setMetric(value)}>{label}</button>)}</div>
- <div className="tablewrap"><table><thead><tr><th>Rank</th><th>Agent</th><th>Agent #</th>{metric==="UNITS"?<><th>Buy</th><th>Sell</th><th>Lease</th><th>Total Units</th></>:metric==="VOLUME"?<><th>Transaction Volume</th><th>Transactions</th></>:metric==="LISTINGS"?<><th>Total Listings</th><th>Sale Listings</th><th>Lease Listings</th></>:<><th>GCI</th><th>Transactions</th></>}</tr></thead><tbody>{visible.map(x=><tr key={x.id}><td><strong>{x.rank}</strong>{x.rank===1&&<span className="pill" style={{marginLeft:6}}>Top</span>}</td><td>{x.name}</td><td>{x.agentNumber||"—"}</td>{metric==="UNITS"?<><td>{x.buyUnits}</td><td>{x.sellUnits}</td><td>{x.leaseUnits}</td><td><strong>{x.units}</strong></td></>:metric==="VOLUME"?<><td><strong>{cash(x.volume)}</strong></td><td>{x.tradeCount}</td></>:metric==="LISTINGS"?<><td><strong>{x.listings}</strong></td><td>{x.saleListings}</td><td>{x.leaseListings}</td></>:<><td><strong>{cash(x.gci)}</strong></td><td>{x.tradeCount}</td></>}</tr>)}{!visible.length&&<tr><td colSpan="8"><div className="empty small"><BarChart3/><h3>No ranking data found</h3><p>Try a different date range or check that transactions and listings have the required dates and agent assignments.</p></div></td></tr>}</tbody></table></div></section></>;
+ <div className="tablewrap"><table><thead><tr><th>Rank</th><th>Agent</th><th>Agent #</th>{metric==="UNITS"?<><th>Buy</th><th>Sell</th><th>Lease</th><th>Total Units</th></>:metric==="VOLUME"?<><th>Transaction Volume</th><th>Transactions</th></>:metric==="LISTINGS"?<><th>Total Listings</th><th>Sale Listings</th><th>Lease Listings</th></>:<><th>GCI</th><th>Transactions</th></>}</tr></thead><tbody>{visible.map(x=><tr key={x.id}><td><strong>{x.rank}</strong>{x.rank===1&&<span className="pill" style={{marginLeft:6}}>Top</span>}</td><td><button type="button" className="linklike" onClick={()=>setSelectedAgent(x)} title="View counted records">{x.name}</button></td><td>{x.agentNumber||"—"}</td>{metric==="UNITS"?<><td>{x.buyUnits}</td><td>{x.sellUnits}</td><td>{x.leaseUnits}</td><td><strong>{x.units}</strong></td></>:metric==="VOLUME"?<><td><strong>{cash(x.volume)}</strong></td><td>{x.tradeCount}</td></>:metric==="LISTINGS"?<><td><strong>{x.listings}</strong></td><td>{x.saleListings}</td><td>{x.leaseListings}</td></>:<><td><strong>{cash(x.gci)}</strong></td><td>{x.tradeCount}</td></>}</tr>)}{!visible.length&&<tr><td colSpan="8"><div className="empty small"><BarChart3/><h3>No ranking data found</h3><p>Try a different date range or check that transactions and listings have the required dates and agent assignments.</p></div></td></tr>}</tbody></table></div></section>
+ {selectedAgent&&<div className="modalbackdrop" onClick={()=>setSelectedAgent(null)}><section className="modal panel agent-ranking-detail" role="dialog" aria-modal="true" aria-label={selectedAgent.name+" ranking details"} onClick={e=>e.stopPropagation()}><div className="paneltitle"><div><h2>{selectedAgent.name}</h2><p className="panelhint">Records included in the selected date range ({start} to {end})</p></div><button className="secondary" type="button" onClick={()=>setSelectedAgent(null)}>Close</button></div><div className="grid3"><Card title="Buy / Sell / Lease" value={selectedAgent.units} sub={`${selectedAgent.buyUnits} buy · ${selectedAgent.sellUnits} sell · ${selectedAgent.leaseUnits} lease`}/><Card title="Transaction Volume" value={cash(selectedAgent.volume)} sub={`${selectedAgent.tradeCount} completed transactions`}/><Card title="GCI" value={cash(selectedAgent.gci)} sub="Agent gross commission counted"/></div><h3>Transactions counted</h3><div className="tablewrap"><table><thead><tr><th>Closing date</th><th>Trade #</th><th>Type / Side</th><th>Property</th><th>Sale price / Monthly rent</th><th>GCI</th><th>Status</th></tr></thead><tbody>{selectedAgent.transactionDetails.map((t,i)=><tr key={t.id+"-"+i}><td>{t.date}</td><td>{t.transactionNumber}</td><td>{t.type}</td><td>{t.address}</td><td>{cash(t.amount)}</td><td>{cash(t.gci)}</td><td>{t.status}</td></tr>)}{!selectedAgent.transactionDetails.length&&<tr><td colSpan="7">No completed transactions counted for this agent in this period.</td></tr>}</tbody></table></div><h3 style={{marginTop:20}}>Listings counted</h3><div className="tablewrap"><table><thead><tr><th>Original listing date</th><th>Listing #</th><th>Type</th><th>Property</th><th>Status</th><th>Source</th></tr></thead><tbody>{selectedAgent.listingDetails.map((l,i)=><tr key={String(l.listingNumber)+"-"+i}><td>{l.date}</td><td>{l.listingNumber}</td><td>{l.type}</td><td>{l.address}</td><td>{l.status}</td><td>{l.source}</td></tr>)}{!selectedAgent.listingDetails.length&&<tr><td colSpan="6">No listings counted for this agent in this period.</td></tr>}</tbody></table></div><p className="muted" style={{marginTop:12}}>Each transaction row above contributes one unit and its sale price (or monthly rent for a lease) to this agent. GCI is shown using the agent-specific commission record where available. Listings use their original listing start date.</p></section></div>}
+ </>;
 }
 function Reports(){
  const[preview,setPreview]=useState(null),[selectedReport,setSelectedReport]=useState("Profit & Loss"),[dateFrom,setDateFrom]=useState(""),[dateTo,setDateTo]=useState(""),[statusFilter,setStatusFilter]=useState("ALL"),[agentFilter,setAgentFilter]=useState("ALL"),[searchFilter,setSearchFilter]=useState("");
