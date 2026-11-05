@@ -785,89 +785,128 @@ function Payroll({user,permissions={},role}){
  </>
 }
 function AgentRankings(){
- const agents=useRows("dv_accounting_agents"),transactions=useRows("dv_accounting_transactions"),agentInfo=useRows("dv_accounting_transaction_agents"),tradeSubmissions=useRows("dv_accounting_agent_trade_submissions"),listingSubmissions=useRows("dv_accounting_listing_submissions"),legacyListings=useRows("dv_accounting_listings");
+ const agents=useRows("dv_accounting_agents");
+ const transactions=useRows("dv_accounting_transactions");
+ const transactionAgents=useRows("dv_accounting_transaction_agents");
+ const agentInfo=useRows("dv_accounting_transaction_agent_info");
+ const commissions=useRows("dv_accounting_commissions");
+ const listingSubmissions=useRows("dv_accounting_listing_submissions");
+ const legacyListings=useRows("dv_accounting_listings");
  const now=new Date(),iso=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");return y+"-"+m+"-"+day};
- const[period,setPeriod]=useState("MONTH"),[start,setStart]=useState(iso(new Date(now.getFullYear(),now.getMonth(),1))),[end,setEnd]=useState(iso(now)),[metric,setMetric]=useState("UNITS"),[dateBasis,setDateBasis]=useState("FINALIZED"),[search,setSearch]=useState("");
+ const[period,setPeriod]=useState("YEAR");
+ const[start,setStart]=useState(iso(new Date(now.getFullYear(),0,1)));
+ const[end,setEnd]=useState(iso(now));
+ const[metric,setMetric]=useState("UNITS");
+ const[search,setSearch]=useState("");
  function choosePeriod(value){
-  setPeriod(value);const n=new Date(),y=n.getFullYear(),m=n.getMonth();let a=new Date(y,m,1),b=n;
-  if(value==="QUARTER"){const q=Math.floor(m/3);a=new Date(y,q*3,1)}
-  else if(value==="HALF"){a=new Date(y,m<6?0:6,1)}
-  else if(value==="YEAR"){a=new Date(y,0,1)}
-  else if(value==="MONTH"){a=new Date(y,m,1)}
-  else if(value==="CUSTOM"){return}
+  setPeriod(value);const n=new Date(),y=n.getFullYear(),m=n.getMonth();let a=new Date(y,0,1),b=n;
+  if(value==="MONTH")a=new Date(y,m,1);
+  else if(value==="QUARTER")a=new Date(y,Math.floor(m/3)*3,1);
+  else if(value==="HALF")a=new Date(y,m<6?0:6,1);
+  else if(value==="YEAR")a=new Date(y,0,1);
+  else if(value==="ALL"){a=new Date(2000,0,1)}
+  else if(value==="CUSTOM")return;
   setStart(iso(a));setEnd(iso(b));
  }
- const completed=useMemo(()=>{
-  if(!start||!end||start>end)return [];
-  return transactions.rows.filter(t=>{
-   const statuses=[t.status,t.transaction_status].map(value=>String(value||"").toUpperCase().replace(/[^A-Z]/g,""));
-   if(!statuses.some(status=>["CLOSED","COMPLETED","FINALIZED","CLOSEDWON","PAID"].includes(status)))return false;
-   // Use the selected date basis consistently; do not silently substitute closing
-   // dates for finalization dates, since that changes the reporting period.
-   const date=String(dateBasis==="FINALIZED"
-    ?(t.finalized_date||t.finalized_at||t.closed_at||"")
-    :(t.close_date||t.closing_date||"")).slice(0,10);
-   return !!date&&date>=start&&date<=end;
-  });
- },[transactions.rows,start,end,dateBasis]);
  const ranking=useMemo(()=>{
-  const agentById=new Map(agents.rows.map(a=>[String(a.id),a]));
-  const infoByTransaction=new Map();
-  for(const link of agentInfo.rows){
+  if(!start||!end||start>end)return [];
+  const agentMap=new Map(agents.rows.map(a=>[String(a.id),{
+   id:String(a.id),name:[a.first_name,a.last_name].filter(Boolean).join(" ").trim()||a.name||a.legal_name||"Unnamed agent",
+   agentNumber:a.agent_number||"",buyUnits:0,sellUnits:0,leaseUnits:0,units:0,volume:0,gci:0,
+   listings:0,saleListings:0,leaseListings:0,tradeIds:new Set()
+  }]));
+  const linksByTx=new Map();
+  for(const link of transactionAgents.rows){
    if(!link.transaction_id||!link.agent_id)continue;
    const key=String(link.transaction_id);
-   if(!infoByTransaction.has(key))infoByTransaction.set(key,[]);
-   infoByTransaction.get(key).push(link);
+   if(!linksByTx.has(key))linksByTx.set(key,[]);
+   linksByTx.get(key).push(link);
   }
-  const map=new Map();
-  for(const agent of agents.rows){const id=String(agent.id);map.set(id,{id,name:[agent.first_name,agent.last_name].filter(Boolean).join(" ").trim()||agent.name||agent.legal_name||"Unnamed agent",agentNumber:agent.agent_number||"",units:0,volume:0,gci:0,transactions:[],tradeCount:0,listingCount:0,leaseListingCount:0,saleListingCount:0});}
-  for(const t of completed){
-   const links=[...(infoByTransaction.get(String(t.id))||[])];
-   if(!links.length&&t.agent_id&&agentById.has(String(t.agent_id)))links.push({agent_id:String(t.agent_id),agent_gross:t.gross_commission});
-   // The current schema supports one transaction-agent info row per transaction.
-   // De-duplicate defensively in case legacy or inconsistent data contains repeats.
-   const uniqueLinks=[...new Map(links.map(link=>[String(link.agent_id),link])).values()];
-   for(const link of uniqueLinks){
-    const id=String(link.agent_id),agent=agentById.get(id);
-    if(!agent)continue;
-    const row=map.get(id)||{id,name:[agent.first_name,agent.last_name].filter(Boolean).join(" ").trim()||agent.name||agent.legal_name||"Unnamed agent",agentNumber:agent.agent_number||"",units:0,volume:0,gci:0,transactions:[],tradeCount:0,listingCount:0};
-    row.units+=1;
-    row.volume+=Math.max(0,Number(t.sale_price??t.purchase_price??0)||0);
-    // Prefer the assigned agent's commission amount when present; fall back to transaction GCI.
-    const assignedGci=link.commission_base??link.gross_commission??link.agent_gross;
-    row.gci+=Number(assignedGci??t.gross_commission??0)||0;
-    row.transactions.push(t);
-    map.set(id,row);
+  const commissionByTx=new Map();
+  for(const c of commissions.rows){
+   if(!c.transaction_id||!c.agent_id)continue;
+   const key=String(c.transaction_id);
+   if(!commissionByTx.has(key))commissionByTx.set(key,[]);
+   commissionByTx.get(key).push(c);
+  }
+  const infoByTx=new Map(agentInfo.rows.filter(x=>x.transaction_id).map(x=>[String(x.transaction_id),x]));
+  const eligibleStatus=s=>["CLOSED","COMPLETED","FINALIZED","CLOSEDWON","PAID"].includes(String(s||"").toUpperCase().replace(/[^A-Z]/g,""));
+  for(const tx of transactions.rows){
+   if(!eligibleStatus(tx.status))continue;
+   const date=String(tx.close_date||tx.closing_date||tx.finalized_date||tx.finalized_at||"").slice(0,10);
+   if(!date||date<start||date>end)continue;
+   const info=infoByTx.get(String(tx.id));
+   let links=[...(linksByTx.get(String(tx.id))||[])];
+   if(!links.length&&info?.agent_id)links=[{agent_id:info.agent_id,side:tx.side,primary_agent:true}];
+   if(!links.length&&tx.agent_id)links=[{agent_id:tx.agent_id,side:tx.side,primary_agent:true}];
+   links=[...new Map(links.map(x=>[String(x.agent_id),x])).values()];
+   const type=String(tx.transaction_type||"").toUpperCase().replace(/[^A-Z]/g,"");
+   const isLease=type.includes("LEASE")||type==="RENT";
+   const amount=Math.max(0,Number(tx.sale_price??tx.purchase_price??0)||0);
+   const commissionRows=commissionByTx.get(String(tx.id))||[];
+   for(const link of links){
+    const row=agentMap.get(String(link.agent_id));if(!row)continue;
+    const side=String(link.side||tx.side||"").toUpperCase();
+    if(isLease)row.leaseUnits++;
+    else if(["SELLER","LANDLORD","LISTING","LISTINGSIDE"].includes(side))row.sellUnits++;
+    else row.buyUnits++;
+    row.units=row.buyUnits+row.sellUnits+row.leaseUnits;
+    row.volume+=amount;
+    row.tradeIds.add(String(tx.id));
+    const assignedCommission=commissionRows.find(c=>String(c.agent_id)===String(link.agent_id));
+    if(assignedCommission){
+     row.gci+=Math.max(0,Number(assignedCommission.gross_commission??assignedCommission.agent_share??0)||0);
+    }else if(String(link.agent_id)===String(info?.agent_id||"")){
+     row.gci+=Math.max(0,Number(info?.agent_gross??tx.agent_commission??0)||0);
+    }else{
+     row.gci+=Math.max(0,Number(link.commission_base||0)||0);
+    }
    }
   }
-  const assignedId=row=>String(row.agent_id||row.assigned_agent_id||row.agent_user_id||row.created_for_agent_id||"");
-  for(const trade of tradeSubmissions.rows){const id=assignedId(trade);if(id&&map.has(id)&&!["REJECTED","CANCELLED","DELETED"].includes(String(trade.status||"").toUpperCase()))map.get(id).tradeCount++;}
-  const countListing=(listing,dateValue,typeValue,agentValues)=>{const date=String(dateValue||"").slice(0,10),status=String(listing.status||"").toUpperCase().replace(/[^A-Z]/g,""),rawType=String(typeValue||"").toUpperCase().replace(/[^A-Z]/g,""),type=rawType.includes("LEASE")?"LEASE":rawType.includes("SALE")||rawType.includes("SELL")?"SALE":"";if(!date||date<start||date>end||["REJECTED","CANCELLED","DELETED","EXPIRED"].includes(status)||!["LEASE","SALE"].includes(type))return;const ids=agentValues.filter(v=>v!==null&&v!==undefined&&String(v)!=="").map(String);for(const id of new Set(ids)){const row=map.get(id);if(row){row.listingCount++;if(type==="LEASE")row.leaseListingCount++;if(type==="SALE")row.saleListingCount++;}}};for(const listing of listingSubmissions.rows)countListing(listing,listing.listing_start_date,listing.listing_type,[listing.agent_id,...(Array.isArray(listing.additional_agent_ids)?listing.additional_agent_ids:[])]);for(const listing of legacyListings.rows)countListing(listing,listing.listing_start_date||listing.list_date||listing.listing_date,listing.listing_type||listing.type||listing.transaction_type,[listing.agent_id,listing.listing_agent_id,...(Array.isArray(listing.additional_agent_ids)?listing.additional_agent_ids:[])]);
-  return [...map.values()].sort((a,b)=>{
-   const scoreKey=key=>{const values=[...map.values()].sort((x,y)=>Number(y[key]||0)-Number(x[key]||0));const n=values.length;return new Map(values.map((x,i)=>[x.id,n<=1?100:100*(n-i-1)/(n-1)]))};const points={units:scoreKey("units"),volume:scoreKey("volume"),gci:scoreKey("gci"),listings:scoreKey("listingCount")};for(const x of map.values())x.combinedScore=Math.round(((points.units.get(x.id)||0)+(points.volume.get(x.id)||0)+(points.gci.get(x.id)||0)+(points.listings.get(x.id)||0))/4*100)/100;const primary=metric==="LISTINGS"?b.listingCount-a.listingCount:metric==="COMBINED"?b.combinedScore-a.combinedScore:metric==="VOLUME"?b.volume-a.volume:metric==="GCI"?b.gci-a.gci:b.units-a.units;
-   return primary||(metric==="LISTINGS"?b.listingCount-a.listingCount:b.volume-a.volume)||b.volume-a.volume||b.gci-a.gci||a.name.localeCompare(b.name);
-  }).map((row,index)=>({...row,rank:index+1}));
- },[completed,agentInfo.rows,agents.rows,tradeSubmissions.rows,listingSubmissions.rows,legacyListings.rows,metric]);
+  const countListing=(listing,dateValue,typeValue,agentIds)=>{
+   const date=String(dateValue||"").slice(0,10);
+   const status=String(listing.status||"").toUpperCase().replace(/[^A-Z]/g,"");
+   const rawType=String(typeValue||"").toUpperCase().replace(/[^A-Z]/g,"");
+   const type=rawType.includes("LEASE")||rawType.includes("RENT")?"LEASE":rawType.includes("SALE")||rawType.includes("SELL")?"SALE":"";
+   if(!date||date<start||date>end||["DRAFT","REJECTED","CANCELLED","DELETED","WITHDRAWN"].includes(status)||!type)return;
+   const ids=[...new Set(agentIds.filter(Boolean).map(String))];
+   for(const id of ids){const row=agentMap.get(id);if(!row)continue;row.listings++;if(type==="LEASE")row.leaseListings++;else row.saleListings++;}
+  };
+  for(const listing of listingSubmissions.rows){
+   countListing(listing,listing.listing_start_date||listing.original_listing_date,listing.listing_type||listing.property_type,
+    [listing.agent_id,...(Array.isArray(listing.additional_agent_ids)?listing.additional_agent_ids:[])]);
+  }
+  for(const listing of legacyListings.rows){
+   countListing(listing,listing.listing_start_date||listing.list_date||listing.listing_date,listing.listing_type||listing.type||listing.transaction_type,
+    [listing.agent_id,listing.listing_agent_id,...(Array.isArray(listing.additional_agent_ids)?listing.additional_agent_ids:[])]);
+  }
+  const key=metric==="LISTINGS"?"listings":metric==="VOLUME"?"volume":metric==="GCI"?"gci":"units";
+  return [...agentMap.values()].sort((a,b)=>Number(b[key]||0)-Number(a[key]||0)||b.units-a.units||b.volume-a.volume||b.gci-a.gci||a.name.localeCompare(b.name))
+   .map((row,index)=>({...row,tradeCount:row.tradeIds.size,rank:index+1}));
+ },[agents.rows,transactions.rows,transactionAgents.rows,agentInfo.rows,commissions.rows,listingSubmissions.rows,legacyListings.rows,start,end,metric]);
  const normalizedSearch=search.trim().toLowerCase();
  const visible=ranking.filter(x=>!normalizedSearch||x.name.toLowerCase().includes(normalizedSearch)||String(x.agentNumber).toLowerCase().includes(normalizedSearch));
  const cash=n=>money(n);
+ const metricLabel=metric==="UNITS"?"completed units":metric==="VOLUME"?"transaction volume":metric==="LISTINGS"?"listings by original listing date":"gross commission income";
  function exportCsv(){
-  const rows=[["Rank","Agent","Agent Number","Completed Units","Sales Volume","Gross Commission","Lease Listings","Sale Listings","Total Listings"],...visible.map(x=>[x.rank,x.name,x.agentNumber,x.units,x.volume.toFixed(2),x.gci.toFixed(2),x.leaseListingCount,x.saleListingCount,x.listingCount])];
+  const headers=["Rank","Agent","Agent Number","Buy Units","Sell Units","Lease Units","Total Units","Transaction Volume","GCI","Listings","Sale Listings","Lease Listings"];
+  const rows=[headers,...visible.map(x=>[x.rank,x.name,x.agentNumber,x.buyUnits,x.sellUnits,x.leaseUnits,x.units,x.volume.toFixed(2),x.gci.toFixed(2),x.listings,x.saleListings,x.leaseListings])];
   const csv=rows.map(row=>row.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(",")).join("\n");
   const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));const a=document.createElement("a");a.href=url;a.download="agent-rankings-"+start+"-to-"+end+".csv";a.click();URL.revokeObjectURL(url);
  }
- return <><div className="pagehead"><div><h1>Agent Rankings & Top Producers</h1><p>Rank agents by completed transactions or listings started during the selected reporting period, using listing start date for listing rankings.</p></div><button className="secondary" type="button" onClick={()=>{agents.load();transactions.load();agentInfo.load();tradeSubmissions.load();listingSubmissions.load()}}><RefreshCw size={16}/> Refresh</button></div>
+ const refresh=()=>{agents.load();transactions.load();transactionAgents.load();agentInfo.load();commissions.load();listingSubmissions.load();legacyListings.load()};
+ return <><div className="pagehead"><div><h1>Agent Rankings</h1><p>Four separate leaderboards. Each ranking uses its own measure and date rules.</p></div><button className="secondary" type="button" onClick={refresh}><RefreshCw size={16}/> Refresh</button></div>
  <section className="panel"><div className="formgrid">
- <label>Reporting period<select value={period} onChange={e=>choosePeriod(e.target.value)}><option value="MONTH">Monthly</option><option value="QUARTER">Quarterly</option><option value="HALF">Half-yearly</option><option value="YEAR">Yearly</option><option value="CUSTOM">Custom date range</option></select></label>
- <label>Rank by<select value={metric} onChange={e=>setMetric(e.target.value)}><option value="UNITS">Completed units</option><option value="VOLUME">Sales volume</option><option value="GCI">Gross commission</option><option value="LISTINGS">Listing count (listing start date)</option><option value="COMBINED">Combined top producer</option></select></label>
- <label>Reporting date<select value={dateBasis} onChange={e=>setDateBasis(e.target.value)}><option value="CLOSING">Closing date</option><option value="FINALIZED">Finalization date</option></select></label>
- <label>From date<input type="date" value={start} max={end||undefined} onChange={e=>{setStart(e.target.value);setPeriod("CUSTOM")}}/></label>
- <label>To date<input type="date" value={end} min={start||undefined} max={iso(now)} onChange={e=>{setEnd(e.target.value);setPeriod("CUSTOM")}}/></label>
- <label style={{gridColumn:"1 / -1"}}>Search agent<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Agent name or agent number"/></label>
- </div><div className="muted" style={{marginTop:10}}>Includes Closed, Completed, Finalized, and Closed Won transactions dated by {dateBasis==="FINALIZED"?"finalization date":"actual closing date"} inside the selected range. Transactions without the selected date or an agent assignment are excluded. Use Reporting date to switch between closing-date and finalization-date results. Summary totals remain based on the full reporting period when you search for an agent.</div>
- <div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}><button className="primary" type="button" onClick={exportCsv} disabled={!visible.length}><FileSpreadsheet size={16}/> Export Ranking CSV</button></div></section>
- <div className="grid3"><Card title="Completed Units" value={ranking.reduce((n,x)=>n+x.units,0)} sub="Agent transaction credits in reporting period"/><Card title="Sales Volume" value={cash(ranking.reduce((n,x)=>n+x.volume,0))} sub="Completed transactions"/><Card title="Gross Commission" value={cash(ranking.reduce((n,x)=>n+x.gci,0))} sub="Agent commission credited in reporting period"/></div>
- <section className="panel"><div className="paneltitle"><div><h2>Top Producers</h2><p className="panelhint">{start||"—"} to {end||"—"} · ranked by {metric==="LISTINGS"?"listings started":metric==="UNITS"?"completed units":metric==="VOLUME"?"sales volume":"gross commission"}</p></div><span className="pill">{visible.length} agents{normalizedSearch?" matched":""}</span></div><div className="tablewrap"><table><thead><tr><th>Rank</th><th>Agent</th><th>Agent #</th><th>Completed Units</th><th>Sales Volume</th><th>Gross Commission</th><th>Trades</th><th>Lease Listings</th><th>Sale Listings</th><th>Total Listings</th></tr></thead><tbody>{visible.map(x=><tr key={x.id}><td><strong>{x.rank}</strong>{x.rank===1&&<span className="pill" style={{marginLeft:6}}>Top Producer</span>}</td><td>{x.name}</td><td>{x.agentNumber||"—"}</td><td>{x.units}</td><td>{cash(x.volume)}</td><td>{cash(x.gci)}</td><td>{x.tradeCount}</td><td>{x.leaseListingCount}</td><td>{x.saleListingCount}</td><td>{x.listingCount}</td></tr>)}{!visible.length&&<tr><td colSpan="10"><div className="empty small"><BarChart3/><h3>No completed transactions found</h3><p>Try another date range, or verify that transactions have a closing date, an eligible status, and an agent assignment.</p></div></td></tr>}</tbody></table></div></section></>;
+  <label>Reporting period<select value={period} onChange={e=>choosePeriod(e.target.value)}><option value="MONTH">This month</option><option value="QUARTER">This quarter</option><option value="HALF">This half-year</option><option value="YEAR">This year</option><option value="ALL">All time</option><option value="CUSTOM">Custom date range</option></select></label>
+  <label>From date<input type="date" value={start} max={end||undefined} onChange={e=>{setStart(e.target.value);setPeriod("CUSTOM")}}/></label>
+  <label>To date<input type="date" value={end} min={start||undefined} max={iso(now)} onChange={e=>{setEnd(e.target.value);setPeriod("CUSTOM")}}/></label>
+  <label>Search agent<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Agent name or agent number"/></label>
+ </div><div className="muted" style={{marginTop:10}}>Transaction rankings use the actual closing date where available, then the recorded finalization date. Lease transaction volume uses the monthly rent entered in the transaction's Sale Price field. GCI uses the agent gross commission amount before agent fees and deductions. Listing rankings use the listing's original start date; sold or expired listings remain included.</div>
+ <div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}><button className="primary" type="button" onClick={exportCsv} disabled={!visible.length}><FileSpreadsheet size={16}/> Export CSV</button></div></section>
+ <div className="grid3"><Card title="Buy Units" value={ranking.reduce((n,x)=>n+x.buyUnits,0)} sub="Buyer / tenant representation"/><Card title="Sell Units" value={ranking.reduce((n,x)=>n+x.sellUnits,0)} sub="Seller / landlord representation"/><Card title="Lease Units" value={ranking.reduce((n,x)=>n+x.leaseUnits,0)} sub="Lease transactions"/></div>
+ <section className="panel"><div className="paneltitle"><div><h2>Independent Rankings</h2><p className="panelhint">{start||"—"} to {end||"—"} · ranked by {metricLabel}</p></div><span className="pill">{visible.length} agents</span></div>
+ <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>{[["UNITS","Number of units"],["VOLUME","Transaction volume"],["LISTINGS","Number of listings"],["GCI","GCI"]].map(([value,label])=><button key={value} type="button" className={metric===value?"primary":"secondary"} onClick={()=>setMetric(value)}>{label}</button>)}</div>
+ <div className="tablewrap"><table><thead><tr><th>Rank</th><th>Agent</th><th>Agent #</th>{metric==="UNITS"?<><th>Buy</th><th>Sell</th><th>Lease</th><th>Total Units</th></>:metric==="VOLUME"?<><th>Transaction Volume</th><th>Transactions</th></>:metric==="LISTINGS"?<><th>Total Listings</th><th>Sale Listings</th><th>Lease Listings</th></>:<><th>GCI</th><th>Transactions</th></>}</tr></thead><tbody>{visible.map(x=><tr key={x.id}><td><strong>{x.rank}</strong>{x.rank===1&&<span className="pill" style={{marginLeft:6}}>Top</span>}</td><td>{x.name}</td><td>{x.agentNumber||"—"}</td>{metric==="UNITS"?<><td>{x.buyUnits}</td><td>{x.sellUnits}</td><td>{x.leaseUnits}</td><td><strong>{x.units}</strong></td></>:metric==="VOLUME"?<><td><strong>{cash(x.volume)}</strong></td><td>{x.tradeCount}</td></>:metric==="LISTINGS"?<><td><strong>{x.listings}</strong></td><td>{x.saleListings}</td><td>{x.leaseListings}</td></>:<><td><strong>{cash(x.gci)}</strong></td><td>{x.tradeCount}</td></>}</tr>)}{!visible.length&&<tr><td colSpan="8"><div className="empty small"><BarChart3/><h3>No ranking data found</h3><p>Try a different date range or check that transactions and listings have the required dates and agent assignments.</p></div></td></tr>}</tbody></table></div></section></>;
 }
 function Reports(){
  const[preview,setPreview]=useState(null),[selectedReport,setSelectedReport]=useState("Profit & Loss"),[dateFrom,setDateFrom]=useState(""),[dateTo,setDateTo]=useState(""),[statusFilter,setStatusFilter]=useState("ALL"),[agentFilter,setAgentFilter]=useState("ALL"),[searchFilter,setSearchFilter]=useState("");
