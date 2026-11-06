@@ -434,6 +434,31 @@ Deno.serve(async (req: Request) => {
     }
     const actor = await requireActor(req, admin, supabaseUrl, anonKey);
     const isAdmin = ["SUPERADMIN","ADMIN"].includes(actor.role);
+    if (action === "get_commission_trust_eft_details") {
+      if (!isAdmin) return json({ error: "Only an administrator can retrieve Commission Trust EFT details for a statement." }, 403);
+      const { data: item, error } = await admin.from("dv_accounting_trust_account_instructions")
+        .select("institution,institution_number,transit_number,account_number_ciphertext,account_name,bank_address")
+        .eq("account_type", "COMMISSION_TRUST").maybeSingle();
+      if (error) throw error;
+      if (!item) return json({ error: "Dream Valley's Commission Trust EFT instructions have not been configured." }, 404);
+      const raw = item.account_number_ciphertext;
+      let encrypted: Uint8Array;
+      if (raw instanceof Uint8Array) encrypted = raw;
+      else if (Array.isArray(raw)) encrypted = new Uint8Array(raw);
+      else {
+        const encoded = String(raw || "");
+        const hex = encoded.startsWith("\\\\x") ? encoded.slice(2) : encoded;
+        if (!/^[0-9a-f]+$/i.test(hex) || hex.length % 2 !== 0) throw new Error("Invalid encrypted Commission Trust account data.");
+        encrypted = new Uint8Array(hex.length / 2);
+        for (let i = 0; i < encrypted.length; i++) encrypted[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+      }
+      const accountNumber = await decrypt(encrypted, encryptionSecret);
+      return json({ instructions: {
+        institution: item.institution, institution_number: item.institution_number,
+        transit_number: item.transit_number, account_number: accountNumber,
+        account_name: item.account_name, bank_address: item.bank_address,
+      }});
+    }
     if (action === "get_settings") {
       if (!isAdmin) return json({ error: "Only an administrator can view the saved banking instructions." }, 403);
       const { data, error } = await admin.from("dv_accounting_trust_account_instructions")
