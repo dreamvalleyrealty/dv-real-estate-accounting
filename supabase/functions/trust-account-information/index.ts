@@ -447,7 +447,7 @@ Deno.serve(async (req: Request) => {
       else if (Array.isArray(raw)) encrypted = new Uint8Array(raw);
       else {
         const encoded = String(raw || "");
-        const hex = encoded.startsWith("\\\\x") ? encoded.slice(2) : encoded;
+        const hex = encoded.startsWith("\\x") ? encoded.slice(2) : encoded;
         if (!/^[0-9a-f]+$/i.test(hex) || hex.length % 2 !== 0) throw new Error("Invalid encrypted Commission Trust account data.");
         encrypted = new Uint8Array(hex.length / 2);
         for (let i = 0; i < encrypted.length; i++) encrypted[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
