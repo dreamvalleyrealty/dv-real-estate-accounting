@@ -117,11 +117,27 @@ const blankTrust=()=>({we_hold_deposit:"NO",held_by:"",received:"NO",deposit_dat
 function mergeDepositHistoryRows(existing=[],incoming=[]){
  const rows=[...(existing||[]),...(incoming||[])];
  const seen=new Set();
- return rows.filter(row=>{
-  const key=[String(row.reference_number||row.reference||"").trim().toUpperCase(),String(row.deposit_date||row.ledger_date||row.created_at||"").slice(0,10),Number(row.amount||0).toFixed(2)].join("|");
-  if(seen.has(key))return false;
-  seen.add(key);return true;
- }).sort((a,b)=>String(b.deposit_date||b.ledger_date||"").localeCompare(String(a.deposit_date||a.ledger_date||"")));
+ const payerKey=value=>String(value||"").replace(/[—–-]/g,"").normalize("NFKD").replace(/[\\u0300-\\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"");
+ const kept=[];
+ for(const row of rows){
+  const date=String(row.deposit_date||row.ledger_date||row.created_at||"").slice(0,10);
+  const amount=Number(row.amount||0);
+  const reference=String(row.reference_number||row.reference||"").trim().toUpperCase();
+  const source=String(row._source||"").toUpperCase();
+  const payer=payerKey(row.received_from||row.client_name);
+  const duplicateLinkedCopy=kept.some(prior=>{
+   const priorSource=String(prior._source||"").toUpperCase();
+   if(!source||!priorSource||source===priorSource||!["TRADE","LISTING"].includes(source)||!["TRADE","LISTING"].includes(priorSource))return false;
+   const priorDate=String(prior.deposit_date||prior.ledger_date||prior.created_at||"").slice(0,10);
+   const priorPayer=payerKey(prior.received_from||prior.client_name);
+   return !!date&&date===priorDate&&Math.abs(amount-Number(prior.amount||0))<0.01&&(!payer||!priorPayer||payer===priorPayer);
+  });
+  if(duplicateLinkedCopy)continue;
+  const key=[reference,date,amount.toFixed(2),source].join("|");
+  if(seen.has(key))continue;
+  seen.add(key);kept.push(row);
+ }
+ return kept.sort((a,b)=>String(b.deposit_date||b.ledger_date||"").localeCompare(String(a.deposit_date||a.ledger_date||"")));
 }
 function ModalLike({title,onClose,children}){return <div className="overlay"><div className="modal tx-contact-modal"><div className="modalhead"><h2>{title}</h2><button type="button" className="iconbtn" onClick={onClose}>×</button></div>{children}</div></div>}
 function Field({label,children,wide=false}){return <label className={wide?"tx-field tx-wide":"tx-field"}><span>{label}</span>{children}</label>}
