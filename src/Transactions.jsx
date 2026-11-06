@@ -123,10 +123,10 @@ function mergeDepositHistoryRows(existing=[],incoming=[]){
   const date=String(row.deposit_date||row.ledger_date||row.created_at||"").slice(0,10);
   const amount=Number(row.amount||0);
   const reference=String(row.reference_number||row.reference||"").trim().toUpperCase();
-  const source=String(row._source||"").toUpperCase();
+  const source=String(row._source||(String(row.transaction_number||"").startsWith("LST-")?"LISTING":String(row.transaction_number||"").startsWith("TR")?"TRADE":"")).toUpperCase();
   const payer=payerKey(row.received_from||row.client_name);
   const duplicateLinkedCopy=kept.some(prior=>{
-   const priorSource=String(prior._source||"").toUpperCase();
+   const priorSource=String(prior._source||(String(prior.transaction_number||"").startsWith("LST-")?"LISTING":String(prior.transaction_number||"").startsWith("TR")?"TRADE":"")).toUpperCase();
    if(!source||!priorSource||source===priorSource||!["TRADE","LISTING"].includes(source)||!["TRADE","LISTING"].includes(priorSource))return false;
    const priorDate=String(prior.deposit_date||prior.ledger_date||prior.created_at||"").slice(0,10);
    const priorPayer=payerKey(prior.received_from||prior.client_name);
@@ -291,7 +291,7 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
      const history=(listingTransactions||[]).map(listingTx=>{
       const listingTrust=trustById.get(listingTx.id);
       if(!listingTrust||String(listingTrust.received||"").toUpperCase()!=="YES"||Number(listingTrust.amount||listingTx.deposit_amount||0)<=0)return null;
-      return {...listingTrust,transaction_id:listingTx.id,transaction_number:listingTx.transaction_number,amount:Number(listingTrust.amount||listingTx.deposit_amount||0),deposit_date:listingTrust.deposit_date||listingTrust.created_at?.slice(0,10)||listingTx.created_at?.slice(0,10)||"",received_from:listingTrust.received_from||"—",reference_number:listingTrust.reference_number||"—"};
+      return {...listingTrust,transaction_id:listingTx.id,transaction_number:listingTx.transaction_number,amount:Number(listingTrust.amount||listingTx.deposit_amount||0),deposit_date:listingTrust.deposit_date||listingTrust.created_at?.slice(0,10)||listingTx.created_at?.slice(0,10)||"",received_from:listingTrust.received_from||"—",reference_number:listingTrust.reference_number||"—",_source:"LISTING"};
      }).filter(Boolean);
      if(!cancelled)setListingDepositHistory(current=>mergeDepositHistoryRows(current,history));
      const listingTx=listingTransactions[0];
