@@ -860,7 +860,7 @@ function AgentRankings({onOpenTransaction,onOpenTradeSubmission,onOpenListingSub
     row.tradeIds.add(String(tx.id));
     const assignedCommission=commissionRows.find(c=>String(c.agent_id)===String(link.agent_id));
     if(assignedCommission){
-     row.gci+=Math.max(0,Number(assignedCommission.gross_commission??assignedCommission.agent_share??0)||0);
+     row.gci+=Math.max(0,Number(assignedCommission.agent_share??assignedCommission.gross_commission??0)||0);
     }else if(String(link.agent_id)===String(info?.agent_id||"")){
      row.gci+=Math.max(0,Number(info?.agent_gross??tx.agent_commission??0)||0);
     }else{
