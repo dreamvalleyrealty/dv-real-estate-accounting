@@ -884,7 +884,7 @@ function AgentRankings(){
     [listing.agent_id,listing.listing_agent_id,...(Array.isArray(listing.additional_agent_ids)?listing.additional_agent_ids:[])]);
   }
   const key=metric==="LISTINGS"?"listings":metric==="VOLUME"?"volume":metric==="GCI"?"gci":"units";
-  return [...agentMap.values()].sort((a,b)=>Number(b[key]||0)-Number(a[key]||0)||b.units-a.units||b.volume-a.volume||b.gci-a.gci||a.name.localeCompare(b.name))
+  return [...agentMap.values()].filter(row=>Number(row[key]||0)>0).sort((a,b)=>Number(b[key]||0)-Number(a[key]||0)||b.units-a.units||b.volume-a.volume||b.gci-a.gci||a.name.localeCompare(b.name))
    .map((row,index)=>({...row,tradeCount:row.tradeIds.size,rank:index+1}));
  },[agents.rows,transactions.rows,transactionAgents.rows,agentInfo.rows,commissions.rows,listingSubmissions.rows,legacyListings.rows,start,end,metric]);
  const normalizedSearch=search.trim().toLowerCase();
