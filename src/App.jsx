@@ -804,6 +804,7 @@ function AgentRankings(){
  function choosePeriod(value){
   setPeriod(value);const n=new Date(),y=n.getFullYear(),m=n.getMonth();let a=new Date(y,0,1),b=n;
   if(value==="MONTH")a=new Date(y,m,1);
+   else if(value==="LAST_MONTH"){a=new Date(y,m-1,1);b=new Date(y,m,0)}
   else if(value==="QUARTER")a=new Date(y,Math.floor(m/3)*3,1);
   else if(value==="HALF")a=new Date(y,m<6?0:6,1);
   else if(value==="YEAR")a=new Date(y,0,1);
@@ -900,7 +901,7 @@ function AgentRankings(){
  const refresh=()=>{agents.load();transactions.load();transactionAgents.load();agentInfo.load();commissions.load();listingSubmissions.load();legacyListings.load()};
  return <><div className="pagehead"><div><h1>Agent Rankings</h1><p>Four separate leaderboards. Each ranking uses its own measure and date rules.</p></div><button className="secondary" type="button" onClick={refresh}><RefreshCw size={16}/> Refresh</button></div>
  <section className="panel"><div className="formgrid">
-  <label>Reporting period<select value={period} onChange={e=>choosePeriod(e.target.value)}><option value="MONTH">This month</option><option value="QUARTER">This quarter</option><option value="HALF">This half-year</option><option value="YEAR">This year</option><option value="ALL">All time</option><option value="CUSTOM">Custom date range</option></select></label>
+  <label>Reporting period<select value={period} onChange={e=>choosePeriod(e.target.value)}><option value="MONTH">This month</option><option value="LAST_MONTH">Last month</option><option value="QUARTER">This quarter</option><option value="HALF">This half-year</option><option value="YEAR">This year</option><option value="ALL">All time</option><option value="CUSTOM">Custom date range</option></select></label>
   <label>From date<input type="date" value={start} max={end||undefined} onChange={e=>{setStart(e.target.value);setPeriod("CUSTOM")}}/></label>
   <label>To date<input type="date" value={end} min={start||undefined} max={iso(now)} onChange={e=>{setEnd(e.target.value);setPeriod("CUSTOM")}}/></label>
   <label>Search agent<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Agent name or agent number"/></label>
