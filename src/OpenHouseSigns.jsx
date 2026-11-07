@@ -50,6 +50,8 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const mapClickRef = useRef(null);
   const [companyId, setCompanyId] = useState("");
   const [agentName, setAgentName] = useState("");
+  const [agents, setAgents] = useState([]);
+  const [selectedAgentId, setSelectedAgentId] = useState(agentId || "");
   const [events, setEvents] = useState([]);
   const [locations, setLocations] = useState([]);
   const [eventSigns, setEventSigns] = useState([]);
@@ -95,7 +97,9 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     if (eventResult.error) throw eventResult.error;
     if (locationResult.error) throw locationResult.error;
     if (agentResult.error) throw agentResult.error;
-    const agentMap = new Map((agentResult.data || []).map(agent => [agent.id, agent.name || [agent.first_name, agent.last_name].filter(Boolean).join(" ") || agent.email || "Agent"]));
+    const agentRows = agentResult.data || [];
+    setAgents(agentRows);
+    const agentMap = new Map(agentRows.map(agent => [agent.id, agent.name || [agent.first_name, agent.last_name].filter(Boolean).join(" ") || agent.email || "Agent"]));
     const rows = (eventResult.data || []).map(event => ({ ...event, agent_name: agentMap.get(event.agent_id) || (event.created_by === user?.id ? agentName || "You" : "Agent") }));
     setEvents(rows);
     setLocations(locationResult.data || []);
@@ -224,18 +228,21 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     event.preventDefault();
     setError(""); setMessage("");
     if (!companyId || !supabase) return;
+    if (adminMode && !selectedAgentId) { setError("Select the agent this open house is being created for."); return; }
     if (!MAPS_KEY || !geocoderRef.current) { setError("Google Maps must be configured before creating an open house."); return; }
     setSaving(true);
     try {
       const point = await geocodeAddress(eventForm.property_address);
       const { data, error: insertError } = await supabase.from("dv_open_house_events").insert({
-        company_id: companyId, agent_id: agentId || null, created_by: user.id,
+        company_id: companyId, agent_id: adminMode ? selectedAgentId : (agentId || null), created_by: user.id,
         property_address: eventForm.property_address.trim(), property_lat: point.lat, property_lng: point.lng,
         event_date: eventForm.event_date || null, start_time: eventForm.start_time || null,
         end_time: eventForm.end_time || null, notes: eventForm.notes.trim() || null
       }).select("*").single();
       if (insertError) throw insertError;
-      setEvents(prev => [{ ...data, agent_name: agentName }, ...prev]);
+      const assignedAgent = agents.find(agent => agent.id === (adminMode ? selectedAgentId : agentId));
+      const assignedName = assignedAgent?.name || [assignedAgent?.first_name, assignedAgent?.last_name].filter(Boolean).join(" ") || agentName;
+      setEvents(prev => [{ ...data, agent_name: assignedName || "Agent" }, ...prev]);
       setActiveEventId(data.id);
       setEventForm({ property_address: "", event_date: "", start_time: "13:00", end_time: "16:00", notes: "" });
       setShowNewEvent(false); setMessage("Open house saved. Click the map to add sign locations.");
@@ -454,6 +461,6 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
         </> : <div className="oh-no-event"><MapPinned size={42}/><h2>Plan your first open house</h2><p>Enter a property address to map the route and save directional sign locations for future use.</p><button className="oh-primary" onClick={() => setShowNewEvent(true)}><Plus size={16}/> Create open house</button></div>}
       </section>
     </div>
-    {showNewEvent && <div className="oh-modal-backdrop"><form className="oh-modal" onSubmit={createEvent}><div className="oh-modal-head"><div><strong>New open house</strong><span>Start with the property address and event details.</span></div><button type="button" className="oh-icon-btn" onClick={() => setShowNewEvent(false)}><X size={17}/></button></div><div className="oh-modal-body"><label className="full">Property address<input autoFocus required value={eventForm.property_address} onChange={e => setEventForm(f => ({ ...f, property_address: e.target.value }))} placeholder="Street address, city, province, postal code"/></label><div className="oh-form-grid"><label>Open house date<input type="date" value={eventForm.event_date} onChange={e => setEventForm(f => ({ ...f, event_date: e.target.value }))}/></label><label>Start time<input type="time" value={eventForm.start_time} onChange={e => setEventForm(f => ({ ...f, start_time: e.target.value }))}/></label><label>End time<input type="time" value={eventForm.end_time} onChange={e => setEventForm(f => ({ ...f, end_time: e.target.value }))}/></label><label className="full">Notes<textarea value={eventForm.notes} onChange={e => setEventForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional instructions"/></label></div><div className="oh-modal-note"><AlertTriangle size={15}/> Sign suggestions are starting points only. Check municipal rules and place signs where they do not obstruct sidewalks, roads or sightlines.</div></div><div className="oh-modal-actions"><button type="button" className="oh-secondary" onClick={() => setShowNewEvent(false)}>Cancel</button><button type="submit" className="oh-primary" disabled={saving}>{saving ? "Saving…" : "Save open house"}</button></div></form></div>}
+    {showNewEvent && <div className="oh-modal-backdrop"><form className="oh-modal" onSubmit={createEvent}><div className="oh-modal-head"><div><strong>New open house</strong><span>Start with the property address and event details.</span></div><button type="button" className="oh-icon-btn" onClick={() => setShowNewEvent(false)}><X size={17}/></button></div><div className="oh-modal-body">{adminMode && <label className="full">Assign open house to agent<select required value={selectedAgentId} onChange={e => setSelectedAgentId(e.target.value)}><option value="">Select an agent</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name || [agent.first_name, agent.last_name].filter(Boolean).join(" ") || agent.email}</option>)}</select></label>}<label className="full">Property address<input autoFocus required value={eventForm.property_address} onChange={e => setEventForm(f => ({ ...f, property_address: e.target.value }))} placeholder="Street address, city, province, postal code"/></label><div className="oh-form-grid"><label>Open house date<input type="date" value={eventForm.event_date} onChange={e => setEventForm(f => ({ ...f, event_date: e.target.value }))}/></label><label>Start time<input type="time" value={eventForm.start_time} onChange={e => setEventForm(f => ({ ...f, start_time: e.target.value }))}/></label><label>End time<input type="time" value={eventForm.end_time} onChange={e => setEventForm(f => ({ ...f, end_time: e.target.value }))}/></label><label className="full">Notes<textarea value={eventForm.notes} onChange={e => setEventForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional instructions"/></label></div><div className="oh-modal-note"><AlertTriangle size={15}/> Sign suggestions are starting points only. Check municipal rules and place signs where they do not obstruct sidewalks, roads or sightlines.</div></div><div className="oh-modal-actions"><button type="button" className="oh-secondary" onClick={() => setShowNewEvent(false)}>Cancel</button><button type="submit" className="oh-primary" disabled={saving}>{saving ? "Saving…" : "Save open house"}</button></div></form></div>}
   </div>;
 }
