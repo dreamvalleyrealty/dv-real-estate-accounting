@@ -739,7 +739,10 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
           <div className="oh-tabs"><button className={selectedTab === "plan" ? "active" : ""} onClick={() => setSelectedTab("plan")}>Sign plan</button><button className={selectedTab === "saved" ? "active" : ""} onClick={() => setSelectedTab("saved")}>Saved nearby ({nearbyLocations.length})</button><button className={selectedTab === "suggestions" ? "active" : ""} onClick={() => setSelectedTab("suggestions")}>Suggestions ({suggestions.length})</button></div>
           <div className="oh-map-wrap">
             <div ref={mapElement} className="oh-map"/>
-            {mapReady && <button type="button" className="oh-current-location" onClick={locateCurrentPosition} disabled={locating} title="Show my current location"><LocateFixed size={17}/><span>{locating ? "Locating…" : "Current location"}</span></button>}
+            {mapReady && <div className="oh-map-location-controls">
+              <button type="button" className="oh-current-location" onClick={locateCurrentPosition} disabled={locating} title="Show my current location"><LocateFixed size={17}/><span>{locating ? "Locating…" : "Current location"}</span></button>
+              <button type="button" className={"oh-live-location" + (liveTracking ? " is-active" : "")} onClick={toggleLiveTracking} disabled={locating && !liveTracking} title={liveTracking ? "Stop live location tracking" : "Start live location tracking"}><span className="oh-live-dot"/><span>{liveTracking ? "Stop live tracking" : "Live tracking"}</span></button>
+            </div>}
             {!mapReady && <div className="oh-map-overlay">{mapError ? <><AlertTriangle size={22}/><strong>Map unavailable</strong><span>{mapError}</span></> : <><LoaderCircle className="oh-spin"/><span>Loading Google Maps…</span></>}</div>}
             {mapReady && <div className="oh-map-tip"><MapPin size={14}/> Tap anywhere on the map to add a sign location</div>}
           </div>
