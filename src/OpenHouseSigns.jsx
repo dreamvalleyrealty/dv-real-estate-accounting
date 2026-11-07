@@ -46,6 +46,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const mapRef = useRef(null);
   const markersRef = useRef([]);
   const geocoderRef = useRef(null);
+  const locationWatchRef = useRef(null);
     const routePolylinesRef = useRef([]);
   const mapClickRef = useRef(null);
   const [companyId, setCompanyId] = useState("");
@@ -60,6 +61,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const [mapError, setMapError] = useState("");
   const [userLocation, setUserLocation] = useState(null);
   const [locating, setLocating] = useState(false);
+  const [liveTracking, setLiveTracking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -263,6 +265,53 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       mapRef.current.fitBounds(bounds);
     }
   }, [mapReady, propertyPoint, eventSigns, activeEvent?.property_address, userLocation]);
+
+  const stopLiveTracking = useCallback(() => {
+    if (locationWatchRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(locationWatchRef.current);
+      locationWatchRef.current = null;
+    }
+    setLiveTracking(false);
+  }, []);
+
+  const toggleLiveTracking = useCallback(() => {
+    if (liveTracking) { stopLiveTracking(); return; }
+    if (!navigator.geolocation) {
+      setError("Live location is not supported by this browser.");
+      return;
+    }
+    setError("");
+    setLocating(true);
+    const watchId = navigator.geolocation.watchPosition(
+      position => {
+        const point = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setUserLocation(point);
+        if (mapRef.current) {
+          mapRef.current.panTo(point);
+          if (mapRef.current.getZoom() < 15) mapRef.current.setZoom(15);
+        }
+        setLocating(false);
+        setLiveTracking(true);
+      },
+      locationError => {
+        const message = locationError.code === 1
+          ? "Location access is blocked. Allow location access for this website in your browser settings."
+          : locationError.code === 2
+            ? "Your current location could not be determined. Check Location Services."
+            : "Live location timed out. Please try again.";
+        setError(message);
+        setLocating(false);
+        stopLiveTracking();
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 3000 }
+    );
+    locationWatchRef.current = watchId;
+    setLiveTracking(true);
+  }, [liveTracking, stopLiveTracking]);
+
+  useEffect(() => () => {
+    if (locationWatchRef.current !== null && navigator.geolocation) navigator.geolocation.clearWatch(locationWatchRef.current);
+  }, []);
 
   const locateCurrentPosition = useCallback(() => {
     if (!navigator.geolocation) {
@@ -690,7 +739,10 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
           <div className="oh-tabs"><button className={selectedTab === "plan" ? "active" : ""} onClick={() => setSelectedTab("plan")}>Sign plan</button><button className={selectedTab === "saved" ? "active" : ""} onClick={() => setSelectedTab("saved")}>Saved nearby ({nearbyLocations.length})</button><button className={selectedTab === "suggestions" ? "active" : ""} onClick={() => setSelectedTab("suggestions")}>Suggestions ({suggestions.length})</button></div>
           <div className="oh-map-wrap">
             <div ref={mapElement} className="oh-map"/>
-            {mapReady && <button type="button" className="oh-current-location" onClick={locateCurrentPosition} disabled={locating} title="Show my current location"><LocateFixed size={17}/><span>{locating ? "Locating…" : "Current location"}</span></button>}
+            {mapReady && <div className="oh-map-location-controls">
+              <button type="button" className="oh-current-location" onClick={locateCurrentPosition} disabled={locating} title="Show my current location"><LocateFixed size={17}/><span>{locating ? "Locating…" : "Current location"}</span></button>
+              <button type="button" className={"oh-live-location" + (liveTracking ? " is-active" : "")} onClick={toggleLiveTracking} disabled={locating && !liveTracking} title={liveTracking ? "Stop live location tracking" : "Start live location tracking"}><span className="oh-live-dot"/><span>{liveTracking ? "Stop live tracking" : "Live tracking"}</span></button>
+            </div>}
             {!mapReady && <div className="oh-map-overlay">{mapError ? <><AlertTriangle size={22}/><strong>Map unavailable</strong><span>{mapError}</span></> : <><LoaderCircle className="oh-spin"/><span>Loading Google Maps…</span></>}</div>}
             {mapReady && <div className="oh-map-tip"><MapPin size={14}/> Tap anywhere on the map to add a sign location</div>}
           </div>
