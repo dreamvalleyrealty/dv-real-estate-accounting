@@ -305,7 +305,8 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       if (inventoryError) throw inventoryError;
       const rows = data || [];
       setInventoryRows(rows);
-      const own = rows.find(row => row.agent_id === currentInventoryAgentId);
+      const selectedAgentForInventory = adminMode ? inventoryAgentId : currentInventoryAgentId;
+      const own = rows.find(row => row.agent_id === selectedAgentForInventory);
       if (own) setInventoryForm({ total_signs: String(own.total_signs), damaged_signs: String(own.damaged_signs), notes: own.notes || "" });
       else setInventoryForm({ total_signs: "0", damaged_signs: "0", notes: "" });
       if (!inventoryAgentId && currentInventoryAgentId) setInventoryAgentId(currentInventoryAgentId);
