@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
 import OpenHouseSigns from "./OpenHouseSigns";
-import { Camera, LogOut, MapPin, ShieldCheck } from "lucide-react";
+import { CalendarDays, LogOut, MapPin, ShieldCheck, Signpost, UserRound } from "lucide-react";
 import fieldVersion from "../field-version.json";
 
 const ADMIN_ROLES = ["SUPERADMIN","ADMIN","MANAGER","BROKER","BROKER_OF_RECORD","BROKER OF RECORD","OWNER"];
@@ -15,6 +15,7 @@ export default function FieldApp() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [activePage, setActivePage] = useState("openhouses");
 
   useEffect(() => {
     if (!supabase) { setError("The app is not connected to the Back Office database."); setLoading(false); return; }
@@ -94,8 +95,8 @@ export default function FieldApp() {
     {loading ? <div className="field-loading">Preparing your sign workspace…</div> : error ? <div className="field-message"><ShieldCheck/><h2>Account setup needed</h2><p>{error}</p><button onClick={signOut}>Sign out</button></div> :
       <div className="field-content">
         <div className="field-welcome"><div><span>FIELD TOOLS</span><h1>Open House Signs</h1><p>Hi {profile?.display_name?.split(" ")[0] || "there"}, ready to plan?</p></div><div className="field-hero-icon"><MapPin/></div></div>
-        <OpenHouseSigns user={user} agentId={agentId} role={profile?.role || "AGENT"} adminMode={isAdmin}/>
+        {activePage === "account" ? <section className="field-account"><div className="field-account-mark"><UserRound size={28}/></div><span>MY ACCOUNT</span><h2>{profile?.display_name || user.email}</h2><p>{user.email}</p><div className="field-account-detail"><small>Account role</small><strong>{profile?.role || "Agent"}</strong></div><div className="field-account-detail"><small>Field App version</small><strong>v{fieldVersion.version}</strong></div><button className="field-account-signout" onClick={signOut}><LogOut size={17}/> Sign out</button></section> : <OpenHouseSigns user={user} agentId={agentId} role={profile?.role || "AGENT"} adminMode={isAdmin} activePage={activePage}/> }
       </div>}
-    <nav className="field-bottom"><span><MapPin size={16}/> Plan</span><span><Camera size={16}/> Install</span><small>Field App v{fieldVersion.version}</small></nav>
+    <nav className="field-nav" aria-label="Field app navigation"><button className={activePage === "openhouses" ? "active" : ""} onClick={() => setActivePage("openhouses")}><CalendarDays/><span>Open Houses</span></button><button className={activePage === "locations" ? "active" : ""} onClick={() => setActivePage("locations")}><MapPin/><span>Sign Locations</span></button><button className={activePage === "inventory" ? "active" : ""} onClick={() => setActivePage("inventory")}><Signpost/><span>My Inventory</span></button><button className={activePage === "account" ? "active" : ""} onClick={() => setActivePage("account")}><UserRound/><span>My Account</span></button></nav><div className="field-version">DREAM VALLEY REALTY · FIELD APP v{fieldVersion.version}</div>
   </div>;
 }
