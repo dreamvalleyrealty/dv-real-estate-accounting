@@ -105,7 +105,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const groupedEvents = useMemo(() => {
     const groups = new Map();
     filteredEvents.forEach(event => {
-      const addressKey = String(event.property_address || "").trim().replace(/\\s+/g, " ").toLowerCase();
+      const addressKey = String(event.property_address || "").trim().replace(/\s+/g, " ").toLowerCase();
       if (!groups.has(addressKey)) groups.set(addressKey, { address: event.property_address || "Address not set", events: [] });
       groups.get(addressKey).events.push(event);
     });
