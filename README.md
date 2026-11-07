@@ -6,7 +6,7 @@ Simple Canadian real-estate brokerage accounting and back-office application.
 Deploy this repository directly from GitHub. Build command: `npm run build`. The production app is the Vite `dist` output.
 
 ## Environment
-Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in Railway.
+Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_GOOGLE_MAPS_API_KEY` in Railway. The Open House Signs module uses Google Maps JavaScript API, Places API (New), and Geocoding API; enable billing and restrict the browser key to the Back Office domain. The Directions service is used to preview the sign route and Google Maps opens turn-by-turn navigation.
 
 The application is designed to use the existing Dream Valley Supabase project while keeping new accounting data in dedicated accounting tables.
 
@@ -58,3 +58,15 @@ Before production use, verify the deployed Edge Function secrets, apply the SQL 
 The separate **Send Deposit Instructions** workflow is exposed from the Listings workspace for both agents and administrators. Agents can select only listings assigned to their linked agent profile; administrators can select any brokerage listing. The Edge Function independently enforces this rule.
 
 The workflow sends the supplied one-page Real Estate Trust deposit-instructions document as a PDF attachment to the buyer's agent. The email includes the selected property address. No secure link or OTP is used for this listing-specific email. The sender and recipient, selected listing, send time, and email status remain in the audit history. The PDF is generated server-side from the approved document text and attached through the Zoho Mail attachment API.
+
+
+## Open House Directional Signs
+
+The **Open House Signs** workspace is available in the agent portal and the administrator Back Office navigation. It stores open house events, shared sign-location records, per-event installation and collection status, and sign photos in the private `dv-open-house-sign-photos` Storage bucket. Agents can reuse saved sign locations within 5 km of a new property.
+
+Configure `VITE_GOOGLE_MAPS_API_KEY` in the Railway service environment before using the map. Enable Maps JavaScript API, Places API (New), and Geocoding API in Google Cloud, enable billing, and apply HTTP-referrer and API restrictions to the key. After changing the environment variable, redeploy the app. Google Places suggestions are candidates only; agents must confirm each location is safe and permitted before placing a sign.
+
+Database migrations:
+- `supabase/migrations/20261106213000_open_house_directional_signs.sql`
+- `supabase/migrations/20261106220000_open_house_sign_photo_and_shared_read.sql`
+- `supabase/migrations/20261106223000_open_house_company_scope.sql`
