@@ -46,6 +46,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const mapRef = useRef(null);
   const markersRef = useRef([]);
   const geocoderRef = useRef(null);
+  const locationWatchRef = useRef(null);
     const routePolylinesRef = useRef([]);
   const mapClickRef = useRef(null);
   const [companyId, setCompanyId] = useState("");
@@ -60,6 +61,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const [mapError, setMapError] = useState("");
   const [userLocation, setUserLocation] = useState(null);
   const [locating, setLocating] = useState(false);
+  const [liveTracking, setLiveTracking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -263,6 +265,52 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       mapRef.current.fitBounds(bounds);
     }
   }, [mapReady, propertyPoint, eventSigns, activeEvent?.property_address, userLocation]);
+
+  const stopLiveTracking = useCallback(() => {
+    if (locationWatchRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(locationWatchRef.current);
+      locationWatchRef.current = null;
+    }
+    setLiveTracking(false);
+  }, []);
+
+  const toggleLiveTracking = useCallback(() => {
+    if (liveTracking) { stopLiveTracking(); return; }
+    if (!navigator.geolocation) {
+      setError("Live location is not supported by this browser.");
+      return;
+    }
+    setError("");
+    setLocating(true);
+    const watchId = navigator.geolocation.watchPosition(
+      position => {
+        const point = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setUserLocation(point);
+        if (mapRef.current) {
+          mapRef.current.panTo(point);
+          if (mapRef.current.getZoom() < 15) mapRef.current.setZoom(15);
+        }
+        setLocating(false);
+        setLiveTracking(true);
+      },
+      locationError => {
+        const message = locationError.code === 1
+          ? "Location access is blocked. Allow location access for this website in your browser settings."
+          : locationError.code === 2
+            ? "Your current location could not be determined. Check Location Services."
+            : "Live location timed out. Please try again.";
+        setError(message);
+        setLocating(false);
+        stopLiveTracking();
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 3000 }
+    );
+    locationWatchRef.current = watchId;
+  }, [liveTracking, stopLiveTracking]);
+
+  useEffect(() => () => {
+    if (locationWatchRef.current !== null && navigator.geolocation) navigator.geolocation.clearWatch(locationWatchRef.current);
+  }, []);
 
   const locateCurrentPosition = useCallback(() => {
     if (!navigator.geolocation) {
