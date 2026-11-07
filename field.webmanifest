@@ -1,9 +1,9 @@
 {
-  "id": "/",
+  "id": "/field.html",
   "name": "Dream Valley Open House Signs",
   "short_name": "DV Signs",
   "description": "Plan open house directional signs and record installations.",
-  "start_url": "/",
+  "start_url": "/field.html",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
