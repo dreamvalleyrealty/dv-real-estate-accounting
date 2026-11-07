@@ -66,6 +66,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const [eventForm, setEventForm] = useState({ property_address: "", start_time: "13:00", end_time: "16:00", notes: "" });
   const [dateRows, setDateRows] = useState([{ event_date: "", start_time: "13:00", end_time: "16:00" }]);
   const [templateEventId, setTemplateEventId] = useState("");
+  const [editingEventId, setEditingEventId] = useState("");
   const [pendingPoint, setPendingPoint] = useState(null);
   const [pointForm, setPointForm] = useState({ label: "Directional sign", direction: "", notes: "" });
   const [suggestions, setSuggestions] = useState([]);
@@ -247,42 +248,84 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     event.preventDefault();
     setError(""); setMessage("");
     if (!companyId || !supabase) return;
-    if (adminMode && !selectedAgentId) { setError("Select the agent this open house is being created for."); return; }
-    if (!MAPS_KEY || !geocoderRef.current) { setError("Google Maps must be configured before creating an open house."); return; }
+    if (adminMode && !selectedAgentId) { setError("Select the agent this open house is assigned to."); return; }
+    if (!MAPS_KEY || !geocoderRef.current) { setError("Google Maps must be configured before saving an open house."); return; }
     setSaving(true);
     try {
-      const point = await geocodeAddress(eventForm.property_address);
       const dates = dateRows.filter(row => row.event_date);
-      if (!dates.length) throw new Error("Add at least one open house date.");
-      if (new Set(dates.map(row => row.event_date)).size !== dates.length) throw new Error("Each open house date must be unique.");
-      const assignedAgentId = adminMode ? selectedAgentId : (agentId || activeEvent?.agent_id || null);
-      const assignedAgent = agents.find(agent => agent.id === assignedAgentId);
-      const assignedName = assignedAgent?.name || [assignedAgent?.first_name, assignedAgent?.last_name].filter(Boolean).join(" ") || agentName;
-      const createdEvents = [];
-      for (const row of dates) {
-        const { data, error: insertError } = await supabase.from("dv_open_house_events").insert({
-          company_id: companyId, agent_id: assignedAgentId, created_by: user.id,
-          property_address: eventForm.property_address.trim(), property_lat: point.lat, property_lng: point.lng,
-          event_date: row.event_date, start_time: row.start_time || null,
-          end_time: row.end_time || null, notes: eventForm.notes.trim() || null
-        }).select("*").single();
-        if (insertError) throw insertError;
-        createdEvents.push({ ...data, agent_name: assignedName || "Agent" });
-        if (templateEventId && eventSigns.length) {
-          const copies = eventSigns.map((sign,index) => ({ company_id: companyId, event_id: data.id, sign_location_id: sign.sign_location_id, sequence: index + 1, status: "PLANNED" }));
-          const { error: copyError } = await supabase.from("dv_open_house_event_signs").insert(copies);
-          if (copyError) throw copyError;
+      if (dates.length !== 1) throw new Error("Save one date when editing an existing open house.");
+      const row = dates[0];
+      if (editingEventId) {
+        const current = events.find(item => item.id === editingEventId);
+        if (!current) throw new Error("This open house could not be found. Refresh and try again.");
+        const addressChanged = eventForm.property_address.trim().toLowerCase() !== String(current.property_address || "").trim().toLowerCase();
+        const point = addressChanged ? await geocodeAddress(eventForm.property_address) : { lat: current.property_lat, lng: current.property_lng };
+        const assignedAgentId = adminMode ? selectedAgentId : current.agent_id;
+        const { data, error: updateError } = await supabase.from("dv_open_house_events").update({
+          agent_id: assignedAgentId || null,
+          property_address: eventForm.property_address.trim(),
+          property_lat: point.lat,
+          property_lng: point.lng,
+          event_date: row.event_date,
+          start_time: row.start_time || null,
+          end_time: row.end_time || null,
+          notes: eventForm.notes.trim() || null
+        }).eq("id", editingEventId).eq("company_id", companyId).select("*").single();
+        if (updateError) throw updateError;
+        const assignedAgent = agents.find(agent => agent.id === assignedAgentId);
+        const assignedName = assignedAgent?.name || [assignedAgent?.first_name, assignedAgent?.last_name].filter(Boolean).join(" ") || agentName;
+        setEvents(prev => prev.map(item => item.id === data.id ? { ...item, ...data, agent_name: assignedName || item.agent_name || "Agent" } : item));
+        setMessage("Open house updated. Its existing sign checklist, installation records and photos were kept.");
+      } else {
+        if (adminMode && !selectedAgentId) throw new Error("Select the agent this open house is being created for.");
+        const point = await geocodeAddress(eventForm.property_address);
+        if (new Set(dates.map(item => item.event_date)).size !== dates.length) throw new Error("Each open house date must be unique.");
+        const assignedAgentId = adminMode ? selectedAgentId : (agentId || activeEvent?.agent_id || null);
+        const assignedAgent = agents.find(agent => agent.id === assignedAgentId);
+        const assignedName = assignedAgent?.name || [assignedAgent?.first_name, assignedAgent?.last_name].filter(Boolean).join(" ") || agentName;
+        const createdEvents = [];
+        for (const dateRow of dates) {
+          const { data, error: insertError } = await supabase.from("dv_open_house_events").insert({
+            company_id: companyId, agent_id: assignedAgentId, created_by: user.id,
+            property_address: eventForm.property_address.trim(), property_lat: point.lat, property_lng: point.lng,
+            event_date: dateRow.event_date, start_time: dateRow.start_time || null,
+            end_time: dateRow.end_time || null, notes: eventForm.notes.trim() || null
+          }).select("*").single();
+          if (insertError) throw insertError;
+          createdEvents.push({ ...data, agent_name: assignedName || "Agent" });
+          if (templateEventId && eventSigns.length) {
+            const copies = eventSigns.map((sign,index) => ({ company_id: companyId, event_id: data.id, sign_location_id: sign.sign_location_id, sequence: index + 1, status: "PLANNED" }));
+            const { error: copyError } = await supabase.from("dv_open_house_event_signs").insert(copies);
+            if (copyError) throw copyError;
+          }
         }
+        setEvents(prev => [...createdEvents, ...prev]);
+        if (createdEvents.length) setActiveEventId(createdEvents[0].id);
+        setMessage(createdEvents.length + " open house date(s) saved. Each date has its own sign checklist.");
       }
-      setEvents(prev => [...createdEvents, ...prev]);
-      if (createdEvents.length) setActiveEventId(createdEvents[0].id);
       setEventForm({ property_address: "", start_time: "13:00", end_time: "16:00", notes: "" });
       setDateRows([{ event_date: "", start_time: "13:00", end_time: "16:00" }]);
       setTemplateEventId("");
+      setEditingEventId("");
       setShowNewEvent(false);
-      setMessage(createdEvents.length + " open house date(s) saved. Each date has its own sign checklist.");
     } catch (e) { setError(errorText(e)); }
     finally { setSaving(false); }
+  }
+
+  function openEditEvent() {
+    if (!activeEvent) return;
+    setEditingEventId(activeEvent.id);
+    setTemplateEventId("");
+    setSelectedAgentId(activeEvent.agent_id || "");
+    setEventForm({
+      property_address: activeEvent.property_address || "",
+      start_time: activeEvent.start_time?.slice(0,5) || "13:00",
+      end_time: activeEvent.end_time?.slice(0,5) || "16:00",
+      notes: activeEvent.notes || ""
+    });
+    setDateRows([{ event_date: activeEvent.event_date || "", start_time: activeEvent.start_time?.slice(0,5) || "13:00", end_time: activeEvent.end_time?.slice(0,5) || "16:00" }]);
+    setShowNewEvent(true);
+    setError(""); setMessage("");
   }
 
   async function attachLocation(location) {
@@ -485,7 +528,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
         {activeEvent ? <>
           <div className="oh-event-header">
             <div><div className="oh-property-label">SELECTED OPEN HOUSE</div><h2>{activeEvent.property_address}</h2><div className="oh-meta"><span><CalendarDays size={14}/>{prettyDate(activeEvent.event_date)}</span><span><Clock3 size={14}/>{activeEvent.start_time ? activeEvent.start_time.slice(0,5) : "Time TBD"} – {activeEvent.end_time ? activeEvent.end_time.slice(0,5) : "Time TBD"}</span><span><MapPinned size={14}/>{eventSigns.length} sign locations</span></div></div>
-            <div className="oh-event-actions"><button className="oh-secondary" onClick={() => { setTemplateEventId(activeEvent.id); setSelectedAgentId(activeEvent.agent_id || selectedAgentId); setEventForm({ property_address: activeEvent.property_address, start_time: activeEvent.start_time?.slice(0,5) || "13:00", end_time: activeEvent.end_time?.slice(0,5) || "16:00", notes: activeEvent.notes || "" }); setDateRows([{ event_date: "", start_time: activeEvent.start_time?.slice(0,5) || "13:00", end_time: activeEvent.end_time?.slice(0,5) || "16:00" }]); setShowNewEvent(true); setError(""); }}><Plus size={15}/> Add dates</button><button className="oh-secondary" onClick={suggestIntersections} disabled={suggesting || !mapReady}><Search size={15}/>{suggesting ? "Searching…" : "Suggest locations"}</button><button className="oh-primary" onClick={openDirections} disabled={!eventSigns.length}><Navigation size={15}/> Get route</button></div>
+            <div className="oh-event-actions"><button className="oh-secondary" onClick={openEditEvent}><Pencil size={15}/> Edit</button><button className="oh-secondary" onClick={() => { setTemplateEventId(activeEvent.id); setSelectedAgentId(activeEvent.agent_id || selectedAgentId); setEventForm({ property_address: activeEvent.property_address, start_time: activeEvent.start_time?.slice(0,5) || "13:00", end_time: activeEvent.end_time?.slice(0,5) || "16:00", notes: activeEvent.notes || "" }); setDateRows([{ event_date: "", start_time: activeEvent.start_time?.slice(0,5) || "13:00", end_time: activeEvent.end_time?.slice(0,5) || "16:00" }]); setShowNewEvent(true); setError(""); }}><Plus size={15}/> Add dates</button><button className="oh-secondary" onClick={suggestIntersections} disabled={suggesting || !mapReady}><Search size={15}/>{suggesting ? "Searching…" : "Suggest locations"}</button><button className="oh-primary" onClick={openDirections} disabled={!eventSigns.length}><Navigation size={15}/> Get route</button></div>
           </div>
           <div className="oh-tabs"><button className={selectedTab === "plan" ? "active" : ""} onClick={() => setSelectedTab("plan")}>Sign plan</button><button className={selectedTab === "saved" ? "active" : ""} onClick={() => setSelectedTab("saved")}>Saved nearby ({nearbyLocations.length})</button><button className={selectedTab === "suggestions" ? "active" : ""} onClick={() => setSelectedTab("suggestions")}>Suggestions ({suggestions.length})</button></div>
           <div className="oh-map-wrap">
@@ -503,6 +546,6 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
         </> : <div className="oh-no-event"><MapPinned size={42}/><h2>Plan your first open house</h2><p>Enter a property address to map the route and save directional sign locations for future use.</p><button className="oh-primary" onClick={() => setShowNewEvent(true)}><Plus size={16}/> Create open house</button></div>}
       </section>
     </div>
-    {showNewEvent && <div className="oh-modal-backdrop"><form className="oh-modal" onSubmit={createEvent}><div className="oh-modal-head"><div><strong>New open house</strong><span>Start with the property address and event details.</span></div><button type="button" className="oh-icon-btn" onClick={() => setShowNewEvent(false)}><X size={17}/></button></div><div className="oh-modal-body">{adminMode && <label className="full">Assign open house to agent<select required value={selectedAgentId} onChange={e => setSelectedAgentId(e.target.value)}><option value="">Select an agent</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name || [agent.first_name, agent.last_name].filter(Boolean).join(" ") || agent.email}</option>)}</select></label>}<label className="full">Property address<input autoFocus required value={eventForm.property_address} onChange={e => setEventForm(f => ({ ...f, property_address: e.target.value }))} placeholder="Street address, city, province, postal code"/></label><div className="oh-date-schedule"><div className="oh-date-schedule-head"><strong>Open house dates</strong><button type="button" className="oh-secondary" onClick={() => setDateRows(rows => [...rows, { event_date: "", start_time: rows[rows.length-1]?.start_time || "13:00", end_time: rows[rows.length-1]?.end_time || "16:00" }])}><Plus size={14}/> Add another date</button></div>{dateRows.map((row,index) => <div className="oh-date-row" key={index}><div className="oh-date-row-title"><strong>Date {index+1}</strong>{dateRows.length>1 && <button type="button" className="oh-text-btn" onClick={() => setDateRows(rows => rows.filter((_,i)=>i!==index))}>Remove</button>}</div><label>Date<input required type="date" value={row.event_date} onChange={e => setDateRows(rows => rows.map((item,i)=>i===index?{...item,event_date:e.target.value}:item))}/></label><div className="oh-form-grid"><label>Start time<input type="time" value={row.start_time} onChange={e => setDateRows(rows => rows.map((item,i)=>i===index?{...item,start_time:e.target.value}:item))}/></label><label>End time<input type="time" value={row.end_time} onChange={e => setDateRows(rows => rows.map((item,i)=>i===index?{...item,end_time:e.target.value}:item))}/></label></div></div>)}</div><label className="full">Notes<textarea value={eventForm.notes} onChange={e => setEventForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional instructions"/></label><div className="oh-modal-note"><AlertTriangle size={15}/> Sign suggestions are starting points only. Check municipal rules and place signs where they do not obstruct sidewalks, roads or sightlines.</div></div><div className="oh-modal-actions"><button type="button" className="oh-secondary" onClick={() => setShowNewEvent(false)}>Cancel</button><button type="submit" className="oh-primary" disabled={saving}>{saving ? "Saving…" : "Save open house"}</button></div></form></div>}
+    {showNewEvent && <div className="oh-modal-backdrop"><form className="oh-modal" onSubmit={createEvent}><div className="oh-modal-head"><div><strong>{editingEventId ? "Edit open house" : "New open house"}</strong><span>{editingEventId ? "Update this date without changing its sign installation history." : "Start with the property address and event details."}</span></div><button type="button" className="oh-icon-btn" onClick={() => { setShowNewEvent(false); setEditingEventId(""); }}><X size={17}/></button></div><div className="oh-modal-body">{adminMode && <label className="full">Assign open house to agent<select required value={selectedAgentId} onChange={e => setSelectedAgentId(e.target.value)}><option value="">Select an agent</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name || [agent.first_name, agent.last_name].filter(Boolean).join(" ") || agent.email}</option>)}</select></label>}<label className="full">Property address<input autoFocus required value={eventForm.property_address} onChange={e => setEventForm(f => ({ ...f, property_address: e.target.value }))} placeholder="Street address, city, province, postal code"/></label>{!editingEventId && <div className="oh-date-schedule"><div className="oh-date-schedule-head"><strong>Open house dates</strong><button type="button" className="oh-secondary" onClick={() => setDateRows(rows => [...rows, { event_date: "", start_time: rows[rows.length-1]?.start_time || "13:00", end_time: rows[rows.length-1]?.end_time || "16:00" }])}><Plus size={14}/> Add another date</button></div>{dateRows.map((row,index) => <div className="oh-date-row" key={index}><div className="oh-date-row-title"><strong>Date {index+1}</strong>{dateRows.length>1 && <button type="button" className="oh-text-btn" onClick={() => setDateRows(rows => rows.filter((_,i)=>i!==index))}>Remove</button>}</div><label>Date<input required type="date" value={row.event_date} onChange={e => setDateRows(rows => rows.map((item,i)=>i===index?{...item,event_date:e.target.value}:item))}/></label><div className="oh-form-grid"><label>Start time<input type="time" value={row.start_time} onChange={e => setDateRows(rows => rows.map((item,i)=>i===index?{...item,start_time:e.target.value}:item))}/></label><label>End time<input type="time" value={row.end_time} onChange={e => setDateRows(rows => rows.map((item,i)=>i===index?{...item,end_time:e.target.value}:item))}/></label></div></div>)}</div>}<label className="full">Notes<textarea value={eventForm.notes} onChange={e => setEventForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional instructions"/></label><div className="oh-modal-note"><AlertTriangle size={15}/> Sign suggestions are starting points only. Check municipal rules and place signs where they do not obstruct sidewalks, roads or sightlines.</div></div><div className="oh-modal-actions"><button type="button" className="oh-secondary" onClick={() => { setShowNewEvent(false); setEditingEventId(""); }}>Cancel</button><button type="submit" className="oh-primary" disabled={saving}>{saving ? "Saving…" : editingEventId ? "Save changes" : "Save open house"}</button></div></form></div>}
   </div>;
 }
