@@ -781,7 +781,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     </section>}
     <div className="oh-layout">
       <aside className="oh-side">
-        <div className="oh-side-head"><div><strong>Open houses</strong><span>{groupedEvents.length} properties · {events.length} dates</span></div><button className="oh-icon-btn" title="Refresh" onClick={() => loadDirectories(companyId)}><RefreshCw size={15}/></button></div>
+        <div className="oh-side-head"><div><strong>Open houses</strong><span>{groupedEvents.length} properties · {events.length} dates</span></div><div className="oh-side-head-actions"><button className="oh-icon-btn" title="Refresh" onClick={() => loadDirectories(companyId)}><RefreshCw size={15}/></button><button type="button" className="oh-primary oh-new-open-house" onClick={() => { setTemplateEventId(""); setEditingEventId(""); setEventForm({ property_address: "", start_time: "13:00", end_time: "16:00", notes: "" }); setDateRows([{ event_date: "", start_time: "13:00", end_time: "16:00" }]); setShowNewEvent(true); setError(""); }}><Plus size={14}/> New</button></div></div>
         <div className="oh-search"><Search size={15}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search property or agent"/></div>
         <div className="oh-event-list">
           {groupedEvents.length ? groupedEvents.map(group => <div className="oh-address-group" key={group.address.toLowerCase()}>
