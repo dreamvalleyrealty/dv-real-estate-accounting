@@ -58,3 +58,12 @@
 
 /* Expand or collapse dates under each property address. */
 .oh-address-toggle{width:27px;height:27px;display:grid;place-items:center;flex:none;border:1px solid #e2e6ec;border-radius:7px;background:#fff;color:#9e8556;cursor:pointer;padding:0}.oh-address-toggle:hover{border-color:#9e8556;background:#faf7f1;color:#0f2141}.oh-address-toggle:focus-visible{outline:2px solid #9e8556;outline-offset:2px}
+
+/* Clear, touch-friendly access to uploaded sign photos. */
+.oh-view-photo{display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:6px 9px;border:1px solid #d9d0bf;border-radius:7px;background:#fbfaf7;color:#806a43;font:700 10px "DM Sans",system-ui,sans-serif;cursor:pointer}
+.oh-view-photo:hover{border-color:#9e8556;background:#f7f2e9;color:#0f2141}
+.oh-photo-preview-backdrop{z-index:150}
+.oh-photo-preview-modal{width:min(900px,100%);max-height:92vh;background:#fff;border-radius:14px;box-shadow:0 28px 80px rgba(5,18,40,.35);overflow:hidden;display:flex;flex-direction:column}
+.oh-photo-preview-body{min-height:0;overflow:auto;display:flex;align-items:center;justify-content:center;padding:12px;background:#101827}
+.oh-photo-preview-body img{display:block;max-width:100%;max-height:calc(92vh - 90px);object-fit:contain;border-radius:5px}
+@media(max-width:600px){.oh-photo-preview-modal{width:100%;max-height:94vh}.oh-photo-preview-body img{max-height:calc(94vh - 90px)}}
