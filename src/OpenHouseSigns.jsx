@@ -370,7 +370,8 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     const targetAgentId = adminMode ? inventoryAgentId : currentInventoryAgentId;
     if (!targetAgentId || !supabase) { setError("Your agent profile could not be identified. Ask an administrator to link your login to your agent profile."); return; }
     const total = Number.parseInt(inventoryForm.total_signs, 10);
-    const lost = Number.parseInt(inventoryForm.lost_signs, 10);\n    const damaged = Number.parseInt(inventoryForm.damaged_signs, 10);
+    const lost = Number.parseInt(inventoryForm.lost_signs, 10);
+    const damaged = Number.parseInt(inventoryForm.damaged_signs, 10);
     if (!Number.isInteger(total) || !Number.isInteger(lost) || !Number.isInteger(damaged) || total < 0 || lost < 0 || damaged < 0 || lost + damaged > total) {
       setError("Enter valid sign counts. Lost and damaged signs combined cannot exceed total signs."); return;
     }
