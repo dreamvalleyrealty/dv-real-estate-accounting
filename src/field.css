@@ -6,7 +6,7 @@ body{background:#f5f6f8;overscroll-behavior-y:contain}
 button,input{font:inherit}
 .field-shell{min-height:100dvh;padding-bottom:calc(72px + env(safe-area-inset-bottom));background:#f5f6f8}
 .field-topbar{height:62px;position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:#0f2141;color:#fff;box-shadow:0 2px 12px #0f214122}
-.field-brand{display:flex;align-items:center;gap:10px}.field-brand-mark,.field-mark{display:grid;place-items:center;border:1px solid #9e8556;color:#d2b77e;font:800 19px Manrope,serif;width:38px;height:38px;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)}
+.field-brand{display:flex;align-items:center;gap:10px}.field-brand-logo{width:38px;height:46px;object-fit:contain;flex:none}.field-login-logo{display:block;width:76px;height:92px;object-fit:contain;margin:0 auto 15px}
 .field-brand strong,.field-brand small{display:block}.field-brand strong{font:800 12px Manrope,sans-serif;letter-spacing:.5px}.field-brand small{font-size:8px;color:#c5ae80;letter-spacing:1.4px;margin-top:3px}
 .field-signout{width:38px;height:38px;border:1px solid #ffffff30;border-radius:10px;background:transparent;color:#fff;display:grid;place-items:center}
 .field-content{padding:17px 12px 26px;max-width:900px;margin:0 auto}
