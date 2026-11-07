@@ -46,7 +46,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const mapRef = useRef(null);
   const markersRef = useRef([]);
   const geocoderRef = useRef(null);
-    const directionsRendererRef = useRef(null);
+    const routePolylinesRef = useRef([]);
   const mapClickRef = useRef(null);
   const [companyId, setCompanyId] = useState("");
   const [agentName, setAgentName] = useState("");
@@ -165,7 +165,6 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       });
       mapRef.current = map;
       geocoderRef.current = new google.maps.Geocoder();
-      directionsRendererRef.current = new google.maps.DirectionsRenderer({ map, suppressMarkers: true, preserveViewport: true, polylineOptions: { strokeColor: "#9e8556", strokeWeight: 5, strokeOpacity: .9 } });
       mapClickRef.current = map.addListener("click", async event => {
         if (!event.latLng) return;
         const point = { lat: event.latLng.lat(), lng: event.latLng.lng() };
@@ -187,7 +186,8 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     const google = window.google;
     markersRef.current.forEach(marker => marker.setMap(null));
     markersRef.current = [];
-    if (directionsRendererRef.current) directionsRendererRef.current.setDirections({ routes: [] });
+    routePolylinesRef.current.forEach(polyline => polyline.setMap(null));
+    routePolylinesRef.current = [];
     if (propertyPoint) {
       const marker = new google.maps.Marker({ map: mapRef.current, position: propertyPoint, title: activeEvent?.property_address || "Open house property", label: { text: "P", color: "#fff", fontWeight: "700" }, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 12, fillColor: "#0f2141", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 } });
       markersRef.current.push(marker);
@@ -385,15 +385,27 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   async function drawRoute() {
     if (!activeEvent || !propertyPoint || !eventSigns.length || !window.google) return;
     setRouteBusy(true);
+    setError("");
     try {
-      const service = new window.google.maps.DirectionsService();
+      const { Route: GoogleRoute } = await window.google.maps.importLibrary("routes");
       const ordered = [...eventSigns].sort((a, b) => a.sequence - b.sequence);
       const origin = { lat: Number(ordered[0].location.latitude), lng: Number(ordered[0].location.longitude) };
-      const destination = propertyPoint;
-      const waypoints = ordered.slice(1, 10).map(item => ({ location: { lat: Number(item.location.latitude), lng: Number(item.location.longitude) }, stopover: true }));
-      const result = await service.route({ origin, destination, waypoints, optimizeWaypoints: true, travelMode: window.google.maps.TravelMode.DRIVING });
-      directionsRendererRef.current?.setDirections(result);
-      setMessage("Driving route displayed. Use Google Maps navigation for turn-by-turn directions.");
+      const intermediates = ordered.slice(1, 10).map(item => ({
+        location: { lat: Number(item.location.latitude), lng: Number(item.location.longitude) }
+      }));
+      const { routes = [] } = await GoogleRoute.computeRoutes({
+        origin,
+        destination: propertyPoint,
+        intermediates,
+        optimizeWaypointOrder: true,
+        travelMode: "DRIVING",
+        fields: ["path"]
+      });
+      if (!routes.length) throw new Error("Google Maps could not calculate a driving route for these sign locations.");
+      routePolylinesRef.current.forEach(polyline => polyline.setMap(null));
+      routePolylinesRef.current = routes[0].createPolylines();
+      routePolylinesRef.current.forEach(polyline => polyline.setMap(mapRef.current));
+      setMessage("Driving route displayed on the map. Use Get route for turn-by-turn navigation.");
     } catch (e) { setError(errorText(e)); }
     finally { setRouteBusy(false); }
   }
