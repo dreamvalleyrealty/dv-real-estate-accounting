@@ -7,3 +7,19 @@
 .oh-brand-lockup{display:flex;align-items:center;gap:13px;min-width:0}.oh-brand-lockup img{width:48px;height:58px;object-fit:contain;flex:none}.oh-brand-lockup>div{min-width:0}@media(max-width:600px){.oh-heading{align-items:center}.oh-brand-lockup img{width:40px;height:48px}.oh-heading h1{font-size:22px}.oh-heading p{max-width:250px}}
 .oh-current-location{position:absolute;z-index:5;top:12px;right:12px;display:inline-flex;align-items:center;gap:7px;padding:10px 12px;border:1px solid #dce1e8;border-radius:9px;background:#fff;color:#0f2141;box-shadow:0 2px 10px rgba(15,33,65,.16);font:700 11px "DM Sans",system-ui,sans-serif;cursor:pointer}.oh-current-location:hover{border-color:#9e8556}.oh-current-location:disabled{opacity:.65;cursor:wait}.oh-current-location svg{color:#2878e5}
 @media(max-width:640px){.oh-current-location{top:10px;right:10px;padding:10px}.oh-current-location span{display:none}}
+
+.oh-inventory-panel{margin:0 0 16px;padding:18px 20px;background:#fff;border:1px solid #e6e9ee;border-radius:13px;box-shadow:0 4px 18px rgba(17,31,55,.03)}
+.oh-inventory-agent-list{display:flex;gap:8px;overflow:auto;padding:4px 0 12px}
+.oh-inventory-agent{display:flex;flex-direction:column;gap:5px;min-width:190px;padding:10px 12px;text-align:left;border:1px solid #e2e6ec;border-radius:9px;background:#fff;color:#25344d;cursor:pointer}
+.oh-inventory-agent.selected{border-color:#9e8556;background:#faf7f1}
+.oh-inventory-agent strong{font-size:11px}.oh-inventory-agent span{font-size:10px;color:#778397}
+.oh-inventory-form{max-width:680px;padding:14px;border:1px solid #edf0f3;border-radius:10px;background:#fbfcfd}
+.oh-inventory-form-title{display:flex;justify-content:space-between;gap:12px;margin-bottom:12px;color:#0f2141;font-size:12px}
+.oh-inventory-form-title span{color:#8791a0;font-size:10px}
+.oh-inventory-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.oh-inventory-fields label,.oh-inventory-notes{display:flex;flex-direction:column;gap:6px;color:#536075;font-size:10px;font-weight:700}
+.oh-inventory-fields input,.oh-inventory-notes textarea{width:100%;border:1px solid #d8dee6;border-radius:7px;padding:10px;font:13px "DM Sans",sans-serif;color:#28364d;background:#fff}
+.oh-inventory-available{display:flex;flex-direction:column;justify-content:center;padding:8px 12px;border-radius:8px;background:#f3eee5;color:#806b45;font-size:10px}
+.oh-inventory-available strong{font-size:22px;color:#0f2141}
+.oh-inventory-notes{margin-top:12px}.oh-inventory-notes textarea{min-height:65px;resize:vertical}
+@media(max-width:560px){.oh-inventory-panel{padding:14px}.oh-inventory-fields{grid-template-columns:1fr 1fr}.oh-inventory-available{grid-column:1/-1}.oh-inventory-form-title{flex-direction:column;gap:4px}}
