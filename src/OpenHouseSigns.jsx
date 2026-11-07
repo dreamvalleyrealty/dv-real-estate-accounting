@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
 import {
-  AlertTriangle, CalendarDays, Camera, CheckCircle2, Clock3, ExternalLink,
+  AlertTriangle, CalendarDays, Camera, CheckCircle2, Clock3, ExternalLink, Minus,
   History, LoaderCircle, LocateFixed, MapPin, MapPinned, Navigation, Pencil, Plus, RefreshCw,
   Route, Search, Signpost, Trash2, X
 } from "lucide-react";
@@ -87,6 +87,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [transferForm, setTransferForm] = useState({ to_agent_id: "", quantity: "1", notes: "" });
   const [inventoryTransfers, setInventoryTransfers] = useState([]);
+  const [expandedAddressGroups, setExpandedAddressGroups] = useState(() => new Set());
 
   useEffect(() => { setShowInventory(activePage === "inventory"); }, [activePage]);
 
@@ -113,7 +114,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     });
     return Array.from(groups.values()).map(group => ({
       ...group,
-      events: group.events.sort((a, b) => String(b.event_date || "").localeCompare(String(a.event_date || "")))
+      events: group.events.sort((a, b) => String(a.event_date || "9999-12-31").localeCompare(String(b.event_date || "9999-12-31")))
     }));
   }, [filteredEvents]);
 
@@ -786,12 +787,19 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
         <div className="oh-side-head"><div><strong>Open houses</strong><span>{groupedEvents.length} properties · {events.length} dates</span></div><div className="oh-side-head-actions"><button className="oh-icon-btn" title="Refresh" onClick={() => loadDirectories(companyId)}><RefreshCw size={15}/></button><button type="button" className="oh-primary oh-new-open-house" onClick={() => { setTemplateEventId(""); setEditingEventId(""); setEventForm({ property_address: "", start_time: "13:00", end_time: "16:00", notes: "" }); setDateRows([{ event_date: "", start_time: "13:00", end_time: "16:00" }]); setShowNewEvent(true); setError(""); }}><Plus size={14}/> New</button></div></div>
         <div className="oh-search"><Search size={15}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search property or agent"/></div>
         <div className="oh-event-list">
-          {groupedEvents.length ? groupedEvents.map(group => <div className="oh-address-group" key={group.address.toLowerCase()}>
-            <div className="oh-address-heading"><span className="oh-event-icon"><MapPin size={17}/></span><strong title={group.address}>{group.address}</strong><span className="oh-date-count">{group.events.length} {group.events.length === 1 ? "date" : "dates"}</span></div>
-            <div className="oh-address-dates">{group.events.map(event => <button key={event.id} className={"oh-event-row oh-date-event-row " + (event.id === activeEventId ? "selected" : "")} onClick={() => { setActiveEventId(event.id); setPendingPoint(null); setSuggestions([]); }}>
-              <span className="oh-event-copy"><strong>{prettyDate(event.event_date)}</strong><small>{event.start_time ? event.start_time.slice(0,5) : "Time TBD"} – {event.end_time ? event.end_time.slice(0,5) : "Time TBD"} · {event.agent_name || "Agent"}</small></span><span className={"oh-dot " + String(event.status || "PLANNED").toLowerCase()} />
-            </button>)}</div>
-          </div>) : <div className="oh-empty-list">No open houses yet. Create one to start planning.</div>}
+          {groupedEvents.length ? groupedEvents.map(group => {
+            const addressKey = group.address.trim().replace(/\s+/g, " ").toLowerCase();
+            const expanded = expandedAddressGroups.has(addressKey);
+            return <div className="oh-address-group" key={addressKey}>
+              <div className="oh-address-heading">
+                <button type="button" className="oh-address-toggle" aria-label={expanded ? "Hide open house dates" : "Show open house dates"} aria-expanded={expanded} title={expanded ? "Hide dates" : "Show dates"} onClick={() => setExpandedAddressGroups(previous => { const next = new Set(previous); if (next.has(addressKey)) next.delete(addressKey); else next.add(addressKey); return next; })}>{expanded ? <Minus size={15}/> : <Plus size={15}/>}</button>
+                <span className="oh-event-icon"><MapPin size={17}/></span><strong title={group.address}>{group.address}</strong><span className="oh-date-count">{group.events.length} {group.events.length === 1 ? "date" : "dates"}</span>
+              </div>
+              {expanded && <div className="oh-address-dates">{group.events.map(event => <button key={event.id} className={"oh-event-row oh-date-event-row " + (event.id === activeEventId ? "selected" : "")} onClick={() => { setActiveEventId(event.id); setPendingPoint(null); setSuggestions([]); }}>
+                <span className="oh-event-copy"><strong>{prettyDate(event.event_date)}</strong><small>{event.start_time ? event.start_time.slice(0,5) : "Time TBD"} – {event.end_time ? event.end_time.slice(0,5) : "Time TBD"} · {event.agent_name || "Agent"}</small></span><span className={"oh-dot " + String(event.status || "PLANNED").toLowerCase()} />
+              </button>)}</div>}
+            </div>;
+          }) : <div className="oh-empty-list">No open houses yet. Create one to start planning.</div>}
         </div>
         <div className="oh-side-foot"><History size={15}/> Saved sign locations are shared with active users in your brokerage.</div>
       </aside>
