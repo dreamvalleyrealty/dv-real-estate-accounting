@@ -156,34 +156,51 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     return () => { cancelled = true; };
   }, [activeEventId]);
 
+  // Load the Google Maps API and Geocoder independently of the visible map.
+  // The first open house cannot exist yet, so the map canvas is not rendered
+  // until after creation. Requiring the canvas here creates a circular dependency.
   useEffect(() => {
-    if (!MAPS_KEY) { setMapError("Google Maps is not configured yet. Add VITE_GOOGLE_MAPS_API_KEY to the Back Office hosting environment."); return; }
+    if (!MAPS_KEY) {
+      setMapError("Google Maps is not configured yet. Add VITE_GOOGLE_MAPS_API_KEY to the Back Office hosting environment.");
+      return;
+    }
     let cancelled = false;
     loadGoogleMaps().then(google => {
-      if (cancelled || !mapElement.current || mapRef.current) return;
-      const center = propertyPoint || { lat: 43.6532, lng: -79.3832 };
-      const map = new google.maps.Map(mapElement.current, {
-        center, zoom: propertyPoint ? 14 : 11, mapTypeControl: false,
-        streetViewControl: false, fullscreenControl: true, clickableIcons: false,
-        gestureHandling: "greedy", mapId: undefined
-      });
-      mapRef.current = map;
+      if (cancelled) return;
       geocoderRef.current = new google.maps.Geocoder();
-      mapClickRef.current = map.addListener("click", async event => {
-        if (!event.latLng) return;
-        const point = { lat: event.latLng.lat(), lng: event.latLng.lng() };
-        let address = "Pinned map location";
-        try {
-          const result = await geocoderRef.current.geocode({ location: point });
-          address = result.results?.[0]?.formatted_address || address;
-        } catch {}
-        setPendingPoint({ ...point, address });
-        setPointForm({ label: "Directional sign", direction: "", notes: "" });
-      });
+      setMapError("");
       setMapReady(true);
-    }).catch(e => setMapError(errorText(e)));
+    }).catch(e => {
+      if (!cancelled) setMapError(errorText(e));
+    });
     return () => { cancelled = true; };
-  }, [activeEventId]);
+  }, []);
+
+  // Create the visible map only after an open house exists and its map canvas
+  // has been rendered. The Geocoder is already available for the first save.
+  useEffect(() => {
+    if (!mapReady || !mapElement.current || mapRef.current) return;
+    const google = window.google;
+    if (!google?.maps || !geocoderRef.current) return;
+    const center = propertyPoint || { lat: 43.6532, lng: -79.3832 };
+    const map = new google.maps.Map(mapElement.current, {
+      center, zoom: propertyPoint ? 14 : 11, mapTypeControl: false,
+      streetViewControl: false, fullscreenControl: true, clickableIcons: false,
+      gestureHandling: "greedy", mapId: undefined
+    });
+    mapRef.current = map;
+    mapClickRef.current = map.addListener("click", async event => {
+      if (!event.latLng) return;
+      const point = { lat: event.latLng.lat(), lng: event.latLng.lng() };
+      let address = "Pinned map location";
+      try {
+        const result = await geocoderRef.current.geocode({ location: point });
+        address = result.results?.[0]?.formatted_address || address;
+      } catch {}
+      setPendingPoint({ ...point, address });
+      setPointForm({ label: "Directional sign", direction: "", notes: "" });
+    });
+  }, [mapReady, activeEventId, propertyPoint]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
