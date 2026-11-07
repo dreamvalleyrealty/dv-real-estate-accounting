@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Dream Valley Open House Signs",
+  "short_name": "DV Signs",
+  "description": "Plan open house directional signs and record installations.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f6f8",
+  "theme_color": "#0f2141",
+  "icons": [
+    { "src": "/dv-field-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
