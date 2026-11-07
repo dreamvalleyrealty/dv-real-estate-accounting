@@ -161,7 +161,6 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       });
       mapRef.current = map;
       geocoderRef.current = new google.maps.Geocoder();
-      placesRef.current = new google.maps.places.PlacesService(map);
       directionsRendererRef.current = new google.maps.DirectionsRenderer({ map, suppressMarkers: true, preserveViewport: true, polylineOptions: { strokeColor: "#9e8556", strokeWeight: 5, strokeOpacity: .9 } });
       mapClickRef.current = map.addListener("click", async event => {
         if (!event.latLng) return;
@@ -272,29 +271,39 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     } catch (e) { setError(errorText(e)); setSaving(false); }
   }
 
-  function suggestIntersections() {
-    if (!activeEvent || !propertyPoint || !placesRef.current || !window.google) return;
+  async function suggestIntersections() {
+    if (!activeEvent || !propertyPoint || !window.google) return;
     setSuggesting(true); setError(""); setSuggestions([]);
-    placesRef.current.textSearch({
-      query: "major road intersections near " + activeEvent.property_address,
-      location: new window.google.maps.LatLng(propertyPoint.lat, propertyPoint.lng),
-      radius: 5000
-    }, (results, status) => {
-      setSuggesting(false);
-      if (status !== window.google.maps.places.PlacesServiceStatus.OK || !results?.length) {
-        setError("Google Maps did not return nearby intersection suggestions. You can still tap the map to place signs manually.");
-        return;
-      }
+    try {
+      const { Place } = await window.google.maps.importLibrary("places");
+      const { places = [] } = await Place.searchByText({
+        textQuery: "major road intersections near " + activeEvent.property_address,
+        fields: ["id", "displayName", "formattedAddress", "location"],
+        locationBias: { center: propertyPoint, radius: 5000 },
+        maxResultCount: 10,
+        language: "en",
+        region: "ca"
+      });
       const seen = new Set();
-      const options = results.map(place => {
-        const point = { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() };
-        return { id: place.place_id, name: place.name || "Suggested intersection", address: place.formatted_address || place.name || "Nearby location", ...point, distance: distanceKm(propertyPoint, point) };
-      }).filter(item => item.distance > .08 && item.distance <= 5).filter(item => { if (seen.has(item.id)) return false; seen.add(item.id); return true; })
+      const options = places.map(place => {
+        const location = place.location;
+        const point = {
+          lat: typeof location?.lat === "function" ? location.lat() : Number(location?.lat),
+          lng: typeof location?.lng === "function" ? location.lng() : Number(location?.lng)
+        };
+        const name = typeof place.displayName === "string" ? place.displayName : place.displayName?.text || "Suggested intersection";
+        return { id: place.id || name + ":" + point.lat + ":" + point.lng, name, address: place.formattedAddress || name, ...point, distance: distanceKm(propertyPoint, point) };
+      }).filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng) && item.distance > .08 && item.distance <= 5)
+        .filter(item => { if (seen.has(item.id)) return false; seen.add(item.id); return true; })
         .filter(item => !locations.some(saved => distanceKm(item, { lat: Number(saved.latitude), lng: Number(saved.longitude) }) < .06))
         .slice(0, 10);
       setSuggestions(options);
       if (!options.length) setMessage("No new nearby suggestions. Check your saved sign locations or add a pin manually.");
-    });
+    } catch (e) {
+      setError("Google Maps could not suggest nearby places: " + errorText(e) + " You can still tap the map to place signs manually.");
+    } finally {
+      setSuggesting(false);
+    }
   }
 
   async function addSuggestion(item) {
