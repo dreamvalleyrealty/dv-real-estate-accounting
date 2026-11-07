@@ -6,7 +6,7 @@ Simple Canadian real-estate brokerage accounting and back-office application.
 Deploy this repository directly from GitHub. Build command: `npm run build`. The production app is the Vite `dist` output.
 
 ## Environment
-Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_GOOGLE_MAPS_API_KEY` in Railway. The Open House Signs module uses Google Maps JavaScript API, Places API (New), and Geocoding API; enable billing and restrict the browser key to the Back Office domain. The Directions service is used to preview the sign route and Google Maps opens turn-by-turn navigation.
+Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_GOOGLE_MAPS_API_KEY` in Railway. The Open House Signs module uses Google Maps JavaScript API, Places API (New), Geocoding API, and Routes API; enable billing and restrict the browser key to the Back Office domain. The Directions service is used to preview the sign route and Google Maps opens turn-by-turn navigation.
 
 The application is designed to use the existing Dream Valley Supabase project while keeping new accounting data in dedicated accounting tables.
 
@@ -64,7 +64,7 @@ The workflow sends the supplied one-page Real Estate Trust deposit-instructions 
 
 The **Open House Signs** workspace is available in the agent portal and the administrator Back Office navigation. It stores open house events, shared sign-location records, per-event installation and collection status, and sign photos in the private `dv-open-house-sign-photos` Storage bucket. Agents can reuse saved sign locations within 5 km of a new property.
 
-Configure `VITE_GOOGLE_MAPS_API_KEY` in the Railway service environment before using the map. Enable Maps JavaScript API, Places API (New), and Geocoding API in Google Cloud, enable billing, and apply HTTP-referrer and API restrictions to the key. After changing the environment variable, redeploy the app. Google Places suggestions are candidates only; agents must confirm each location is safe and permitted before placing a sign.
+Configure `VITE_GOOGLE_MAPS_API_KEY` in the Railway service environment before using the map. Enable Maps JavaScript API, Places API (New), Geocoding API, and Routes API in Google Cloud, enable billing, and apply HTTP-referrer and API restrictions to the key. After changing the environment variable, redeploy the app. Google Places suggestions are candidates only; agents must confirm each location is safe and permitted before placing a sign.
 
 Database migrations:
 - `supabase/migrations/20261106213000_open_house_directional_signs.sql`
