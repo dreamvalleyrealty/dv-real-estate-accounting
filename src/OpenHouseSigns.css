@@ -44,3 +44,5 @@
 .oh-field-inventory-toggle{display:none}
 .field-content .oh-field-inventory-toggle{display:flex;justify-content:flex-end;margin:0 0 12px}
 .field-content .oh-field-inventory-toggle button{min-height:44px;width:100%;justify-content:center;white-space:normal;text-align:center;line-height:1.35;padding:12px 14px;font-size:12px}
+
+.oh-status.lost{background:#fff0ed;color:#a43d2f}.oh-status.damaged{background:#fff6df;color:#8a651b}
