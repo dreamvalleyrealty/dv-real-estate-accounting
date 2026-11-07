@@ -19,16 +19,16 @@ create policy "open house sign transfers admin read"
 on public.dv_open_house_sign_transfers for select to authenticated
 using (
   public.dv_open_house_company_access(company_id)
-  and public.dv_open_house_current_user_role() in ('SUPERADMIN','ADMIN','MANAGER','BROKER','BROKER_OF_RECORD','BROKER OF RECORD','OWNER')
+  and public.dv_accounting_current_user_role() in ('SUPERADMIN','ADMIN','MANAGER','BROKER','BROKER_OF_RECORD','BROKER OF RECORD','OWNER')
 );
 drop policy if exists "open house sign transfers admin insert" on public.dv_open_house_sign_transfers;
 create policy "open house sign transfers admin insert"
 on public.dv_open_house_sign_transfers for insert to authenticated
 with check (
   public.dv_open_house_company_access(company_id)
-  and public.dv_open_house_current_user_role() in ('SUPERADMIN','ADMIN','MANAGER','BROKER','BROKER_OF_RECORD','BROKER OF RECORD','OWNER')
-  and exists (select 1 from public.dv_accounting_agents a where a.id = from_agent_id and a.company_id = company_id)
-  and exists (select 1 from public.dv_accounting_agents a where a.id = to_agent_id and a.company_id = company_id)
+  and public.dv_accounting_current_user_role() in ('SUPERADMIN','ADMIN','MANAGER','BROKER','BROKER_OF_RECORD','BROKER OF RECORD','OWNER')
+  and exists (select 1 from public.dv_accounting_agents a where a.id = from_agent_id and a.company_id = dv_open_house_sign_transfers.company_id)
+  and exists (select 1 from public.dv_accounting_agents a where a.id = to_agent_id and a.company_id = dv_open_house_sign_transfers.company_id)
 );
 
 create or replace function public.dv_open_house_apply_sign_transfer()
