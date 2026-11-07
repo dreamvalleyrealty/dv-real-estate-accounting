@@ -177,7 +177,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       setMapReady(true);
     }).catch(e => setMapError(errorText(e)));
     return () => { cancelled = true; };
-  }, []);
+  }, [activeEventId]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
