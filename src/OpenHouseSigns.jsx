@@ -417,6 +417,21 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     } catch (e) { setError(errorText(e)); setSaving(false); }
   }
 
+  function consecutiveEventIds(event) {
+    const sameProperty = events.filter(candidate =>
+      candidate.company_id === event.company_id &&
+      String(candidate.property_address || "").trim().toLowerCase() === String(event.property_address || "").trim().toLowerCase() &&
+      (candidate.agent_id || null) === (event.agent_id || null)
+    ).sort((a,b) => String(a.event_date).localeCompare(String(b.event_date)));
+    const index = sameProperty.findIndex(candidate => candidate.id === event.id);
+    if (index < 0) return [event.id];
+    const dayNumber = value => Math.floor(Date.parse(value + "T00:00:00Z") / 86400000);
+    let first = index, last = index;
+    while (first > 0 && dayNumber(sameProperty[first].event_date) - dayNumber(sameProperty[first-1].event_date) === 1) first--;
+    while (last < sameProperty.length - 1 && dayNumber(sameProperty[last+1].event_date) - dayNumber(sameProperty[last].event_date) === 1) last++;
+    return sameProperty.slice(first, last + 1).map(candidate => candidate.id);
+  }
+
   async function updateSignStatus(item, status) {
     if (!supabase) return;
     setError("");
@@ -425,10 +440,20 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     if (status === "INSTALLED") { patch.installed_at = now; patch.installed_by = user.id; }
     if (status === "COLLECTED") { patch.collected_at = now; patch.collected_by = user.id; }
     if (status === "PLANNED") { patch.installed_at = null; patch.installed_by = null; patch.collected_at = null; patch.collected_by = null; }
-    const { data, error: updateError } = await supabase.from("dv_open_house_event_signs").update(patch).eq("id", item.id).select("*,location:dv_open_house_sign_locations(*)").single();
+    const sharedEventIds = activeEvent ? consecutiveEventIds(activeEvent) : [activeEventId];
+    const { data: siblingRows, error: siblingError } = await supabase.from("dv_open_house_event_signs")
+      .select("id").in("event_id", sharedEventIds).eq("sign_location_id", item.sign_location_id);
+    if (siblingError) { setError(errorText(siblingError)); return; }
+    const rowIds = (siblingRows || []).map(row => row.id);
+    const { error: updateError } = await supabase.from("dv_open_house_event_signs").update(patch).in("id", rowIds);
     if (updateError) { setError(errorText(updateError)); return; }
+    const { data, error: refreshError } = await supabase.from("dv_open_house_event_signs")
+      .select("*,location:dv_open_house_sign_locations(*)").eq("id", item.id).single();
+    if (refreshError) { setError(errorText(refreshError)); return; }
     setEventSigns(prev => prev.map(row => row.id === item.id ? data : row));
-    setMessage(status === "INSTALLED" ? "Sign marked as installed." : status === "COLLECTED" ? "Sign marked as collected." : "Sign returned to the plan.");
+    setMessage(sharedEventIds.length > 1
+      ? (status === "INSTALLED" ? "Sign marked installed for both consecutive open house days." : status === "COLLECTED" ? "Sign marked collected after the final open house day." : "Sign status reset for both consecutive open house days.")
+      : (status === "INSTALLED" ? "Sign marked as installed." : status === "COLLECTED" ? "Sign marked as collected." : "Sign returned to the plan."));
   }
 
   async function removeSign(item) {
@@ -448,7 +473,12 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       const path = companyId + "/" + activeEvent.id + "/" + item.id + "-" + Date.now() + "." + ext;
       const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(path, file, { upsert: true, contentType: file.type });
       if (uploadError) throw uploadError;
-      const { error: updateError } = await supabase.from("dv_open_house_event_signs").update({ photo_path: path, updated_at: new Date().toISOString() }).eq("id", item.id);
+      const photoEventIds = consecutiveEventIds(activeEvent);
+      const { data: photoRows, error: photoRowsError } = await supabase.from("dv_open_house_event_signs")
+        .select("id").in("event_id", photoEventIds).eq("sign_location_id", item.sign_location_id);
+      if (photoRowsError) throw photoRowsError;
+      const { error: updateError } = await supabase.from("dv_open_house_event_signs")
+        .update({ photo_path: path, updated_at: new Date().toISOString() }).in("id", (photoRows || []).map(row => row.id));
       if (updateError) throw updateError;
       const { data: signed } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(path, 3600);
       setEventSigns(prev => prev.map(row => row.id === item.id ? { ...row, photo_path: path, photo_url: signed?.signedUrl || "" } : row));
