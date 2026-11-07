@@ -409,7 +409,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       if (updateError) throw updateError;
       const { data: signed } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(path, 3600);
       setEventSigns(prev => prev.map(row => row.id === item.id ? { ...row, photo_path: path, photo_url: signed?.signedUrl || "" } : row));
-      setMessage("Sign photo saved to the shared location record.");
+      setMessage("Sign photo saved for this open house date.");
     } catch (e) { setError(errorText(e)); }
     finally { setPhotoBusyId(""); }
   }
@@ -465,7 +465,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   return <div className="oh-wrap">
     <div className="oh-heading">
       <div><div className="oh-eyebrow">DREAM VALLEY REALTY · FIELD TOOLS</div><h1>Open House Signs</h1><p>Plan sign locations, remember where they were placed, and reuse them at future open houses.</p></div>
-      <button className="oh-primary" onClick={() => { setShowNewEvent(true); setError(""); }}><Plus size={16}/> New Open House</button>
+      <button className="oh-primary" onClick={() => { setTemplateEventId(""); setEventForm({ property_address: "", start_time: "13:00", end_time: "16:00", notes: "" }); setDateRows([{ event_date: "", start_time: "13:00", end_time: "16:00" }]); setShowNewEvent(true); setError(""); }}><Plus size={16}/> New Open House</button>
     </div>
     {error && <div className="oh-alert oh-alert-error"><AlertTriangle size={17}/><span>{error}</span><button onClick={() => setError("")}><X size={15}/></button></div>}
     {message && <div className="oh-alert oh-alert-ok"><CheckCircle2 size={17}/><span>{message}</span><button onClick={() => setMessage("")}><X size={15}/></button></div>}
