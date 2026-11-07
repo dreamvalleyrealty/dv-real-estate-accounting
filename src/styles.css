@@ -1,1045 +1,829 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap');
-:root{font-family:"DM Sans",system-ui,sans-serif;color:#17233b;background:#f5f6f8;font-synthesis:none;\nbody,#root,.app,main,.content{font-family:"DM Sans",Arial,sans-serif}\nbutton,input,select,textarea{font-family:inherit}--navy:#0f2141;--navy2:#173158;--gold:#9e8556;--gold2:#b49a6b;--ink:#16243d;--muted:#7d8797;--line:#e6e9ee;--card:#fff;--soft:#f7f8fa;--green:#3f765d;--red:#a34e4e}
-*{box-sizing:border-box}html{background:#f5f6f8}body{margin:0;background:#f5f6f8}button,input,select{font:inherit}
-.app{min-height:100vh;display:flex}.sidebar{width:276px;background:linear-gradient(180deg,#0b1b34 0%,#102849 58%,#0d223f 100%);color:#fff;position:fixed;inset:0 auto 0 0;display:flex;flex-direction:column;z-index:30;box-shadow:10px 0 32px rgba(15,33,65,.12)}
-.brand{height:92px;padding:19px 21px;display:flex;align-items:center;gap:13px;border-bottom:1px solid rgba(255,255,255,.09)}.brand img{width:45px;height:51px;object-fit:contain;flex:none}.brand strong{display:block;font-family:Manrope;font-size:11px;letter-spacing:1.15px;white-space:nowrap}.brand small{display:block;color:#c5ae80;font-size:8px;letter-spacing:1.55px;margin-top:6px;white-space:nowrap}
-.sidebar nav{padding:18px 12px;overflow:auto}.nav{width:100%;border:0;background:transparent;color:#aab8cc;display:flex;align-items:center;gap:12px;padding:10px 13px;border-radius:9px;text-align:left;font-size:12px;cursor:pointer;margin:3px 0;transition:.16s}.nav svg{width:17px;opacity:.82}.nav:hover{background:rgba(255,255,255,.055);color:#fff}.nav.active{background:linear-gradient(90deg,#b29461,#9e8556);color:#fff;font-weight:700;box-shadow:0 7px 20px rgba(158,133,86,.23)}.sidefoot{margin-top:auto;padding:17px 19px;color:#788ba5;font-size:9px;line-height:1.7;border-top:1px solid rgba(255,255,255,.08)}.sidefoot small{color:#c0a976}.close{display:none;margin-left:auto;background:none;border:0;color:#fff;cursor:pointer}
-main{margin-left:276px;width:calc(100% - 276px);min-width:0}.top{height:76px;background:rgba(255,255,255,.96);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 34px;gap:16px;position:sticky;top:0;z-index:20}.top strong{font-family:Manrope;color:var(--navy);font-size:14px}.top span{display:block;color:#929baa;font-size:10px;margin-top:3px}.logout{margin-left:auto;background:#fff;border:1px solid #dde2e9;color:#59667a;padding:8px 12px;border-radius:8px;display:flex;align-items:center;gap:7px;cursor:pointer;font-size:11px}.profile-trigger{margin-left:auto}.profile-trigger+.logout{margin-left:0}.hamb{display:none;background:none;border:0}
-.content{padding:32px 36px 52px;max-width:1680px;margin:auto}.pagehead{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:25px}.pagehead h1{margin:0;font-family:Manrope;font-size:27px;letter-spacing:-.65px;color:var(--navy)}.pagehead p{margin:7px 0 0;color:var(--muted);font-size:12px}.primary{border:0;background:var(--gold);color:#fff;padding:10px 15px;border-radius:8px;font-weight:700;display:flex;gap:8px;align-items:center;cursor:pointer;box-shadow:0 6px 17px rgba(158,133,86,.2);transition:.16s}.primary:hover{background:#8f764a;transform:translateY(-1px)}.primary:disabled{opacity:.55;transform:none}.secondary{border:1px solid #dce1e8;background:#fff;color:#4e5b70;padding:9px 12px;border-radius:8px;font-weight:600;display:flex;align-items:center;gap:7px;cursor:pointer}.secondary:hover{border-color:#cdbb99;background:#fcfbf8}
-.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:17px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 20px 18px;box-shadow:0 4px 18px rgba(17,31,55,.035);position:relative;overflow:hidden}.card:before{content:"";position:absolute;left:0;top:0;width:3px;height:100%;background:linear-gradient(180deg,var(--gold),transparent);opacity:.65}.card:after{content:"";position:absolute;right:-30px;top:-30px;width:85px;height:85px;border-radius:50%;background:rgba(158,133,86,.045)}.muted{font-size:10px;color:#7d8899;font-weight:700;text-transform:uppercase;letter-spacing:.55px}.metric{font-family:Manrope;font-size:25px;font-weight:800;color:var(--ink);margin:10px 0 5px;letter-spacing:-.6px}.sub{font-size:10px;color:#a0a8b5}
-.two{display:grid;grid-template-columns:1fr 1.25fr;gap:17px;margin:17px 0}.panel{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 4px 18px rgba(17,31,55,.028)}.paneltitle{display:flex;align-items:center;justify-content:space-between}.paneltitle h2,.panel>h2{font-family:Manrope;font-size:14px;color:var(--navy);margin:0 0 16px}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.actions button{background:#fafbfc;border:1px solid #e5e8ed;border-radius:10px;padding:13px;text-align:left;display:flex;align-items:center;gap:9px;color:#33425a;cursor:pointer;font-size:11px;font-weight:600;transition:.16s}.actions button:hover{border-color:#cdbb99;background:#fff;transform:translateY(-1px);box-shadow:0 5px 14px rgba(17,31,55,.04)}.actions svg{width:16px;color:var(--gold)}.check{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid #eef0f3;font-size:11px;color:#526078}.check svg{color:#b49665;width:16px}.todo{margin-left:auto;color:#a2aab6;font-size:10px}.pill,.status{font-size:10px;background:#f1f3f6;border-radius:20px;padding:5px 9px;color:#6c7789}.status{display:inline-block;padding:4px 8px}
-.toolbar{display:flex;gap:9px;margin-bottom:14px}.search{background:#fff;border:1px solid #dce1e8;border-radius:9px;display:flex;align-items:center;gap:8px;padding:0 11px;flex:1;max-width:560px}.search svg{color:#9ba5b4;width:15px}.search input{border:0;outline:0;padding:10px 0;width:100%;font-size:12px}
-.tablewrap{padding:0;overflow:auto;border-radius:14px}table{width:100%;border-collapse:separate;border-spacing:0;font-size:11px;min-width:850px}th{text-align:left;background:#f8f9fb;color:#748093;font-weight:700;padding:13px 14px;border-bottom:1px solid var(--line);letter-spacing:.2px;position:sticky;top:0}td{padding:13px 14px;border-bottom:1px solid #eef0f3;color:#3d4b61;background:#fff}tbody tr:hover td{background:#fcfcfd}tbody tr:last-child td{border-bottom:0}
-.empty{text-align:center;padding:52px 20px;color:#a0a8b5}.empty svg{width:34px;height:34px}.empty h2,.empty h3{font-family:Manrope;color:var(--navy);font-size:16px;margin:11px 0 5px}.empty p{font-size:11px;margin:0}.empty.small{padding:30px}
-.modal{background:#fff;border-radius:16px;width:min(700px,calc(100vw - 30px));box-shadow:0 30px 90px rgba(5,18,40,.34);overflow:hidden}.overlay{position:fixed;inset:0;background:rgba(8,22,43,.62);backdrop-filter:blur(6px);display:grid;place-items:center;z-index:100;padding:15px}.modalhead{display:flex;align-items:center;justify-content:space-between;padding:19px 21px;background:#fbfbfa;border-bottom:1px solid #edf0f3}.modalhead h2{font-family:Manrope;margin:0;color:var(--navy);font-size:16px}.iconbtn{border:0;background:#f0f2f5;border-radius:8px;padding:7px;cursor:pointer;color:#667085}.modal form{padding:21px}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:15px}label{font-size:10px;font-weight:700;color:#536075;display:flex;flex-direction:column;gap:6px}input,select{border:1px solid #d8dee6;border-radius:8px;padding:10px 11px;font:inherit;font-size:12px;outline:none;background:#fff;color:#28364d}input:hover,select:hover{border-color:#c7ced8}input:focus,select:focus{border-color:#b59a6b;box-shadow:0 0 0 3px rgba(158,133,86,.1)}.modalactions{display:flex;justify-content:flex-end;gap:9px;margin-top:21px}.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.steps span{padding:11px;border:1px solid #e5e8ed;border-radius:8px;font-size:10px;color:#5c687a;background:#fbfcfd}
-.reportgrid,.settingsgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}.report,.setting{border:1px solid #e2e6ec;background:#fff;border-radius:11px;padding:17px;text-align:left;cursor:pointer;color:#293850;transition:.16s}.report{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700}.report:hover,.setting:hover{border-color:#cdbb99;transform:translateY(-1px);box-shadow:0 8px 20px rgba(17,31,55,.055)}.report svg,.setting svg{color:var(--gold);width:18px}.setting h3{margin:9px 0 3px;color:var(--navy);font-family:Manrope;font-size:12px}.setting p{margin:0;color:#8e98a7;font-size:10px}
-.login{min-height:100vh;background:radial-gradient(circle at 75% 20%,rgba(158,133,86,.2),transparent 28%),linear-gradient(135deg,#0a1931,#17345a);display:grid;place-items:center;padding:20px}.loginbox{width:min(430px,100%);background:rgba(255,255,255,.98);border:1px solid rgba(255,255,255,.55);border-radius:20px;padding:40px;box-shadow:0 30px 100px rgba(0,0,0,.3)}.loginlogo{width:80px;height:80px;object-fit:contain;display:block;margin:0 auto 18px}.loginbox h1{text-align:center;color:var(--navy);font-family:Manrope;font-size:22px;margin:0}.loginbox h2{text-align:center;color:var(--gold);font-family:Manrope;font-size:13px;margin:6px 0}.loginbox>p{text-align:center;color:#8791a0;font-size:11px;margin:0 0 25px}.loginbox form{display:grid;gap:14px}.full{width:100%;justify-content:center;margin-top:4px}.error{background:#fff3f2;color:#b42318;border:1px solid #f3c5c1;border-radius:8px;padding:9px;font-size:11px}
-.cardtop{display:flex;align-items:center;justify-content:space-between}.cardtop svg{color:var(--gold);opacity:.8}.linkbtn,.textbutton{border:0;background:none;color:#9a7d4d;display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;cursor:pointer;padding:0}.linkbtn:hover,.textbutton:hover{text-decoration:underline}.shortcutgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:11px}.shortcutgrid button{border:1px solid #e5e8ed;background:#fafbfc;border-radius:10px;padding:13px;display:flex;align-items:center;gap:9px;color:#435168;font-size:11px;font-weight:700;cursor:pointer}.shortcutgrid button svg:first-child{color:var(--gold);width:17px}.shortcutgrid button svg:last-child{margin-left:auto;width:14px;color:#a6adba}.bankcard{background:#fff;border:1px solid var(--line);border-radius:13px;padding:18px;display:flex;gap:13px;align-items:center}.bankicon{width:39px;height:39px;border-radius:10px;background:#f4efe7;color:var(--gold);display:grid;place-items:center}.bankcard span,.bankcard strong,.bankcard small{display:block}.bankcard span{font-size:11px;color:#748095}.bankcard strong{font-family:Manrope;font-size:18px;color:var(--navy);margin:4px 0}.bankcard small{font-size:9px;color:#a1a9b5}.notice{margin-top:15px;padding:11px 13px;border:1px solid #e8e0d1;background:#fcfaf6;border-radius:9px;color:#6c604c;font-size:10px;display:flex;align-items:flex-start;gap:8px}.notice svg{width:15px;flex:none;color:var(--gold)}.wizard{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:15px 20px;border-bottom:1px solid #edf0f3}.wiz{padding:9px;border-radius:7px;background:#f5f6f8;color:#8a94a3;font-size:10px;font-weight:700;text-align:center}.wiz.active{background:#f1eadf;color:#8d7040}.calcbox{border:1px solid #e6e9ee;border-radius:9px;background:#fbfcfd;padding:14px;display:grid;grid-template-columns:auto 1fr;gap:5px 8px;align-items:center}.calcbox svg{grid-row:span 2;color:var(--gold)}.calcbox b{font-size:10px;color:#69768a}.calcbox strong{font-family:Manrope;color:var(--navy);font-size:18px}.review{display:grid;grid-template-columns:1fr 1fr;gap:10px}.review>div:not(.notice){border:1px solid #e7eaf0;border-radius:9px;padding:12px}.review span,.review b{display:block}.review span{font-size:9px;color:#8a94a3}.review b{margin-top:4px;font-size:12px;color:var(--navy)}.stepnum{width:20px;height:20px;border-radius:50%;background:#f1eadf;color:#8d7040;display:grid;place-items:center;font-size:9px;font-weight:800}.check.big{padding:14px 0}.done{text-decoration:line-through;color:#8d96a4}.complete{margin-left:auto;color:var(--green);font-size:10px;font-weight:700}.block{display:block}.report small{display:block;color:#919aa8;font-size:9px;font-weight:400;margin-top:3px}.report svg:last-child{margin-left:auto}.settingsline{display:flex;justify-content:space-between;border-top:1px solid #edf0f3;padding:11px 0;font-size:11px;color:#69768a}.settingsline b{color:var(--navy)}.textbutton{margin-top:12px}.wide{width:min(860px,calc(100vw - 30px))}.compact{margin-top:5px}
-@media(max-width:1100px){.grid4{grid-template-columns:1fr 1fr}.two{grid-template-columns:1fr}.reportgrid,.settingsgrid{grid-template-columns:1fr 1fr}.shortcutgrid{grid-template-columns:1fr 1fr}}
-@media(max-width:760px){.sidebar{transform:translateX(-100%);transition:.2s}.sidebar.open{transform:translateX(0)}.close{display:block}.sidebar.open:after{content:"";position:fixed;left:276px;right:-100vw;top:0;bottom:0;background:rgba(0,0,0,.35);z-index:-1}main{margin-left:0;width:100%}.hamb{display:block}.content{padding:23px 18px 35px}.top{padding:0 18px}.grid3,.steps{grid-template-columns:1fr 1fr}.formgrid{grid-template-columns:1fr}}
-@media(max-width:520px){.grid4,.grid3,.reportgrid,.settingsgrid{grid-template-columns:1fr}.pagehead{align-items:flex-start;gap:13px;flex-direction:column}.actions{grid-template-columns:1fr}.content{padding:19px 14px 30px}.top{height:64px;padding:0 14px}.loginbox{padding:28px 22px}.steps{grid-template-columns:1fr}.shortcutgrid{grid-template-columns:1fr}.review{grid-template-columns:1fr}.wizard{grid-template-columns:1fr}.bankcard{padding:14px}}
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "./lib/supabase";
+import {
+  AlertTriangle, CalendarDays, Camera, CheckCircle2, Clock3, ExternalLink,
+  History, LoaderCircle, LocateFixed, MapPin, MapPinned, Navigation, Pencil, Plus, RefreshCw,
+  Route, Search, Signpost, Trash2, X
+} from "lucide-react";
+import "./OpenHouseSigns.css";
 
+const PHOTO_BUCKET = "dv-open-house-sign-photos";
+const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
-/* Transaction workspace v0.6.23 */
-/* Transaction people editor v0.6.33 */
-.tx-modal{max-height:94vh!important;overflow:hidden!important}
-.tx-modal>.modalhead{position:sticky;top:0;z-index:4;flex:none}
-.tx-modal>.tx-editor{max-height:calc(94vh - 70px);overflow-y:auto;overflow-x:hidden}
-.tx-people-section{padding-bottom:4px}
-.tx-addbar{display:flex;gap:9px;flex-wrap:wrap;padding:13px 0 17px;border-bottom:1px solid #e7eaf0}
-.tx-addbar .primary,.tx-addbar .secondary{font-size:11px;padding:9px 12px}
-.tx-people-list{display:grid;gap:12px;margin-top:15px}
-.tx-person-card{border:1px solid #e0e5ed;border-radius:12px;background:#fff;overflow:hidden}
-.tx-person-head{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:13px 15px;background:#f8f9fb;border-bottom:1px solid #e7eaf0}
-.tx-person-head>div{min-width:0;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-.tx-person-head strong{font-size:13px;color:#17243d}
-.tx-person-head small{font-size:10px;color:#788397}
-.tx-person-role{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;background:#efe9df;color:#876d43;padding:5px 7px;border-radius:5px}
-.tx-person-fields{padding:15px}
-.tx-people-empty{border:1px dashed #d8dee7;border-radius:12px;padding:32px 18px;margin-top:15px;text-align:center;color:#8993a3;display:flex;flex-direction:column;gap:7px;align-items:center}
-.tx-people-empty strong{color:#3b4860;font-size:12px}
-.tx-people-empty span{font-size:10px}
-@media(max-width:560px){.tx-modal{max-height:96vh!important}.tx-modal>.tx-editor{max-height:calc(96vh - 65px)}.tx-addbar{display:grid;grid-template-columns:1fr 1fr}.tx-addbar button{justify-content:center}.tx-person-head{align-items:flex-start}.tx-person-head>div{display:grid;gap:5px}.tx-person-fields{padding:12px}}
-
-.tx-modal{width:min(1180px,96vw)!important;max-width:1180px!important}
-.tx-editor{padding:0 22px 22px}
-.tx-tabs{display:flex;gap:6px;overflow-x:auto;padding:4px 0 15px;border-bottom:1px solid #e7eaf0;margin-bottom:18px}
-.tx-tabs button{display:flex;align-items:center;gap:8px;white-space:nowrap;border:1px solid #e1e5ed;background:#f7f8fb;color:#42506a;border-radius:9px;padding:10px 13px;font-weight:650;cursor:pointer}
-.tx-tabs button span{display:grid;place-items:center;width:23px;height:23px;border-radius:50%;background:#e8ebf2;font-size:12px}
-.tx-tabs button.active{background:#0f2141;border-color:#0f2141;color:#fff}
-.tx-tabs button.active span{background:#9e8556;color:#fff}
-.tx-section{padding:4px 0 12px}
-.tx-section h3{margin:4px 0 7px;color:#14213d;font-size:18px}
-.tx-section>p,.tx-subhead p{margin:0 0 16px;color:#69758a;font-size:13px}
-.tx-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 16px}
-.tx-field{display:flex;flex-direction:column;gap:6px;min-width:0;color:#34425a;font-size:12px;font-weight:650}
-.tx-field>span{line-height:1.3}
-.tx-field input,.tx-field select{width:100%;min-width:0;box-sizing:border-box;border:1px solid #dce2eb;border-radius:8px;background:#fff;padding:10px 11px;color:#17243d;font:inherit;font-size:13px;outline:none}
-.tx-field input:focus,.tx-field select:focus{border-color:#9e8556;box-shadow:0 0 0 3px #9e855622}
-.tx-field input[readonly]{background:#f5f6f9}
-.tx-wide{grid-column:1/-1}
-.tx-subhead{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:22px 0 12px}
-.tx-subhead h3{margin:0 0 5px}
-.tx-subhead p{margin:0}
-.tx-repeat{display:grid;grid-template-columns:1fr 2fr 1fr 1fr auto;gap:12px;align-items:end;padding:14px;border:1px solid #e5e8ef;border-radius:10px;margin:10px 0}
-.tx-repeat .tx-wide{grid-column:1/-1}
-.tx-card{border:1px solid #e1e6ee;border-radius:12px;padding:16px;margin:12px 0;background:#fff}
-.tx-cardhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;color:#17243d}
-.tx-card h4{margin:0 0 14px;color:#17243d;font-size:15px}
-.tx-commission-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-.tx-amountline{grid-column:1/-1;display:grid;grid-template-columns:1fr auto;gap:7px 15px;border-top:1px solid #e7eaf0;padding-top:12px;font-size:13px;color:#667187}
-.tx-amountline b{color:#14213d;text-align:right}
-.tx-summary{display:grid;grid-template-columns:1fr auto;gap:9px 20px;border:1px solid #e1e6ee;border-radius:10px;padding:16px;margin-top:16px;color:#5d6980;font-size:13px}
-.tx-summary b{color:#14213d;text-align:right}
-.tx-fee-cards{margin:18px 0}
-.tx-print{margin-top:16px}
-.tx-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid #e6e9ef;padding-top:16px;margin-top:18px}
-.tx-footer-right{display:flex;gap:8px;align-items:center}
-.tx-message{margin-top:14px}
-@media(max-width:850px){.tx-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tx-commission-grid{grid-template-columns:1fr}.tx-repeat{grid-template-columns:repeat(2,minmax(0,1fr))}.tx-repeat .tx-wide{grid-column:1/-1}.tx-modal{width:96vw!important}}
-@media(max-width:560px){.tx-editor{padding:0 12px 14px}.tx-grid{grid-template-columns:1fr}.tx-tabs button{padding:8px 10px}.tx-subhead{align-items:flex-start;flex-direction:column}.tx-repeat{grid-template-columns:1fr}.tx-footer{align-items:stretch;flex-direction:column}.tx-footer-right{flex-wrap:wrap;justify-content:flex-end}.tx-summary{grid-template-columns:1fr auto}}
-
-/* Transaction modal list-first workflow v0.6.47 */
-.tx-role-adds{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 16px}.tx-role-adds .secondary{font-size:11px;padding:8px 11px}
-.tx-assigned-list{border:1px solid #e1e6ee;border-radius:12px;overflow:hidden;background:#fff}.tx-assigned-list>.tx-saved-list-head{padding:14px 16px;background:#f8f9fb;border-bottom:1px solid #e7eaf0}.tx-assigned-row{display:grid;grid-template-columns:minmax(220px,1.2fr) minmax(180px,1fr) auto;gap:15px;align-items:center;padding:14px 16px;border-bottom:1px solid #edf0f3}.tx-assigned-row:last-child{border-bottom:0}.tx-assigned-row>div:first-child{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.tx-assigned-row strong{color:#17243d;font-size:12px}.tx-assigned-row span{font-size:10px;color:#68758a}.tx-assigned-row small{width:100%;color:#8a94a3;font-size:10px}.tx-assigned-row>div:last-child{display:flex;gap:10px;justify-content:flex-end}.tx-assigned-row .danger{color:#a34e4e}.tx-trust-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:#e4e8ee;border:1px solid #e4e8ee;border-radius:12px;overflow:hidden}.tx-trust-summary>div{background:#fff;padding:15px 16px}.tx-trust-summary span,.tx-trust-summary strong{display:block}.tx-trust-summary span{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#8a94a3;font-weight:700}.tx-trust-summary strong{margin-top:5px;color:#17243d;font-size:12px}.tx-trust-summary>div:nth-child(6) strong{font-family:Manrope;font-size:16px}.tx-modal .modalhead+form{max-height:calc(94vh - 70px);overflow:auto}
-@media(max-width:850px){.tx-assigned-row{grid-template-columns:1fr auto}.tx-assigned-row>span{grid-column:1}.tx-trust-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:560px){.tx-role-adds{display:grid;grid-template-columns:1fr 1fr}.tx-assigned-row{grid-template-columns:1fr}.tx-assigned-row>span{grid-column:auto}.tx-assigned-row>div:last-child{justify-content:flex-start}.tx-trust-summary{grid-template-columns:1fr}}
-
-.agent-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:14px}.agent-toolbar .toolbar{margin-bottom:0;flex:1}.sortbtn{white-space:nowrap}.tableheadsort{border:0;background:none;padding:0;font:inherit;font-size:inherit;font-weight:700;color:inherit;cursor:pointer}.tableheadsort:hover{color:var(--gold)}
-.agent-toolbar+table{font-size:12px;line-height:1.25}.agent-toolbar+table th{padding:8px 9px;white-space:nowrap}.agent-toolbar+table td{padding:7px 9px;vertical-align:middle}.agent-toolbar+table tbody tr{height:38px}.agent-toolbar+table .linkbtn{padding:0;font-size:12px}.agent-toolbar+table .textbutton{padding:3px 6px;font-size:11px}.agent-toolbar+table .secondary{padding:5px 8px;font-size:11px}.agent-toolbar+table small{font-size:10px}
-
-/* Agent roster compact rows v0.6.22 */
-.agent-table{font-size:12px!important;line-height:1.15!important}.agent-table th{padding:8px 9px!important}.agent-table td{padding:5px 9px!important;height:0;vertical-align:middle}.agent-table tbody tr{height:40px!important}.agent-table td:first-child{white-space:nowrap}.agent-table .linkbtn{line-height:1.1!important}.agent-table .linkbtn .agent-avatar,.agent-table .linkbtn>div:first-child{flex:none}
-
-
-/* Agent profile + personnel documents v0.6.77 */
-.agent-profile-tabs{display:flex;flex-wrap:wrap;gap:6px;overflow:visible;min-width:0;width:100%;box-sizing:border-box;padding:4px;border:1px solid #e3e7ee;background:#f6f7fa;border-radius:12px;margin:0 0 18px}
-.agent-profile-tab{flex:1 1 120px;min-width:0;max-width:100%;display:flex;align-items:center;justify-content:center;gap:6px;border:0;background:transparent;color:#59667a;border-radius:9px;padding:clamp(6px, .7vw, 11px) clamp(4px, .7vw, 12px);cursor:pointer;text-align:center;white-space:normal;transition:.15s ease}
-.agent-profile-tab:hover{background:#fff;color:var(--navy)}
-.agent-profile-tab span{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#e7eaf0;color:#647087;font-size:10px;font-weight:800}
-.agent-profile-tab strong{font-size:clamp(9px, .75vw, 11px);white-space:normal;overflow-wrap:anywhere}
-.agent-profile-tab.active{background:var(--navy);color:#fff;box-shadow:0 2px 7px #0f214122}
-.agent-profile-tab.active span{background:var(--gold);color:#fff}
-.personnel-files{margin-top:12px!important;padding:18px!important}
-.personnel-files .paneltitle{margin-bottom:16px}
-.panelhint{margin:4px 0 0;color:#7a8597;font-size:11px;font-weight:500}
-.personnel-head{display:flex;align-items:center;gap:12px;padding:13px;background:#f8f9fb;border:1px solid #e5e8ee;border-radius:11px;margin-bottom:14px}
-.personnel-head>div:nth-child(2){display:grid;gap:3px;flex:1}.personnel-head>div:nth-child(2) strong{font-size:12px;color:#25324a}.personnel-head .muted{font-size:10px}
-.personnel-avatar{width:58px;height:58px;flex:0 0 58px}.personnel-avatar img,.personnel-avatar-placeholder{width:58px;height:58px;border-radius:50%;object-fit:cover}.personnel-avatar img{border:2px solid var(--gold)}.personnel-avatar-placeholder{display:grid;place-items:center;background:#e9edf3;font-size:23px;color:#7b8494}
-.upload-control{display:inline-flex;align-items:center;gap:7px;cursor:pointer;white-space:nowrap}
-.personnel-upload{display:grid;grid-template-columns:minmax(180px,.8fr) 2.2fr;gap:14px;align-items:end;padding:14px;border:1px solid #e3e7ee;border-radius:11px;background:#fff;margin-bottom:14px}.personnel-upload>div:first-child{display:grid;gap:4px}.personnel-upload>div:first-child strong{font-size:12px;color:#25324a}.personnel-upload>div:first-child span{font-size:10px;color:#7b8596;line-height:1.45}
-.personnel-upload-fields{display:grid;grid-template-columns:180px minmax(180px,1fr) auto;gap:10px;align-items:end}.personnel-upload-fields label{display:grid;gap:5px;font-size:10px;font-weight:700;color:#536078}.personnel-upload-fields input,.personnel-upload-fields select{min-width:0}
-.personnel-doc-list{border:1px solid #e3e7ee;border-radius:11px;overflow:hidden;background:#fff}.personnel-doc-row{display:flex;align-items:center;gap:11px;padding:12px 13px;border-bottom:1px solid #edf0f4}.personnel-doc-row:last-child{border-bottom:0}.personnel-doc-icon{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;border-radius:8px;background:#eef1f6;color:var(--navy)}.personnel-doc-main{display:grid;gap:3px;min-width:0;flex:1}.personnel-doc-main strong{font-size:11px;color:#25324a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.personnel-doc-main span{font-size:9px;color:#8a94a3}.personnel-doc-actions{display:flex;gap:7px;align-items:center}.personnel-doc-actions .secondary{padding:7px 10px;font-size:10px}.personnel-doc-actions .textbutton{font-size:10px}
-.personnel-empty{display:grid;place-items:center;text-align:center;gap:5px;padding:28px 12px;color:#8a94a3}.personnel-empty strong{font-size:11px;color:#5f6b80}.personnel-empty span{font-size:10px}
-.document-preview{display:flex;flex-direction:column;gap:10px;min-width:0}.document-preview-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.document-preview-meta .muted{margin-right:auto;font-size:10px}.document-preview-frame{display:block;width:100%;height:min(68vh,760px);min-height:430px;border:1px solid #dfe4ec;border-radius:9px;background:#f5f6f8}.document-preview-image{display:block;width:100%;height:min(68vh,760px);min-height:300px;object-fit:contain;border:1px solid #dfe4ec;border-radius:9px;background:#f5f6f8}.document-preview-fallback{min-height:380px;border:1px dashed #d6dce6;border-radius:10px;background:#f8f9fb;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;gap:8px;color:#6d788b}.document-preview-fallback h3{margin:4px 0;color:#29364d;font-size:15px}.document-preview-fallback p{margin:0 0 8px;font-size:11px}
-@media(max-width:760px){.agent-profile-tab{min-width:135px}.personnel-upload{grid-template-columns:1fr}.personnel-upload-fields{grid-template-columns:1fr}.personnel-head{flex-wrap:wrap}.personnel-head .upload-control{margin-left:auto}.personnel-doc-row{align-items:flex-start}.personnel-doc-actions{margin-left:auto}.document-preview-frame{min-height:360px;height:62vh}.document-preview-image{min-height:260px;height:62vh}}
-
-
-/* Responsive usability pass v0.6.159 — app-wide mobile/tablet support */
-html{width:100%;max-width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%;scroll-padding-top:76px}
-body,#root,.app,main,.content{min-width:0;max-width:100%}
-body{overflow-x:hidden}
-button,.primary,.secondary,.textbutton,.nav,.logout{touch-action:manipulation}
-button,.primary,.secondary,.logout{min-height:38px}
-input,select,textarea{max-width:100%;min-width:0}
-input,select,textarea{font-size:16px}
-.tablewrap,.table-wrap,.table-scroll{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
-table{max-width:100%}
-.panel,.card,.modal,.modalbody,.formgrid,.pagehead,.toolbar,.actions{min-width:0}
-img,canvas,iframe{max-width:100%}
-.pagehead h1{overflow-wrap:anywhere}
-.content{min-width:0}
-.grid4,.grid3,.grid2,.two,.reportgrid,.settingsgrid,.shortcutgrid,.formgrid{min-width:0}
-.formgrid>*{min-width:0}
-.formgrid input,.formgrid select,.formgrid textarea{width:100%;min-width:0}
-.modal{width:min(1180px,calc(100vw - 32px));max-width:calc(100vw - 32px)}
-.overlay{padding:12px}
-.modalactions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.modalactions button{min-height:42px}
-.paneltitle{gap:10px;flex-wrap:wrap}
-.paneltitle>div{min-width:0}
-.toolbar{display:flex;gap:8px;flex-wrap:wrap}
-.toolbar input{flex:1 1 180px;min-width:0}
-.status,.pill{white-space:normal;overflow-wrap:anywhere}
-pre{max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
-@media(max-width:760px){
- html{scroll-padding-top:64px}
- .sidebar{width:min(300px,86vw);max-width:86vw}
- .sidebar.open:after{left:min(300px,86vw)}
- main{width:100%;max-width:100%;margin-left:0}
- .top{gap:10px;padding:0 14px}
- .top strong{font-size:13px}
- .top span{font-size:10px}
- .content{padding:18px 14px 28px}
- .pagehead{width:100%}
- .pagehead .actions,.pagehead>.actions{width:100%}
- .actions{display:flex;flex-wrap:wrap;gap:8px}
- .actions>*{flex:1 1 145px;min-width:0}
- .grid4{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
- .grid3,.grid2,.two,.reportgrid,.settingsgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
- .card{padding:14px;min-width:0}
- .metric{font-size:clamp(20px,5vw,28px);overflow-wrap:anywhere}
- .panel{padding:14px;border-radius:12px}
- .paneltitle{align-items:flex-start}
- .tablewrap{margin-right:-2px}
- table{min-width:680px}
- th,td{padding:9px 10px}
- .formgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
- .formgrid label{min-width:0;overflow-wrap:anywhere}
- .modal{width:calc(100vw - 20px);max-width:calc(100vw - 20px);max-height:calc(100dvh - 20px)!important;margin:auto}
- .overlay{padding:10px;align-items:center;overflow-y:auto}
- .modalhead{position:sticky;top:0;z-index:10;background:#fff}
- .modalactions{position:sticky;bottom:0;background:#fff;padding-top:10px}
- .tx-modal{width:calc(100vw - 12px)!important;max-width:calc(100vw - 12px)!important}
- .tx-editor{min-width:0}
- .tx-tabs{max-width:100%;overflow-x:auto}
- .agent-profile-tabs{max-width:100%}
- .document-preview-frame{width:100%}
-}
-@media(max-width:560px){
- .content{padding:14px 10px 24px}
- .top{height:60px;padding:0 10px}
- .top strong{font-size:12px}
- .top span{display:none}
- .logout{padding:8px;min-height:38px;font-size:0;gap:0}
- .logout svg{margin:0}
- .grid4,.grid3,.grid2,.two,.reportgrid,.settingsgrid,.shortcutgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
- .card{padding:11px;border-radius:10px}
- .card .muted,.sub{font-size:10px;line-height:1.35}
- .metric{font-size:clamp(18px,5vw,24px)}
- .content{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
- .pagehead{gap:10px;margin-bottom:15px}
- .pagehead h1{font-size:21px;line-height:1.2}
- .pagehead p{font-size:12px;line-height:1.5}
- .panel{padding:11px;margin-bottom:12px}
- .paneltitle h2{font-size:14px}
- .paneltitle .pill{font-size:10px}
- .formgrid{grid-template-columns:minmax(0,1fr);gap:10px}
- .formgrid label{font-size:11px}
- input,select,textarea{padding:11px 10px}
- button,.primary,.secondary{min-height:42px}
- .actions{display:grid;grid-template-columns:1fr}
- .actions>*{width:100%}
- .toolbar{align-items:stretch}
- .toolbar>*{min-width:0}
- .toolbar input{flex:1 1 100%;width:100%}
- .modal{width:calc(100vw - 12px);max-width:calc(100vw - 12px);max-height:calc(100dvh - 12px)!important}
- .overlay{padding:6px;align-items:center}
- .modalhead{padding:14px}
- .modalactions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
- .modalactions button{width:100%;min-width:0}
- .loginbox{width:calc(100vw - 28px);max-width:420px}
- .steps,.review,.wizard{grid-template-columns:minmax(0,1fr)}
- .bankcard{padding:12px}
- .tx-modal{width:calc(100vw - 8px)!important;max-width:calc(100vw - 8px)!important;max-height:calc(100dvh - 8px)!important}
- .tx-modal>.tx-editor{max-height:calc(100dvh - 68px);overflow-y:auto}
- .tx-editor{padding:0 10px 12px}
- .tx-grid{grid-template-columns:minmax(0,1fr)}
- .tx-footer{gap:8px}
- .tx-footer button{flex:1 1 100%}
- .personnel-upload-fields{grid-template-columns:minmax(0,1fr)}
- .personnel-doc-row{flex-wrap:wrap}
- .personnel-doc-actions{width:100%;margin-left:0;flex-wrap:wrap}
- .personnel-doc-actions>*{flex:1}
- .document-preview-frame{height:58dvh;min-height:240px}
- .document-preview-image{height:58dvh;min-height:220px}
-}
-@media(max-width:360px){
- .grid4,.grid3,.grid2,.two,.reportgrid,.settingsgrid{grid-template-columns:minmax(0,1fr)}
- .content{padding-left:8px;padding-right:8px}
- .panel{padding:9px}
- .modalactions{grid-template-columns:minmax(0,1fr)}
+function loadGoogleMaps() {
+  if (window.google?.maps?.places) return Promise.resolve(window.google);
+  if (window.__dvMapsPromise) return window.__dvMapsPromise;
+  window.__dvMapsPromise = new Promise((resolve, reject) => {
+    window.__dvGoogleMapsInit = () => resolve(window.google);
+    const existing = document.getElementById("dv-google-maps");
+    if (existing) {
+      existing.addEventListener("error", () => reject(new Error("Google Maps could not load.")), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.id = "dv-google-maps";
+    script.async = true;
+    script.defer = true;
+    script.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(MAPS_KEY) + "&libraries=places&v=weekly&callback=__dvGoogleMapsInit";
+    script.onerror = () => reject(new Error("Google Maps could not load. Check the API key and enabled Google Maps APIs."));
+    document.head.appendChild(script);
+  });
+  return window.__dvMapsPromise;
 }
 
+const distanceKm = (a, b) => {
+  if (!a || !b) return Infinity;
+  const rad = n => n * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+};
+const prettyDate = value => value ? new Date(value + "T12:00:00").toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" }) : "Date not set";
+const errorText = error => error?.message || String(error || "Something went wrong.");
 
-/* Compact transaction list: keep each trade readable without oversized row gaps. */
-.transaction-list-panel{padding:8px!important}
-.transaction-list-table{font-size:11px;line-height:1.2;min-width:1050px}
-.transaction-list-table th{padding:7px 8px!important;white-space:nowrap}
-.transaction-list-table td{padding:6px 8px!important;vertical-align:middle}
-.transaction-list-table tbody tr{height:auto}
-.transaction-list-table td .textbutton{padding:2px 0;line-height:1.2}
-.transaction-list-table td select{padding:4px 6px;font-size:11px;min-height:28px}
-.transaction-row-actions{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-width:140px;max-width:340px}
-.transaction-row-actions>div{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-width:0}
-.transaction-row-actions .transaction-actions-label{display:none}
-.transaction-row-actions button{font-size:10px!important;line-height:1.15;padding:3px 5px!important;white-space:nowrap}
-.transaction-row-actions button.primary{min-height:0}
-@media(max-width:900px){.transaction-list-panel{padding:6px!important}.transaction-list-table th,.transaction-list-table td{padding:6px!important}.transaction-row-actions{max-width:280px}}
+export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMode = false }) {
+  const mapElement = useRef(null);
+  const mapRef = useRef(null);
+  const markersRef = useRef([]);
+  const geocoderRef = useRef(null);
+  const locationWatchRef = useRef(null);
+    const routePolylinesRef = useRef([]);
+  const mapClickRef = useRef(null);
+  const [companyId, setCompanyId] = useState("");
+  const [agentName, setAgentName] = useState("");
+  const [agents, setAgents] = useState([]);
+  const [selectedAgentId, setSelectedAgentId] = useState(agentId || "");
+  const [events, setEvents] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [eventSigns, setEventSigns] = useState([]);
+  const [activeEventId, setActiveEventId] = useState("");
+  const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState("");
+  const [userLocation, setUserLocation] = useState(null);
+  const [locating, setLocating] = useState(false);
+  const [liveTracking, setLiveTracking] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [showNewEvent, setShowNewEvent] = useState(false);
+  const [eventForm, setEventForm] = useState({ property_address: "", start_time: "13:00", end_time: "16:00", notes: "" });
+  const [dateRows, setDateRows] = useState([{ event_date: "", start_time: "13:00", end_time: "16:00" }]);
+  const [templateEventId, setTemplateEventId] = useState("");
+  const [editingEventId, setEditingEventId] = useState("");
+  const [pendingPoint, setPendingPoint] = useState(null);
+  const [pointForm, setPointForm] = useState({ label: "Directional sign", direction: "", notes: "" });
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggesting, setSuggesting] = useState(false);
+  const [query, setQuery] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
+  const [photoBusyId, setPhotoBusyId] = useState("");
+  const [routeBusy, setRouteBusy] = useState(false);
+  const [selectedTab, setSelectedTab] = useState("plan");
+  const [showInventory, setShowInventory] = useState(false);
+  const [inventoryRows, setInventoryRows] = useState([]);
+  const [inventoryAgentId, setInventoryAgentId] = useState(agentId || "");
+  const [inventoryForm, setInventoryForm] = useState({ total_signs: "0", lost_signs: "0", damaged_signs: "0", notes: "" });
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [transferForm, setTransferForm] = useState({ to_agent_id: "", quantity: "1", notes: "" });
+  const [inventoryTransfers, setInventoryTransfers] = useState([]);
 
-/* Ultra-compact transaction rows: reduce vertical height while keeping all actions accessible. */
-.transaction-list-panel{padding:4px!important;border-radius:9px!important}
-.transaction-list-table{font-size:10px;line-height:1.08;min-width:1030px}
-.transaction-list-table th{padding:5px 6px!important;font-size:9px;letter-spacing:0;}
-.transaction-list-table td{padding:3px 6px!important;line-height:1.15;}
-.transaction-list-table tbody tr:hover td{background:#f7f9fc}
-.transaction-list-table td .textbutton{font-size:10px!important;line-height:1.1;padding:0!important}
-.transaction-list-table td select{padding:2px 4px!important;font-size:10px!important;min-height:23px!important;height:23px}
-.transaction-row-actions{gap:2px!important;min-width:120px;max-width:300px}
-.transaction-row-actions>div{gap:2px!important}
-.transaction-row-actions button{font-size:9px!important;line-height:1.05!important;padding:2px 4px!important;border-radius:4px!important;min-height:0!important}
-.transaction-row-actions button svg{width:11px;height:11px}
-.transaction-row-actions .transaction-actions-label{display:none!important}
-.transaction-list-table .status{font-size:9px;padding:2px 4px}
-@media(max-width:900px){.transaction-list-panel{padding:3px!important}.transaction-list-table th,.transaction-list-table td{padding:4px!important}.transaction-row-actions{max-width:250px}}
+  const activeEvent = useMemo(() => events.find(event => event.id === activeEventId) || null, [events, activeEventId]);
+  const propertyPoint = useMemo(() => activeEvent?.property_lat != null && activeEvent?.property_lng != null
+    ? { lat: Number(activeEvent.property_lat), lng: Number(activeEvent.property_lng) } : null, [activeEvent]);
+  const nearbyLocations = useMemo(() => {
+    if (!propertyPoint) return [];
+    return locations.filter(location => location.active && distanceKm(propertyPoint, { lat: Number(location.latitude), lng: Number(location.longitude) }) <= 5)
+      .sort((a, b) => distanceKm(propertyPoint, { lat: Number(a.latitude), lng: Number(a.longitude) }) - distanceKm(propertyPoint, { lat: Number(b.latitude), lng: Number(b.longitude) }));
+  }, [locations, propertyPoint]);
+  const currentInventoryAgentId = agentId || agents.find(agent => String(agent.email || "").toLowerCase() === String(user?.email || "").toLowerCase())?.id || "";
+  const inventoryAgent = agents.find(agent => agent.id === inventoryAgentId);
+  const filteredEvents = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return events.filter(event => !needle || String(event.property_address || "").toLowerCase().includes(needle) || String(event.agent_name || "").toLowerCase().includes(needle));
+  }, [events, query]);
+  const groupedEvents = useMemo(() => {
+    const groups = new Map();
+    filteredEvents.forEach(event => {
+      const addressKey = String(event.property_address || "").trim().replace(/\s+/g, " ").toLowerCase();
+      if (!groups.has(addressKey)) groups.set(addressKey, { address: event.property_address || "Address not set", events: [] });
+      groups.get(addressKey).events.push(event);
+    });
+    return Array.from(groups.values()).map(group => ({
+      ...group,
+      events: group.events.sort((a, b) => String(b.event_date || "").localeCompare(String(a.event_date || "")))
+    }));
+  }, [filteredEvents]);
+
+  const loadDirectories = useCallback(async (cid) => {
+    if (!supabase || !cid) return;
+    const [eventResult, locationResult, agentResult] = await Promise.all([
+      supabase.from("dv_open_house_events").select("*").eq("company_id", cid).order("event_date", { ascending: false }).order("created_at", { ascending: false }),
+      supabase.from("dv_open_house_sign_locations").select("*").eq("company_id", cid).eq("active", true).order("last_used_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }),
+      supabase.from("dv_accounting_agents").select("id,name,first_name,last_name,email").eq("company_id", cid)
+    ]);
+    if (eventResult.error) throw eventResult.error;
+    if (locationResult.error) throw locationResult.error;
+    if (agentResult.error) throw agentResult.error;
+    const agentRows = agentResult.data || [];
+    setAgents(agentRows);
+    const agentMap = new Map(agentRows.map(agent => [agent.id, agent.name || [agent.first_name, agent.last_name].filter(Boolean).join(" ") || agent.email || "Agent"]));
+    const rows = (eventResult.data || []).map(event => ({ ...event, agent_name: agentMap.get(event.agent_id) || (event.created_by === user?.id ? agentName || "You" : "Agent") }));
+    setEvents(rows);
+    setLocations(locationResult.data || []);
+    if (!activeEventId && rows.length) setActiveEventId(rows[0].id);
+  }, [activeEventId, agentName, user?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function init() {
+      if (!supabase || !user?.id) { setLoading(false); setError("Please sign in to use Open House Signs."); return; }
+      try {
+        const { data: profile, error: profileError } = await supabase.from("dv_accounting_user_profiles").select("company_id,display_name,role,active").eq("user_id", user.id).maybeSingle();
+        if (profileError) throw profileError;
+        if (profile?.active === false) throw new Error("Your Back Office account is inactive.");
+        let cid = profile?.company_id || "";
+        let agent = null;
+        if (agentId) {
+          const { data, error: agentError } = await supabase.from("dv_accounting_agents").select("id,company_id,name,first_name,last_name").eq("id", agentId).maybeSingle();
+          if (agentError) throw agentError;
+          agent = data;
+          cid = cid || data?.company_id || "";
+        }
+        if (!cid && ["SUPERADMIN","ADMIN","MANAGER","BROKER","BROKER_OF_RECORD","BROKER OF RECORD","OWNER"].includes(String(role || profile?.role || "").toUpperCase())) {
+          const { data: company, error: companyError } = await supabase.from("dv_accounting_companies").select("id").limit(1).maybeSingle();
+          if (companyError) throw companyError;
+          cid = company?.id || "";
+        }
+        if (!cid) throw new Error("Your account is not linked to a brokerage company. Ask an administrator to check your agent profile.");
+        if (cancelled) return;
+        setCompanyId(cid);
+        setAgentName(agent?.name || [agent?.first_name, agent?.last_name].filter(Boolean).join(" ") || profile?.display_name || user.email || "Agent");
+        await loadDirectories(cid);
+      } catch (e) {
+        if (!cancelled) setError(errorText(e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    init();
+    return () => { cancelled = true; };
+  }, [agentId, user?.id, role, loadDirectories]);
+
+  useEffect(() => {
+    if (!activeEventId || !supabase) { setEventSigns([]); return; }
+    let cancelled = false;
+    supabase.from("dv_open_house_event_signs")
+      .select("*,location:dv_open_house_sign_locations(*)")
+      .eq("event_id", activeEventId).order("sequence", { ascending: true })
+      .then(({ data, error: fetchError }) => {
+        if (cancelled) return;
+        if (fetchError) setError(errorText(fetchError));
+        else setEventSigns((data || []).filter(row => row.location));
+      });
+    return () => { cancelled = true; };
+  }, [activeEventId]);
+
+  // Load the Google Maps API and Geocoder independently of the visible map.
+  // The first open house cannot exist yet, so the map canvas is not rendered
+  // until after creation. Requiring the canvas here creates a circular dependency.
+  useEffect(() => {
+    if (!MAPS_KEY) {
+      setMapError("Google Maps is not configured yet. Add VITE_GOOGLE_MAPS_API_KEY to the Back Office hosting environment.");
+      return;
+    }
+    let cancelled = false;
+    loadGoogleMaps().then(google => {
+      if (cancelled) return;
+      geocoderRef.current = new google.maps.Geocoder();
+      setMapError("");
+      setMapReady(true);
+    }).catch(e => {
+      if (!cancelled) setMapError(errorText(e));
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Create the visible map only after an open house exists and its map canvas
+  // has been rendered. The Geocoder is already available for the first save.
+  useEffect(() => {
+    if (!mapReady || !mapElement.current || mapRef.current) return;
+    const google = window.google;
+    if (!google?.maps || !geocoderRef.current) return;
+    const center = propertyPoint || { lat: 43.6532, lng: -79.3832 };
+    const map = new google.maps.Map(mapElement.current, {
+      center, zoom: propertyPoint ? 14 : 11, mapTypeControl: false,
+      streetViewControl: false, fullscreenControl: true, clickableIcons: false,
+      gestureHandling: "greedy", mapId: undefined
+    });
+    mapRef.current = map;
+    mapClickRef.current = map.addListener("click", async event => {
+      if (!event.latLng) return;
+      const point = { lat: event.latLng.lat(), lng: event.latLng.lng() };
+      let address = "Pinned map location";
+      try {
+        const result = await geocoderRef.current.geocode({ location: point });
+        address = result.results?.[0]?.formatted_address || address;
+      } catch {}
+      setPendingPoint({ ...point, address });
+      setPointForm({ label: "Directional sign", direction: "", notes: "" });
+    });
+  }, [mapReady, activeEventId, propertyPoint]);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const google = window.google;
+    markersRef.current.forEach(marker => marker.setMap(null));
+    markersRef.current = [];
+    routePolylinesRef.current.forEach(polyline => polyline.setMap(null));
+    routePolylinesRef.current = [];
+    if (propertyPoint) {
+      const marker = new google.maps.Marker({ map: mapRef.current, position: propertyPoint, title: activeEvent?.property_address || "Open house property", label: { text: "P", color: "#fff", fontWeight: "700" }, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 12, fillColor: "#0f2141", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 } });
+      markersRef.current.push(marker);
+      mapRef.current.panTo(propertyPoint);
+      mapRef.current.setZoom(14);
+    }
+    if (userLocation) {
+      mapRef.current.panTo(userLocation);
+      mapRef.current.setZoom(16);
+      const currentMarker = new google.maps.Marker({
+        map: mapRef.current,
+        position: userLocation,
+        title: "Your current location",
+        zIndex: 1000,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: "#2878e5",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 3
+        }
+      });
+      markersRef.current.push(currentMarker);
+    }
+    eventSigns.forEach((item, index) => {
+      const location = item.location;
+      const installed = item.status === "INSTALLED";
+      const marker = new google.maps.Marker({
+        map: mapRef.current, position: { lat: Number(location.latitude), lng: Number(location.longitude) },
+        title: location.label + " · " + location.address,
+        label: { text: String(index + 1), color: "#fff", fontWeight: "700" },
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 11, fillColor: installed ? "#3f765d" : "#9e8556", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 }
+      });
+      markersRef.current.push(marker);
+    });
+    if (!propertyPoint && eventSigns.length) {
+      const bounds = new google.maps.LatLngBounds();
+      eventSigns.forEach(item => bounds.extend({ lat: Number(item.location.latitude), lng: Number(item.location.longitude) }));
+      mapRef.current.fitBounds(bounds);
+    }
+  }, [mapReady, propertyPoint, eventSigns, activeEvent?.property_address, userLocation]);
+
+  const stopLiveTracking = useCallback(() => {
+    if (locationWatchRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(locationWatchRef.current);
+      locationWatchRef.current = null;
+    }
+    setLiveTracking(false);
+  }, []);
+
+  const toggleLiveTracking = useCallback(() => {
+    if (liveTracking) { stopLiveTracking(); return; }
+    if (!navigator.geolocation) {
+      setError("Live location is not supported by this browser.");
+      return;
+    }
+    setError("");
+    setLocating(true);
+    const watchId = navigator.geolocation.watchPosition(
+      position => {
+        const point = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setUserLocation(point);
+        if (mapRef.current) {
+          mapRef.current.panTo(point);
+          if (mapRef.current.getZoom() < 15) mapRef.current.setZoom(15);
+        }
+        setLocating(false);
+        setLiveTracking(true);
+      },
+      locationError => {
+        const message = locationError.code === 1
+          ? "Location access is blocked. Allow location access for this website in your browser settings."
+          : locationError.code === 2
+            ? "Your current location could not be determined. Check Location Services."
+            : "Live location timed out. Please try again.";
+        setError(message);
+        setLocating(false);
+        stopLiveTracking();
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 3000 }
+    );
+    locationWatchRef.current = watchId;
+    setLiveTracking(true);
+  }, [liveTracking, stopLiveTracking]);
+
+  useEffect(() => () => {
+    if (locationWatchRef.current !== null && navigator.geolocation) navigator.geolocation.clearWatch(locationWatchRef.current);
+  }, []);
+
+  const locateCurrentPosition = useCallback(() => {
+    if (!navigator.geolocation) {
+      setError("Location is not supported by this browser. Please allow location access in your phone settings.");
+      return;
+    }
+    setLocating(true);
+    setError("");
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const point = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setUserLocation(point);
+        if (mapRef.current) {
+          mapRef.current.panTo(point);
+          mapRef.current.setZoom(16);
+        }
+        setLocating(false);
+      },
+      locationError => {
+        const message = locationError.code === 1
+          ? "Location access is blocked. Allow location access for this website in your browser settings."
+          : locationError.code === 2
+            ? "Your current location could not be determined. Check that Location Services are enabled."
+            : "The location request timed out. Please try again.";
+        setError(message);
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+    );
+  }, []);
 
 
-/* App-wide compact list density v0.6.183 — agents, contacts, fees/plans, and other data lists.
-   Forms and transaction-specific ultra-compact overrides remain separately scoped. */
-.content table:not(.transaction-list-table) {
-  font-size: 11px;
-  line-height: 1.2;
-}
-.content table:not(.transaction-list-table) th {
-  padding: 6px 8px !important;
-  line-height: 1.15;
-  white-space: nowrap;
-}
-.content table:not(.transaction-list-table) td {
-  padding: 5px 8px !important;
-  line-height: 1.2;
-  vertical-align: middle;
-}
-.content table:not(.transaction-list-table) tbody tr { height: auto; }
-.content table:not(.transaction-list-table) td button,
-.content table:not(.transaction-list-table) td .primary,
-.content table:not(.transaction-list-table) td .secondary,
-.content table:not(.transaction-list-table) td .textbutton {
-  font-size: 10px;
-  line-height: 1.15;
-  padding: 3px 6px;
-  min-height: 0;
-}
-.content table:not(.transaction-list-table) td input,
-.content table:not(.transaction-list-table) td select {
-  font-size: 11px;
-  padding: 4px 6px;
-  min-height: 26px;
-}
-.content .agent-table th { padding: 6px 8px !important; }
-.content .agent-table td { padding: 4px 8px !important; }
-.content .agent-table tbody tr { height: 32px !important; }
-.content .agent-toolbar { gap: 6px; margin-bottom: 8px; }
-.content .agent-toolbar .toolbar { gap: 6px; }
-.content .agent-toolbar input,
-.content .agent-toolbar select { padding: 6px 8px; }
-.content .panel:has(> .agent-toolbar) { padding: 10px; }
-@media (max-width: 760px) {
-  .content table:not(.transaction-list-table) th,
-  .content table:not(.transaction-list-table) td { padding: 5px 6px !important; }
-}
+  const loadSignInventory = useCallback(async () => {
+    if (!supabase || !companyId) return;
+    setInventoryLoading(true);
+    try {
+      let request = supabase.from("dv_open_house_agent_sign_inventory").select("*").eq("company_id", companyId).order("updated_at", { ascending: false });
+      if (!adminMode && currentInventoryAgentId) request = request.eq("agent_id", currentInventoryAgentId);
+      const { data, error: inventoryError } = await request;
+      if (inventoryError) throw inventoryError;
+      const rows = data || [];
+      setInventoryRows(rows);
+      if (adminMode) {
+        const { data: transfers, error: transferError } = await supabase.from("dv_open_house_sign_transfers").select("*,from_agent:dv_accounting_agents!from_agent_id(name,first_name,last_name,email),to_agent:dv_accounting_agents!to_agent_id(name,first_name,last_name,email)").eq("company_id", companyId).order("created_at", { ascending: false }).limit(20);
+        if (transferError) throw transferError;
+        setInventoryTransfers(transfers || []);
+      }
+      const selectedAgentForInventory = adminMode ? inventoryAgentId : currentInventoryAgentId;
+      const own = rows.find(row => row.agent_id === selectedAgentForInventory);
+      if (own) setInventoryForm({ total_signs: String(own.total_signs), lost_signs: String(own.lost_signs || 0), damaged_signs: String(own.damaged_signs), notes: own.notes || "" });
+      else setInventoryForm({ total_signs: "0", lost_signs: "0", damaged_signs: "0", notes: "" });
+      if (!inventoryAgentId && currentInventoryAgentId) setInventoryAgentId(currentInventoryAgentId);
+    } catch (e) { setError("Could not load sign inventory: " + errorText(e)); }
+    finally { setInventoryLoading(false); }
+  }, [companyId, adminMode, currentInventoryAgentId, inventoryAgentId]);
 
+  useEffect(() => { if (companyId) loadSignInventory(); }, [companyId, loadSignInventory]);
 
-/* App-wide typography readability pass v0.6.184.
-   Increase text sizes consistently, including compact lists and transaction tables. */
-html { font-size: 16px; }
-body, #root, .app { font-size: 15px; }
-.content { font-size: 14px; }
-.content p, .content li, .content label, .content .muted,
-.content .sub, .content .hint, .content small { font-size: 13px; }
-.content h1 { font-size: 25px; }
-.content h2 { font-size: 19px; }
-.content h3 { font-size: 16px; }
-.content h4 { font-size: 15px; }
-.content button, .content .primary, .content .secondary,
-.content .textbutton, .content input, .content select, .content textarea {
-  font-size: 13px;
-}
-.content input, .content select, .content textarea { line-height: 1.35; }
-.content table:not(.transaction-list-table) { font-size: 13px !important; line-height: 1.3 !important; }
-.content table:not(.transaction-list-table) th { font-size: 12px !important; line-height: 1.25 !important; }
-.content table:not(.transaction-list-table) td { font-size: 13px !important; line-height: 1.3 !important; }
-.content table:not(.transaction-list-table) td button,
-.content table:not(.transaction-list-table) td .primary,
-.content table:not(.transaction-list-table) td .secondary,
-.content table:not(.transaction-list-table) td .textbutton { font-size: 12px !important; }
-.content table:not(.transaction-list-table) td input,
-.content table:not(.transaction-list-table) td select { font-size: 12px !important; }
-.content .agent-table { font-size: 13px !important; }
-.content .agent-table th { font-size: 12px !important; }
-.content .agent-table td { font-size: 13px !important; }
-.content .agent-toolbar input,
-.content .agent-toolbar select,
-.content .agent-toolbar button { font-size: 13px !important; }
-
-/* Bring the previously ultra-compact transaction list back to readable sizes. */
-.transaction-list-table { font-size: 12px !important; line-height: 1.25 !important; }
-.transaction-list-table th { font-size: 11px !important; line-height: 1.2 !important; }
-.transaction-list-table td { font-size: 12px !important; line-height: 1.25 !important; }
-.transaction-list-table td .textbutton { font-size: 12px !important; }
-.transaction-list-table td select { font-size: 12px !important; }
-.transaction-row-actions button { font-size: 11px !important; line-height: 1.2 !important; }
-.transaction-list-table .status { font-size: 11px !important; }
-
-@media (max-width: 760px) {
-  .content { font-size: 14px; }
-  .content p, .content li, .content label, .content .muted,
-  .content .sub, .content .hint, .content small { font-size: 13px; }
-  .content h1 { font-size: 23px; }
-  .content table:not(.transaction-list-table) th { font-size: 11px !important; }
-  .content table:not(.transaction-list-table) td { font-size: 12px !important; }
-  .transaction-list-table th { font-size: 11px !important; }
-  .transaction-list-table td { font-size: 12px !important; }
-}
-
-
-/* Listing workspace redesign v0.6.186: compact tabs and in-panel document preview. */
-.listing-detail-tabs{display:flex;gap:6px;align-items:center;border-bottom:1px solid #e5e7eb;margin:10px 0 14px;padding:0 0 8px;overflow-x:auto}
-.listing-detail-tabs button{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;border:1px solid transparent;background:transparent;color:#566176;border-radius:8px;padding:9px 12px;min-height:40px;font-weight:600}
-.listing-detail-tabs button.active{background:#f4f0e7;border-color:#d8c9a7;color:#0f2141;box-shadow:inset 0 -2px 0 #9e8556}
-.listing-tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:21px;height:21px;padding:0 5px;border-radius:999px;background:#e9edf3;color:#344054;font-size:11px}
-.listing-property-tab,.listing-documents-tab,.listing-property-tab-secondary{min-width:0;animation:listingTabFade .14s ease-out}
-.listing-document-preview{margin-top:14px;padding:10px;border:1px solid #dce2eb;border-radius:10px;background:#f8fafc;display:grid;gap:10px;min-width:0}
-.listing-document-preview-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.listing-document-preview-head>div{display:grid;gap:3px;min-width:0;overflow-wrap:anywhere}
-.listing-document-preview-head strong{font-size:13px;color:#172b4d}
-.listing-document-preview-head span{font-size:11px;color:#667085}
-.listing-document-preview-frame{display:block;width:100%;height:min(66vh,760px);min-height:420px;border:1px solid #d0d5dd;border-radius:8px;background:#fff}
-.listing-document-preview-image{display:block;width:100%;height:min(66vh,760px);min-height:300px;object-fit:contain;border:1px solid #d0d5dd;border-radius:8px;background:#fff}
-.listing-document-preview-other{min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#667085;text-align:center}
-.listing-document-preview-other p{margin:0}
-.listing-document-preview-other a{color:#0f2141;font-weight:600}
-@keyframes listingTabFade{from{opacity:.65;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
-@media(max-width:760px){.listing-detail-tabs button{flex:1;padding:8px 9px;font-size:12px}.listing-document-preview-frame{height:62vh;min-height:320px}.listing-document-preview-image{height:58vh;min-height:240px}.listing-document-preview{padding:7px}}
-
-
-/* Listing document workspace v0.6.188: clickable file navigation with an in-window, auto-fitting preview. */
-.listing-files-workspace{display:grid;grid-template-columns:minmax(220px,.72fr) minmax(0,1.8fr);gap:12px;align-items:stretch;margin-top:14px;min-width:0}
-.listing-files-sidebar,.listing-files-preview-pane{min-width:0;border:1px solid #e1e6ee;border-radius:10px;background:#fff;overflow:hidden}
-.listing-files-sidebar{display:flex;flex-direction:column;max-height:calc(100vh - 320px);min-height:360px}
-.listing-files-sidebar-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px;background:#f7f8fa;border-bottom:1px solid #e8ebf0}
-.listing-files-sidebar-head strong{font-size:12px;color:#172b4d}
-.listing-files-sidebar-head span{font-size:11px;color:#667085;white-space:nowrap}
-.listing-clickable-file-list{overflow:auto;min-height:0}
-.listing-clickable-file{display:flex;align-items:center;gap:9px;width:100%;min-height:58px;padding:10px;text-align:left;border:0;border-bottom:1px solid #edf0f4;border-radius:0;background:#fff;color:#344054;cursor:pointer}
-.listing-clickable-file:hover{background:#f8fafc}
-.listing-clickable-file.active{background:#f4f0e7;box-shadow:inset 3px 0 #9e8556}
-.listing-clickable-file-icon{display:grid;place-items:center;flex:0 0 32px;width:32px;height:36px;border-radius:7px;background:#edf1f7;color:#0f2141}
-.listing-clickable-file.active .listing-clickable-file-icon{background:#e5dcc9}
-.listing-clickable-file-text{display:grid;gap:4px;flex:1;min-width:0}
-.listing-clickable-file-text strong{font-size:11px;line-height:1.35;font-weight:650;overflow-wrap:anywhere;color:#25324a}
-.listing-clickable-file-text small{font-size:10px;color:#7b8596;overflow-wrap:anywhere}
-.listing-clickable-file-arrow{font-size:20px;color:#98a2b3}
-.listing-files-empty{display:grid;place-items:center;text-align:center;gap:7px;min-height:220px;padding:20px;color:#8a94a3}
-.listing-files-empty span{font-size:12px;color:#475467}
-.listing-files-empty small{font-size:11px}
-.listing-files-preview-pane{display:flex;flex-direction:column;padding:10px;background:#f8fafc;min-height:440px}
-.listing-files-preview-pane .listing-document-preview-head{flex:0 0 auto;margin-bottom:9px;padding:2px 2px 9px;border-bottom:1px solid #e1e6ee}
-.listing-files-preview-pane .listing-document-preview-frame{width:100%;height:calc(100vh - 410px);min-height:420px;max-height:900px;flex:1 1 auto}
-.listing-files-preview-pane .listing-document-preview-image{width:100%;height:calc(100vh - 410px);min-height:300px;max-height:900px;object-fit:contain;background:#fff}
-.listing-files-preview-empty{display:flex;flex:1;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:28px;color:#98a2b3}
-.listing-files-preview-empty strong{font-size:14px;color:#344054}
-.listing-files-preview-empty span{max-width:340px;font-size:12px;line-height:1.55;color:#7b8596}
-.listing-preview-open-link{display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap;padding:6px 9px;min-height:32px}
-@media(max-width:900px){.listing-files-workspace{grid-template-columns:minmax(180px,.75fr) minmax(0,1.5fr);gap:8px}.listing-files-sidebar{max-height:calc(100vh - 280px)}.listing-files-preview-pane .listing-document-preview-frame{height:calc(100vh - 360px);min-height:350px}.listing-files-preview-pane .listing-document-preview-image{height:calc(100vh - 360px);min-height:260px}}
-@media(max-width:640px){.listing-files-workspace{grid-template-columns:minmax(0,1fr)}.listing-files-sidebar{max-height:260px;min-height:140px}.listing-files-preview-pane{min-height:360px}.listing-files-preview-pane .listing-document-preview-frame{height:58vh;min-height:300px}.listing-files-preview-pane .listing-document-preview-image{height:52vh;min-height:240px}.listing-files-preview-empty{min-height:260px}}
-
-/* Listing documents: requirements are the navigation; uploaded filenames are intentionally hidden. */
-.listing-requirement-preview-workspace{display:grid;grid-template-columns:minmax(220px,.72fr) minmax(0,1.6fr);gap:12px;align-items:stretch;margin:12px 0 15px}
-.listing-requirement-list{display:grid;align-content:start;gap:6px;min-width:0}
-.listing-requirement-item{display:flex;align-items:center;gap:8px;width:100%;min-width:0;text-align:left;padding:11px 10px;border:1px solid #e2e6ec;border-radius:8px;background:#fff;color:#39465a;cursor:pointer}
-.listing-requirement-item:hover{border-color:#cdbb99;background:#fcfbf8}
-.listing-requirement-item.active{border-color:var(--gold);background:#f8f4ec;box-shadow:inset 3px 0 0 var(--gold)}
-.listing-requirement-item>svg{flex:none;color:var(--gold)}
-.listing-requirement-label{flex:1;min-width:0;font-size:12px;font-weight:700;overflow-wrap:anywhere}
-.listing-requirement-status{flex:none;font-size:10px;color:#9b6b45;background:#faf1e8;border-radius:12px;padding:4px 6px;white-space:nowrap}
-.listing-requirement-status.uploaded{color:#386c53;background:#eaf4ed}
-.listing-requirement-preview-pane{display:flex;flex-direction:column;min-width:0;min-height:430px;border:1px solid #e1e5eb;border-radius:9px;overflow:hidden;background:#f7f8fa}
-.listing-requirement-preview-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;background:#fff;border-bottom:1px solid #e6e9ee;min-width:0}
-.listing-requirement-preview-heading>div{display:grid;gap:3px;min-width:0}
-.listing-requirement-preview-heading strong{font-size:12px;color:var(--navy);overflow-wrap:anywhere}
-.listing-requirement-preview-heading span{font-size:10px;color:#8993a2}
-.listing-requirement-preview-heading .listing-preview-open-link{font-size:10px;padding:6px 8px;white-space:nowrap;flex:none}
-.listing-requirement-preview-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px;color:#8b95a4}
-.listing-requirement-preview-empty svg{color:#b6a17c}
-.listing-requirement-preview-empty strong{font-size:13px;color:#536075}
-.listing-requirement-preview-empty span{font-size:11px;max-width:300px;line-height:1.5}
-.listing-requirement-preview-pane .listing-document-preview-frame{display:block;width:100%;height:100%;min-height:380px;flex:1;border:0;background:#fff}
-.listing-requirement-preview-pane .listing-document-preview-image{width:100%;height:100%;min-height:380px;object-fit:contain;flex:1;padding:10px}
-.listing-requirement-preview-pane .listing-document-preview-other{flex:1;display:grid;place-content:center;justify-items:center;gap:10px;padding:20px;text-align:center}
-@media(max-width:850px){.listing-requirement-preview-workspace{grid-template-columns:1fr}.listing-requirement-list{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}.listing-requirement-preview-pane{min-height:360px}}
-@media(max-width:520px){.listing-requirement-list{grid-template-columns:1fr}.listing-requirement-preview-pane{min-height:300px}.listing-requirement-preview-pane .listing-document-preview-frame,.listing-requirement-preview-pane .listing-document-preview-image{min-height:260px}}
-
-
-/* Listing list and detail are separate full-page workspaces v0.6.190. */
-.listing-page-workspace{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start;min-width:0}
-.listing-page-workspace>.panel{width:100%;min-width:0;box-sizing:border-box}
-.listing-page-list .listing-list-panel{max-width:none}
-.listing-list-panel .paneltitle{margin-bottom:12px}
-.listing-list-panel .paneltitle button{white-space:nowrap}
-.listing-list-panel button[ type="button" ]{transition:border-color .12s ease,background .12s ease}
-.listing-detail-panel{min-height:calc(100vh - 190px);overflow:visible}
-.listing-detail-panel .listing-detail-tabs{position:sticky;top:0;z-index:4;background:#fff;padding-top:8px}
-.listing-detail-panel .listing-documents-tab{min-width:0}
-.listing-detail-panel .listing-requirement-preview-workspace{grid-template-columns:minmax(250px,.62fr) minmax(0,2fr);gap:14px}
-.listing-detail-panel .listing-requirement-preview-pane{min-height:calc(100vh - 360px)}
-.listing-detail-panel .listing-requirement-preview-pane .listing-document-preview-frame{height:calc(100vh - 430px);min-height:520px;max-height:none}
-.listing-detail-panel .listing-requirement-preview-pane .listing-document-preview-image{height:calc(100vh - 430px);min-height:420px;max-height:none}
-@media(max-width:850px){
- .listing-detail-panel{min-height:0}
- .listing-detail-panel .listing-requirement-preview-workspace{grid-template-columns:1fr}
- .listing-detail-panel .listing-requirement-preview-pane{min-height:360px}
- .listing-detail-panel .listing-requirement-preview-pane .listing-document-preview-frame{height:65vh;min-height:340px}
- .listing-detail-panel .listing-requirement-preview-pane .listing-document-preview-image{height:60vh;min-height:280px}
-}
-
-/* Trade submission queue uses the full available browser width. */
-.content.trade-submissions-fullwidth{width:100%;max-width:none;box-sizing:border-box;padding-left:20px;padding-right:20px;margin:0}
-.content.trade-submissions-fullwidth>.agent-trade-portal{width:100%;max-width:none;min-width:0}
-.content.trade-submissions-fullwidth .agent-trade-layout{width:100%;min-width:0;grid-template-columns:minmax(0,1fr);}
-.content.trade-submissions-fullwidth .agent-trade-layout>section{width:100%;min-width:0;box-sizing:border-box}
-.content.trade-submissions-fullwidth .agent-trade-queue-list,.content.trade-submissions-fullwidth .agent-trade-queue-row{width:100%;min-width:0}
-@media(max-width:760px){.content.trade-submissions-fullwidth{padding-left:12px;padding-right:12px}}
-
-/* Full-width trade submissions queue in the primary app layout. */
-main:has(.content.trade-submissions-fullwidth){width:calc(100% - 276px);max-width:none;min-width:0}
-.content.trade-submissions-fullwidth{width:100%;max-width:none;box-sizing:border-box;margin:0;padding:24px 18px 40px}
-.content.trade-submissions-fullwidth>.agent-trade-portal{width:100%;max-width:none;min-width:0}
-.content.trade-submissions-fullwidth .agent-trade-layout{display:grid;width:100%;max-width:none;min-width:0;grid-template-columns:minmax(0,1fr);}
-.content.trade-submissions-fullwidth .agent-trade-layout>section{width:100%;max-width:none;min-width:0;box-sizing:border-box}
-.content.trade-submissions-fullwidth .agent-trade-queue-list,.content.trade-submissions-fullwidth .agent-trade-queue-row,.content.trade-submissions-fullwidth .agent-trade-queue-card{width:100%;max-width:none;min-width:0;box-sizing:border-box}
-@media(max-width:760px){main:has(.content.trade-submissions-fullwidth){width:100%}.content.trade-submissions-fullwidth{padding:18px 10px 30px}}
-
-
-/* Currency inputs show a dollar prefix and consistently format amounts to two decimals. */
-.money-input-wrap{display:flex;align-items:center;gap:4px;box-sizing:border-box;width:100%;min-width:0;color:#101828;font:inherit;background:#fff;border:1px solid #d0d5dd;border-radius:8px;padding:7px 10px;min-height:38px}
-.money-input-wrap:focus-within{border-color:#9e8556;box-shadow:0 0 0 2px rgba(158,133,86,.14)}
-.money-input-wrap .money-input-prefix{color:#667085;user-select:none}
-.money-input-wrap input{min-width:0}
-.money-input-wrap:has(input:disabled){background:#f2f4f7}
-.agent-trade-field .money-input-wrap{min-height:32px;border-radius:6px;padding:6px 8px;font:inherit}
-
-/* Transaction editor window layout refinements v0.6.286.
-   Keep the title and section tabs stable, scroll only the active form, and pin actions
-   to the bottom so long tabs don't leave awkward gaps or hide Save buttons. */
-.modal.tx-modal:has(> .tx-editor){
-  display:flex;
-  flex-direction:column;
-  width:min(1420px,calc(100vw - 36px))!important;
-  max-width:1420px!important;
-  height:min(940px,calc(100dvh - 32px));
-  max-height:calc(100dvh - 32px)!important;
-  min-height:0;
-  overflow:hidden!important;
-}
-.modal.tx-modal:has(> .tx-editor)>.modalhead{
-  position:relative;
-  top:auto;
-  flex:0 0 auto;
-  min-height:58px;
-  padding:15px 22px;
-}
-.modal.tx-modal:has(> .tx-editor)>.tx-editor{
-  display:flex;
-  flex:1 1 auto;
-  flex-direction:column;
-  min-height:0;
-  height:auto;
-  max-height:none!important;
-  overflow:hidden!important;
-  padding:0 22px;
-}
-.modal.tx-modal:has(> .tx-editor)>.tx-editor>.tx-tabs{
-  position:relative;
-  top:auto;
-  z-index:5;
-  flex:0 0 auto;
-  margin:0 -22px;
-  padding:12px 22px 11px;
-  border-bottom:1px solid #e7eaf0;
-  background:#fff;
-  box-shadow:0 3px 8px rgba(15,33,65,.035);
-  scrollbar-width:thin;
-}
-.modal.tx-modal:has(> .tx-editor)>.tx-editor>form{
-  display:flex;
-  flex:1 1 auto;
-  flex-direction:column;
-  min-height:0;
-  padding:18px 0 0;
-  overflow-y:auto;
-  overflow-x:hidden;
-  overscroll-behavior:contain;
-  scrollbar-gutter:stable;
-}
-.modal.tx-modal:has(> .tx-editor)>.tx-editor>form>.tx-section{
-  flex:0 0 auto;
-  width:100%;
-  box-sizing:border-box;
-}
-.modal.tx-modal:has(> .tx-editor)>.tx-editor>form>.tx-footer{
-  position:sticky;
-  bottom:0;
-  z-index:6;
-  flex:0 0 auto;
-  margin:20px 0 0;
-  padding:13px 0 max(13px,env(safe-area-inset-bottom));
-  border-top:1px solid #e3e7ee;
-  background:rgba(255,255,255,.97);
-  backdrop-filter:blur(8px);
-}
-.modal.tx-modal:has(> .tx-editor) .tx-grid{
-  align-items:start;
-}
-.modal.tx-modal:has(> .tx-editor) .tx-field{
-  min-width:0;
-}
-.modal.tx-modal:has(> .tx-editor) .tx-summary{
-  width:100%;
-  box-sizing:border-box;
-}
-@media(max-width:850px){
-  .modal.tx-modal:has(> .tx-editor){
-    width:calc(100vw - 20px)!important;
-    max-width:calc(100vw - 20px)!important;
-    height:calc(100dvh - 20px);
-    max-height:calc(100dvh - 20px)!important;
+  async function saveSignInventory(event) {
+    event.preventDefault();
+    const targetAgentId = adminMode ? inventoryAgentId : currentInventoryAgentId;
+    if (!targetAgentId || !supabase) { setError("Your agent profile could not be identified. Ask an administrator to link your login to your agent profile."); return; }
+    const total = Number.parseInt(inventoryForm.total_signs, 10);
+    const lost = Number.parseInt(inventoryForm.lost_signs, 10);
+    const damaged = Number.parseInt(inventoryForm.damaged_signs, 10);
+    if (!Number.isInteger(total) || !Number.isInteger(lost) || !Number.isInteger(damaged) || total < 0 || lost < 0 || damaged < 0 || lost + damaged > total) {
+      setError("Enter valid sign counts. Lost and damaged signs combined cannot exceed total signs."); return;
+    }
+    setSaving(true); setError(""); setMessage("");
+    try {
+      const { error: saveError } = await supabase.from("dv_open_house_agent_sign_inventory").upsert({
+        company_id: companyId, agent_id: targetAgentId, total_signs: total,
+        lost_signs: lost, damaged_signs: damaged, notes: inventoryForm.notes.trim() || null,
+        updated_by: user.id, updated_at: new Date().toISOString()
+      }, { onConflict: "agent_id" });
+      if (saveError) throw saveError;
+      setMessage("Sign inventory saved.");
+      await loadSignInventory();
+    } catch (e) { setError("Could not save sign inventory: " + errorText(e)); }
+    finally { setSaving(false); }
   }
-  .modal.tx-modal:has(> .tx-editor)>.tx-editor{padding:0 14px}
-  .modal.tx-modal:has(> .tx-editor)>.tx-editor>.tx-tabs{margin:0 -14px;padding:10px 14px}
-  .modal.tx-modal:has(> .tx-editor)>.tx-editor>form{padding-top:14px}
-  .modal.tx-modal:has(> .tx-editor)>.tx-editor>form>.tx-footer{align-items:stretch;gap:10px}
-  .modal.tx-modal:has(> .tx-editor) .tx-footer-right{flex-wrap:wrap;justify-content:flex-end}
-}
-@media(max-width:560px){
-  .modal.tx-modal:has(> .tx-editor){
-    width:100vw!important;
-    max-width:100vw!important;
-    height:100dvh;
-    max-height:100dvh!important;
-    border-radius:0;
+
+  async function transferAgentSigns(event) {
+    event.preventDefault();
+    const quantity = Number.parseInt(transferForm.quantity, 10);
+    if (!adminMode || !inventoryAgentId || !transferForm.to_agent_id || transferForm.to_agent_id === inventoryAgentId || !Number.isInteger(quantity) || quantity < 1) {
+      setError("Choose two different agents and enter a valid transfer quantity."); return;
+    }
+    setSaving(true); setError(""); setMessage("");
+    try {
+      const { error: transferError } = await supabase.from("dv_open_house_sign_transfers").insert({
+        company_id: companyId, from_agent_id: inventoryAgentId, to_agent_id: transferForm.to_agent_id,
+        quantity, notes: transferForm.notes.trim() || null, transferred_by: user.id
+      });
+      if (transferError) throw transferError;
+      setMessage("Sign transfer recorded. Both agents’ inventories have been updated.");
+      setTransferForm({ to_agent_id: "", quantity: "1", notes: "" });
+      await loadSignInventory();
+    } catch (e) { setError("Could not transfer signs: " + errorText(e)); }
+    finally { setSaving(false); }
   }
-  .modal.tx-modal:has(> .tx-editor)>.modalhead{padding:12px 14px}
-  .modal.tx-modal:has(> .tx-editor)>.tx-editor{padding:0 12px}
-  .modal.tx-modal:has(> .tx-editor)>.tx-editor>.tx-tabs{margin:0 -12px;padding:9px 12px;gap:5px}
-  .modal.tx-modal:has(> .tx-editor)>.tx-editor>.tx-tabs button{font-size:11px;padding:7px 9px}
-  .modal.tx-modal:has(> .tx-editor)>.tx-editor>form>.tx-footer{flex-direction:column;align-items:stretch;padding:11px 0 max(11px,env(safe-area-inset-bottom))}
-  .modal.tx-modal:has(> .tx-editor) .tx-footer-right{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
-  .modal.tx-modal:has(> .tx-editor) .tx-footer-right button{justify-content:center;min-width:0}
-}
 
+  const geocodeAddress = useCallback(async address => {
+    if (!geocoderRef.current) throw new Error("Google Maps is still loading.");
+    const result = await geocoderRef.current.geocode({ address });
+    const hit = result.results?.[0];
+    if (!hit) throw new Error("Google Maps could not find that address. Check the spelling and postal code.");
+    return { lat: hit.geometry.location.lat(), lng: hit.geometry.location.lng(), formatted: hit.formatted_address };
+  }, []);
 
-
-/* Compact Transactions search and refresh controls v0.6.287 */
-.transaction-toolbar{display:flex;align-items:center;gap:10px;min-height:36px;margin:0 0 14px;flex-wrap:wrap}
-.transaction-toolbar .search{flex:0 1 390px;width:min(390px,42vw);max-width:390px;min-width:220px;height:36px;min-height:36px;padding:0 10px;gap:7px;box-sizing:border-box}
-.transaction-toolbar .search svg{width:15px;height:15px;flex:0 0 15px}
-.transaction-toolbar .search input{height:32px;min-height:0;padding:0!important;margin:0;line-height:1.3;font-size:12px;box-shadow:none!important;min-width:0}
-.transaction-toolbar>label{height:34px;min-height:34px;display:inline-flex!important;flex-direction:row!important;align-items:center;gap:7px!important;margin:0;padding:0;font-size:11px!important;line-height:1.2;white-space:nowrap}
-.transaction-toolbar input[type="checkbox"]{appearance:auto;width:14px!important;height:14px!important;min-width:14px;min-height:14px;padding:0!important;margin:0;flex:0 0 14px;border-radius:3px;box-shadow:none!important;accent-color:var(--gold)}
-.transaction-toolbar>button.secondary{height:34px;min-height:34px;flex:0 0 auto;justify-content:center;padding:0 11px;font-size:11px;line-height:1;white-space:nowrap}
-.transaction-toolbar>button.secondary svg{width:14px;height:14px}
-@media(max-width:760px){.transaction-toolbar{gap:8px}.transaction-toolbar .search{flex:1 1 100%;width:100%;max-width:none;min-width:0}.transaction-toolbar>label{flex:1 1 auto}.transaction-toolbar>button.secondary{margin-left:auto}}
-
-
-/* Compact searchable queues for trade submissions and listings */
-.trade-submission-search,.listing-search-toolbar{display:flex;align-items:center;gap:8px;margin:10px 0 12px;flex-wrap:wrap}
-.trade-submission-search .search,.listing-search-toolbar .search{flex:0 1 460px;width:min(460px,100%);max-width:460px;min-width:220px;height:36px;min-height:36px;padding:0 10px;box-sizing:border-box}
-.trade-submission-search .search input,.listing-search-toolbar .search input{height:32px;min-height:0;padding:0!important;margin:0;line-height:1.3;font-size:12px;box-shadow:none!important;min-width:0}
-.trade-submission-search .search svg,.listing-search-toolbar .search svg{width:15px;height:15px;flex:0 0 15px}
-.trade-submission-search>button{height:34px;min-height:34px;padding:0 11px;font-size:11px;white-space:nowrap}
-@media(max-width:600px){.trade-submission-search .search,.listing-search-toolbar .search{flex:1 1 100%;width:100%;max-width:none;min-width:0}}
-
-/* Responsive agent edit tabs: wrap to the available modal width without horizontal scrolling. */
-.agent-edit-tabs{display:flex;flex-wrap:wrap;gap:6px;min-width:0;width:100%;}
-.agent-edit-tabs button{flex:1 1 110px;min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;font-size:clamp(10px, .8vw, 13px);padding:8px 6px;}
-
-/* Cheque format editor layout modeled on traditional cheque setup dialogs. */
-.cheque-format-tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid #aeb8c5;margin:0 -2px 8px;padding:0 4px}
-.cheque-format-tabs button{border:1px solid #aeb8c5;border-bottom:0;border-radius:4px 4px 0 0;background:#f3f5f8;padding:7px 12px;color:#243247}
-.cheque-format-tabs button.active{background:#fff;font-weight:700}
-.cheque-format-top{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:10px 12px;align-items:end}
-.cheque-format-top label,.cheque-format-actions label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#253247}
-.cheque-format-top input,.cheque-format-top select,.cheque-format-actions select{width:100%;min-width:0;box-sizing:border-box}
-.cheque-format-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(160px,190px);gap:14px;margin-top:16px;align-items:start}
-.cheque-position-head,.cheque-position-row{display:grid;grid-template-columns:minmax(135px,1fr) minmax(70px,90px) minmax(75px,95px);gap:8px;align-items:center}
-.cheque-position-head{font-size:11px;color:#4b5563;font-weight:700;padding:4px 0 8px}
-.cheque-position-row{margin-bottom:5px}
-.cheque-position-row>label{text-align:right;font-size:12px;color:#253247}
-.cheque-position-row input{width:100%;min-width:0;box-sizing:border-box;padding:4px}
-.cheque-format-actions{display:flex;flex-direction:column;gap:8px;border-left:1px solid #e0e5eb;padding-left:12px}
-.cheque-format-actions button{font-size:12px;padding:7px 5px;white-space:normal}
-.cheque-format-actions p{font-size:11px;line-height:1.4;margin:0;color:#4b5563}
-.cheque-preview{position:relative;width:100%;max-width:620px;border:1px dashed #9e8556;background-image:linear-gradient(#9e855622 1px,transparent 1px),linear-gradient(90deg,#9e855622 1px,transparent 1px);background-size:0.5in 0.5in;overflow:hidden}
-.cheque-preview-bank{position:absolute;left:8%;top:5%;font-size:11px}
-@media(max-width:760px){.cheque-format-top{grid-template-columns:repeat(2,minmax(0,1fr))}.cheque-format-body{grid-template-columns:minmax(0,1fr)}.cheque-format-actions{border-left:0;border-top:1px solid #e0e5eb;padding:12px 0 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.cheque-position-head,.cheque-position-row{grid-template-columns:minmax(110px,1fr) minmax(58px,70px) minmax(60px,75px);gap:5px}}
-
-/* Keep agent profile content reachable inside the fixed-height modal. */
-.agent-profile-content{overscroll-behavior:contain;scrollbar-gutter:stable;min-height:0!important;max-height:100%;overflow-y:auto!important;overflow-x:hidden!important}
-.agent-profile-content .personnel-files{min-height:0;overflow:visible}
-.agent-profile-content .personnel-doc-list{max-width:100%;overflow:visible}
-.agent-profile-content .personnel-doc-row{min-width:0;flex-wrap:wrap}
-.agent-profile-content .personnel-doc-main{min-width:160px}
-.agent-profile-content .personnel-doc-actions{flex-wrap:wrap}
-@media(max-width:700px){.agent-profile-content{padding:8px!important}.agent-profile-content .personnel-files{padding:10px!important}.agent-profile-content .personnel-upload{grid-template-columns:minmax(0,1fr)}.agent-profile-content .personnel-upload-fields{grid-template-columns:minmax(0,1fr)}}
-
-/* Edit Agent modal: keep tabs visible and scroll the active form content. */
-.modal:has(.agent-edit-form){min-height:0}
-.modal:has(.agent-edit-form) .agent-edit-form{min-height:0!important;max-height:100%;overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:contain;scrollbar-gutter:stable;padding:14px 20px 20px!important}
-.modal:has(.agent-edit-form) .agent-edit-tabs{position:sticky;top:0;z-index:5;background:#fff;padding-top:4px;padding-bottom:10px;flex:0 0 auto}
-.modal:has(.agent-edit-form) .agent-edit-form>.formgrid,.modal:has(.agent-edit-form) .agent-edit-form>section,.modal:has(.agent-edit-form) .agent-edit-form>.panel{flex:0 0 auto;min-width:0}
-.modal:has(.agent-edit-form) .agent-edit-form>.modalactions{position:sticky;bottom:-20px;z-index:4;background:rgba(255,255,255,.97);padding:12px 0 max(8px,env(safe-area-inset-bottom));border-top:1px solid #e6e9ee;flex:0 0 auto}
-@media(max-width:700px){.modal:has(.agent-edit-form) .agent-edit-form{padding:10px!important}.modal:has(.agent-edit-form) .agent-edit-tabs{gap:5px}}
-
-/* Transactions: compact, aligned columns with less visual clutter. */
-.transaction-list-panel{padding:8px!important;overflow:hidden}
-.transaction-list-panel .tablewrap{overflow-x:auto;overscroll-behavior-x:contain}
-.transaction-list-table{width:100%;min-width:1280px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:11px;line-height:1.25}
-.transaction-list-table thead th{position:sticky;top:0;z-index:2;background:#f5f7fa;color:#52617a;font-size:10px;font-weight:700;letter-spacing:.01em;padding:9px 7px!important;border-bottom:1px solid #dce3ed;white-space:normal}
-.transaction-list-table tbody td{padding:8px 7px!important;vertical-align:middle;border-bottom:1px solid #e7ebf1;overflow-wrap:anywhere}
-.transaction-list-table tbody tr:last-child td{border-bottom:0}
-.transaction-list-table tbody tr:hover td{background:#f8fafc}
-.transaction-list-table th:nth-child(1),.transaction-list-table td:nth-child(1){width:72px;font-variant-numeric:tabular-nums}
-.transaction-list-table th:nth-child(2),.transaction-list-table td:nth-child(2){width:88px}
-.transaction-list-table th:nth-child(3),.transaction-list-table td:nth-child(3){width:126px}
-.transaction-list-table th:nth-child(4),.transaction-list-table td:nth-child(4){width:175px}
-.transaction-list-table th:nth-child(5),.transaction-list-table td:nth-child(5){width:94px}
-.transaction-list-table th:nth-child(6),.transaction-list-table td:nth-child(6){width:100px}
-.transaction-list-table th:nth-child(7),.transaction-list-table td:nth-child(7){width:112px}
-.transaction-list-table th:nth-child(8),.transaction-list-table td:nth-child(8){width:124px}
-.transaction-list-table th:nth-child(9),.transaction-list-table td:nth-child(9){width:100px}
-.transaction-list-table th:nth-child(10),.transaction-list-table td:nth-child(10){width:96px}
-.transaction-list-table th:nth-child(11),.transaction-list-table td:nth-child(11){width:88px}
-.transaction-list-table th:nth-child(12),.transaction-list-table td:nth-child(12){width:66px}
-.transaction-list-table th:nth-child(13),.transaction-list-table td:nth-child(13){width:220px}
-.transaction-list-table td:nth-child(1),.transaction-list-table td:nth-child(6),.transaction-list-table td:nth-child(7),.transaction-list-table td:nth-child(8),.transaction-list-table td:nth-child(9),.transaction-list-table td:nth-child(10){font-variant-numeric:tabular-nums;white-space:nowrap}
-.transaction-list-table td:nth-child(2) .textbutton{font-weight:700;white-space:nowrap}
-.transaction-list-table td:nth-child(3)>.textbutton{display:-webkit-box;max-width:100%;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;text-align:left;line-height:1.25!important;white-space:normal;font-weight:600;color:#344054}
-.transaction-list-table td:nth-child(4){display:table-cell}
-.transaction-list-table td:nth-child(4){line-height:1.3}
-.transaction-list-table td:nth-child(5){color:#52617a;font-size:10px}
-.transaction-list-table td select{width:100%;max-width:88px;box-sizing:border-box;padding:5px 5px!important;min-height:28px!important;height:28px;font-size:10px!important;border-radius:6px}
-.transaction-list-table .status{display:inline-flex;align-items:center;justify-content:center;min-width:30px;padding:3px 5px;border-radius:5px;background:#f1f5f9;color:#52617a;font-size:9px;font-weight:700}
-.transaction-row-actions{display:flex;flex-direction:column;align-items:stretch;gap:5px!important;min-width:0!important;max-width:none!important}
-.transaction-row-actions>div{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:4px!important}
-.transaction-row-actions button{display:inline-flex;justify-content:center;align-items:center;gap:3px;min-width:0;min-height:25px!important;padding:4px 5px!important;border:1px solid #e1e7ef!important;border-radius:5px!important;background:#fff;color:#8a6b36!important;font-size:10px!important;line-height:1.15!important;text-align:center;white-space:normal!important;overflow-wrap:anywhere}
-.transaction-row-actions button:hover{background:#f8f5ef!important;border-color:#cdbb98!important}
-.transaction-row-actions button.primary{background:#9e8556!important;color:#fff!important;border-color:#9e8556!important}
-.transaction-row-actions button.danger{color:#a34437!important}
-.transaction-list-table .empty{padding:30px 12px}
-@media(max-width:900px){
- .transaction-list-panel{padding:5px!important}
- .transaction-list-table{min-width:1280px}
- .transaction-list-table thead th,.transaction-list-table tbody td{padding:7px 6px!important}
-}
-
-
-/* App-wide mobile-first usability pass v1.14.
-   Keep all workspaces usable on phones without changing desktop behavior. */
-html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; scroll-padding-top:76px; }
-body{ overflow-x:hidden; }
-#root,.app,main,.content{min-width:0;max-width:100%}
-main{min-width:0}
-.content>*{min-width:0;max-width:100%}
-button,a,[role="button"],input[type="checkbox"],input[type="radio"]{touch-action:manipulation}
-button,.primary,.secondary,.logout,.nav,.iconbtn{ -webkit-tap-highlight-color:transparent; }
-input,select,textarea{min-width:0;max-width:100%;font-size:16px}
-textarea{width:100%;resize:vertical}
-img,video,canvas,iframe{max-width:100%}
-.tablewrap,.table-wrap,.table-scroll,.table-responsive{width:100%;max-width:100%;overflow-x:auto!important;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
-table{max-width:none}
-.pagehead,.toolbar,.transaction-toolbar,.listing-search-toolbar,.trade-submission-search,.modalactions,.modal-actions,.paneltitle{min-width:0;flex-wrap:wrap}
-.pagehead>* ,.toolbar>* ,.modalactions>*{min-width:0;max-width:100%}
-.grid4,.grid3,.grid2,.two,.reportgrid,.settingsgrid,.shortcutgrid,.formgrid,.tx-grid,.tx-people-fields,.cheque-format-top,.cheque-format-body{min-width:0}
-.grid4>*,.grid3>*,.grid2>*,.two>*,.reportgrid>*,.settingsgrid>*,.shortcutgrid>*,.formgrid>*,.tx-grid>*{min-width:0}
-.card,.panel,.tablewrap,.modal,.modalhead,.modal form,.modalbody,.tx-editor,.content section,.content article{min-width:0}
-@media(max-width:900px){
-  .content{padding:22px 18px 36px}
-  .top{padding-inline:18px}
-  .grid4{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .grid3,.reportgrid,.settingsgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .two{grid-template-columns:minmax(0,1fr)}
-  .formgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .pagehead{gap:12px;flex-wrap:wrap}
-  .pagehead h1{font-size:clamp(21px,3vw,27px)}
-  .modal{max-height:calc(100dvh - 24px);overflow-y:auto}
-  .overlay{align-items:start;overflow-y:auto;overscroll-behavior:contain;padding:12px}
-  .modalhead{position:sticky;top:0;z-index:8}
-  .modal form{padding:16px}
-}
-@media(max-width:760px){
-  html{scroll-padding-top:64px}
-  main{margin-left:0!important;width:100%!important}
-  .sidebar{max-width:min(84vw,320px);width:min(84vw,320px);padding-bottom:env(safe-area-inset-bottom);transform:translateX(-105%)}
-  .sidebar.open{transform:translateX(0)}
-  .sidebar.open:after{left:min(84vw,320px)}
-  .brand{padding:14px 15px;min-height:76px;height:auto}
-  .brand strong{white-space:normal;line-height:1.35}
-  .sidebar nav{padding:10px}
-  .nav{min-height:44px;font-size:13px;padding:11px 12px}
-  .top{height:64px;min-height:64px;padding:0 14px;gap:10px}
-  .top strong{font-size:13px}
-  .top span{font-size:10px}
-  .hamb{width:42px;height:42px;display:grid;place-items:center;flex:0 0 42px}
-  .content{padding:18px 14px calc(30px + env(safe-area-inset-bottom))}
-  .pagehead{align-items:stretch;flex-direction:column;margin-bottom:18px}
-  .pagehead>button,.pagehead>.primary,.pagehead>.secondary{align-self:flex-start}
-  .toolbar{flex-wrap:wrap}
-  .toolbar .search{flex:1 1 100%;max-width:none}
-  .search{max-width:100%}
-  .modal{width:100%;max-width:100%;border-radius:14px}
-  .overlay{padding:8px;place-items:start center}
-  .modalhead{padding:14px 15px}
-  .modalhead h2{font-size:15px}
-  .modal form{padding:13px}
-  .modalactions{display:flex;flex-wrap:wrap;gap:8px}
-  .modalactions>button{flex:1 1 130px;justify-content:center}
-  .primary,.secondary,.logout{min-height:42px}
-  .iconbtn{min-width:40px;min-height:40px;display:grid;place-items:center}
-  .formgrid{grid-template-columns:minmax(0,1fr)}
-  .reportgrid,.settingsgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .steps{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .tablewrap{border-radius:10px}
-  .tablewrap table{min-width:760px}
-  .transaction-list-panel .tablewrap{max-width:calc(100vw - 36px)}
-  .transaction-list-table{min-width:1030px}
-  .transaction-row-actions button{min-height:32px!important}
-  .tx-modal{width:100%;max-width:100%;max-height:calc(100dvh - 16px)!important}
-  .tx-modal>.tx-editor{max-height:calc(100dvh - 84px);overflow-y:auto;overscroll-behavior:contain}
-  .tx-modal>.modalhead{padding:12px 14px}
-  .agent-edit-tabs button{flex:1 1 100px;min-height:40px}
-  .cheque-format-top{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .cheque-format-body{grid-template-columns:minmax(0,1fr)}
-  .cheque-format-actions{border-left:0;border-top:1px solid #e0e5eb;padding:12px 0 0}
-  .agent-document-sidebar{max-height:32dvh}
-}
-@media(max-width:520px){
-  .content{padding:15px 11px calc(26px + env(safe-area-inset-bottom))}
-  .top{padding:0 10px}
-  .top strong{font-size:12px}
-  .top span{max-width:45vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .logout{padding:7px 9px;font-size:11px}
-  .grid4,.grid3,.reportgrid,.settingsgrid,.shortcutgrid,.review,.wizard,.steps{grid-template-columns:minmax(0,1fr)}
-  .grid2{grid-template-columns:minmax(0,1fr)!important}
-  .card,.panel{padding:14px}
-  .metric{font-size:22px;overflow-wrap:anywhere}
-  .pagehead h1{font-size:22px;line-height:1.2}
-  .pagehead p{font-size:12px;line-height:1.45}
-  .actions{grid-template-columns:minmax(0,1fr)}
-  .shortcutgrid button{min-height:46px}
-  .toolbar>button,.pagehead button{max-width:100%;white-space:normal}
-  .formgrid{grid-template-columns:minmax(0,1fr)}
-  .modal form{padding:11px}
-  .modalactions{position:sticky;bottom:0;background:#fff;padding:10px 0 max(8px,env(safe-area-inset-bottom));z-index:7}
-  .modalactions>button{flex:1 1 100%;width:100%}
-  .modal .tx-grid,.tx-grid{grid-template-columns:minmax(0,1fr)!important}
-  .steps{gap:6px}
-  .tablewrap table{min-width:700px}
-  .transaction-list-panel .tablewrap{max-width:calc(100vw - 26px)}
-  .cheque-format-top{grid-template-columns:minmax(0,1fr)}
-  .cheque-position-head,.cheque-position-row{grid-template-columns:minmax(0,1fr) 64px 64px;gap:5px}
-  .cheque-position-row>label{text-align:left;font-size:11px}
-  .login{padding:12px}
-  .loginbox{padding:24px 17px;border-radius:16px}
-  .loginbox h1{font-size:20px}
-  .notice{align-items:flex-start}
-}
-@media(max-width:360px){
-  .content{padding-inline:8px}
-  .top{gap:5px}
-  .top span{display:none}
-  .brand{gap:8px}
-  .brand img{width:38px;height:42px}
-  .transaction-list-panel .tablewrap{max-width:calc(100vw - 20px)}
-  .modalhead{padding:11px}
-  .modalhead h2{font-size:14px}
-}
-@media(hover:none){
-  .primary:hover,.actions button:hover,.report:hover,.setting:hover{transform:none;box-shadow:none}
-}
-
-
-/* Comprehensive phone layout override v1.15.
-   This deliberately overrides older page-specific desktop widths and inline grid layouts. */
-*,*::before,*::after{box-sizing:border-box}
-html,body,#root{width:100%;max-width:100%;min-height:100%;margin:0}
-body{overflow-x:clip}
-@media(max-width:760px){
-  .app{display:block!important;width:100%!important;max-width:100vw!important;overflow-x:clip}
-  main{display:block!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;min-width:0!important}
-  .content{width:100%!important;max-width:100%!important;min-width:0!important;margin:0!important;overflow-x:clip!important}
-  .content>div,.content>section,.content>article,.content>.panel,.content>.card{width:100%;max-width:100%;min-width:0}
-  .top{width:100%;max-width:100%;gap:8px;padding-inline:10px!important}
-  .top>div:first-of-type{flex:1 1 auto;min-width:0;overflow:hidden}
-  .top>div:first-of-type strong,.top>div:first-of-type span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .top .logout{flex:0 0 auto;margin-left:0!important;gap:5px;padding:7px 8px!important;white-space:nowrap}
-  .top .logout svg{width:15px;height:15px;flex:0 0 15px}
-  .top .profile-trigger{margin-left:0!important}
-  .sidebar{position:fixed!important;top:0!important;bottom:0!important;left:0!important;right:auto!important;width:min(86vw,320px)!important;max-width:86vw!important;transform:translateX(-105%)!important;z-index:1000!important;transition:transform .22s ease!important}
-  .sidebar.open{transform:translateX(0)!important}
-  .sidebar.open:after{position:fixed!important;left:100%!important;right:auto!important;top:0!important;bottom:0!important;width:100vw!important;background:rgba(5,15,30,.5)!important;content:""!important;z-index:-1!important}
-  .sidebar nav{flex:1 1 auto;min-height:0;overflow-y:auto!important;-webkit-overflow-scrolling:touch}
-  .content .grid4,.content .grid3,.content .grid2,.content .two,.content .reportgrid,.content .settingsgrid,.content .shortcutgrid,.content .formgrid,.content .review,.content .cheque-format-top,.content .cheque-format-body,.content .tx-grid,.content .tx-person-fields,.content .transaction-summary-grid,.content .summary-grid,.content .stats-grid,.content .dashboard-grid{
-    grid-template-columns:minmax(0,1fr)!important;
+  async function createEvent(event) {
+    event.preventDefault();
+    setError(""); setMessage("");
+    if (!companyId || !supabase) return;
+    if (adminMode && !selectedAgentId) { setError("Select the agent this open house is assigned to."); return; }
+    if (!MAPS_KEY || !geocoderRef.current) { setError("Google Maps must be configured before saving an open house."); return; }
+    setSaving(true);
+    try {
+      const dates = dateRows.filter(row => row.event_date);
+      if (dates.length !== 1) throw new Error("Save one date when editing an existing open house.");
+      const row = dates[0];
+      if (editingEventId) {
+        const current = events.find(item => item.id === editingEventId);
+        if (!current) throw new Error("This open house could not be found. Refresh and try again.");
+        const addressChanged = eventForm.property_address.trim().toLowerCase() !== String(current.property_address || "").trim().toLowerCase();
+        const point = addressChanged ? await geocodeAddress(eventForm.property_address) : { lat: current.property_lat, lng: current.property_lng };
+        const assignedAgentId = adminMode ? selectedAgentId : current.agent_id;
+        const { data, error: updateError } = await supabase.from("dv_open_house_events").update({
+          agent_id: assignedAgentId || null,
+          property_address: eventForm.property_address.trim(),
+          property_lat: point.lat,
+          property_lng: point.lng,
+          event_date: row.event_date,
+          start_time: row.start_time || null,
+          end_time: row.end_time || null,
+          notes: eventForm.notes.trim() || null
+        }).eq("id", editingEventId).eq("company_id", companyId).select("*").single();
+        if (updateError) throw updateError;
+        const assignedAgent = agents.find(agent => agent.id === assignedAgentId);
+        const assignedName = assignedAgent?.name || [assignedAgent?.first_name, assignedAgent?.last_name].filter(Boolean).join(" ") || agentName;
+        setEvents(prev => prev.map(item => item.id === data.id ? { ...item, ...data, agent_name: assignedName || item.agent_name || "Agent" } : item));
+        setMessage("Open house updated. Its existing sign checklist, installation records and photos were kept.");
+      } else {
+        if (adminMode && !selectedAgentId) throw new Error("Select the agent this open house is being created for.");
+        const point = await geocodeAddress(eventForm.property_address);
+        if (new Set(dates.map(item => item.event_date)).size !== dates.length) throw new Error("Each open house date must be unique.");
+        const assignedAgentId = adminMode ? selectedAgentId : (agentId || activeEvent?.agent_id || null);
+        const assignedAgent = agents.find(agent => agent.id === assignedAgentId);
+        const assignedName = assignedAgent?.name || [assignedAgent?.first_name, assignedAgent?.last_name].filter(Boolean).join(" ") || agentName;
+        const createdEvents = [];
+        for (const dateRow of dates) {
+          const { data, error: insertError } = await supabase.from("dv_open_house_events").insert({
+            company_id: companyId, agent_id: assignedAgentId, created_by: user.id,
+            property_address: eventForm.property_address.trim(), property_lat: point.lat, property_lng: point.lng,
+            event_date: dateRow.event_date, start_time: dateRow.start_time || null,
+            end_time: dateRow.end_time || null, notes: eventForm.notes.trim() || null
+          }).select("*").single();
+          if (insertError) throw insertError;
+          createdEvents.push({ ...data, agent_name: assignedName || "Agent" });
+          if (templateEventId && eventSigns.length) {
+            const copies = eventSigns.map((sign,index) => ({ company_id: companyId, event_id: data.id, sign_location_id: sign.sign_location_id, sequence: index + 1, status: "PLANNED" }));
+            const { error: copyError } = await supabase.from("dv_open_house_event_signs").insert(copies);
+            if (copyError) throw copyError;
+          }
+        }
+        setEvents(prev => [...createdEvents, ...prev]);
+        if (createdEvents.length) setActiveEventId(createdEvents[0].id);
+        setMessage(createdEvents.length + " open house date(s) saved. Each date has its own sign checklist.");
+      }
+      setEventForm({ property_address: "", start_time: "13:00", end_time: "16:00", notes: "" });
+      setDateRows([{ event_date: "", start_time: "13:00", end_time: "16:00" }]);
+      setTemplateEventId("");
+      setEditingEventId("");
+      setShowNewEvent(false);
+    } catch (e) { setError(errorText(e)); }
+    finally { setSaving(false); }
   }
-  .content .grid4>*,.content .grid3>*,.content .grid2>*,.content .two>*,.content .formgrid>*,.content .tx-grid>*{min-width:0!important;max-width:100%}
-  .content [style*="grid-template-columns"]{grid-template-columns:minmax(0,1fr)!important}
-  .content .pagehead{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:10px!important}
-  .content .pagehead>button,.content .pagehead>.primary,.content .pagehead>.secondary{align-self:flex-start;max-width:100%}
-  .content .toolbar,.content .transaction-toolbar,.content .listing-search-toolbar,.content .trade-submission-search{display:flex!important;flex-wrap:wrap!important;width:100%;max-width:100%;min-width:0}
-  .content .search{flex:1 1 100%!important;width:100%!important;max-width:100%!important;min-width:0!important}
-  .content .tablewrap,.content .table-wrap,.content .table-scroll,.content .table-responsive{display:block!important;width:100%!important;max-width:100%!important;overflow-x:auto!important;overscroll-behavior-x:contain!important;-webkit-overflow-scrolling:touch!important}
-  .content table{width:max-content!important;max-width:none!important}
-  .content table:not(.transaction-list-table){min-width:680px}
-  .content .transaction-list-table{min-width:1030px!important}
-  .content .transaction-list-panel{max-width:100%!important;width:100%!important}
-  .overlay{display:flex!important;align-items:flex-start!important;justify-content:center!important;overflow-y:auto!important;overflow-x:hidden!important;padding: max(8px,env(safe-area-inset-top)) 8px max(8px,env(safe-area-inset-bottom))!important}
-  .modal,.tx-modal{width:100%!important;max-width:100%!important;min-width:0!important;max-height:calc(100dvh - 16px)!important;margin:0!important;border-radius:12px!important;overflow-x:hidden!important;overflow-y:auto!important}
-  .modalhead,.tx-modal>.modalhead{position:sticky!important;top:0!important;z-index:20!important;padding:12px!important}
-  .modalhead h2{min-width:0;overflow-wrap:anywhere}
-  .modal form,.tx-editor,.modalbody{width:100%!important;max-width:100%!important;min-width:0!important;overflow-x:hidden!important}
-  .modalactions,.modal-actions{display:flex!important;flex-wrap:wrap!important;gap:8px!important}
-  .modalactions>button,.modal-actions>button{flex:1 1 130px!important;min-width:0!important;max-width:100%!important;justify-content:center!important;white-space:normal!important}
-  input,select,textarea{width:100%;max-width:100%;min-width:0!important;font-size:16px!important}
-  button{max-width:100%;white-space:normal;overflow-wrap:anywhere}
-  .tx-modal>.tx-editor{max-height:none!important;overflow-y:visible!important}
-  .agent-document-layout,.agent-document-workspace,.trade-document-layout{grid-template-columns:minmax(0,1fr)!important;height:auto!important;min-height:0!important}
-  .agent-document-sidebar{max-height:30dvh!important;overflow:auto!important;border-right:0!important;border-bottom:1px solid var(--line)!important}
-}
-@media(max-width:520px){
-  .top{height:auto!important;min-height:60px!important;padding:8px!important;flex-wrap:wrap!important}
-  .top .hamb{flex:0 0 40px!important}
-  .top .logout{font-size:11px!important;min-width:38px!important;justify-content:center!important;padding:8px!important}
-  .top .logout svg{width:18px!important;height:18px!important}
-  .top>div:first-of-type{flex:1 1 calc(100% - 60px)!important}
-  .content{padding:12px 9px max(22px,env(safe-area-inset-bottom))!important}
-  .content .card,.content .panel{padding:12px!important;border-radius:10px!important}
-  .content .metric{font-size:22px!important;overflow-wrap:anywhere}
-  .modal form{padding:10px!important}
-  .modalhead{padding:10px!important}
-  .modalactions>button,.modal-actions>button{flex-basis:100%!important;width:100%!important}
-  .transaction-list-panel .tablewrap{max-width:calc(100vw - 22px)!important}
-  .cheque-position-head,.cheque-position-row{grid-template-columns:minmax(0,1fr) 58px 58px!important}
-  .agent-edit-tabs{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}
+
+  function openEditEvent() {
+    if (!activeEvent) return;
+    setEditingEventId(activeEvent.id);
+    setTemplateEventId("");
+    setSelectedAgentId(activeEvent.agent_id || "");
+    setEventForm({
+      property_address: activeEvent.property_address || "",
+      start_time: activeEvent.start_time?.slice(0,5) || "13:00",
+      end_time: activeEvent.end_time?.slice(0,5) || "16:00",
+      notes: activeEvent.notes || ""
+    });
+    setDateRows([{ event_date: activeEvent.event_date || "", start_time: activeEvent.start_time?.slice(0,5) || "13:00", end_time: activeEvent.end_time?.slice(0,5) || "16:00" }]);
+    setShowNewEvent(true);
+    setError(""); setMessage("");
+  }
+
+  async function attachLocation(location) {
+    if (!activeEvent || !supabase) return;
+    if (eventSigns.some(item => item.sign_location_id === location.id)) { setMessage("That location is already on this open house plan."); return; }
+    setSaving(true); setError("");
+    try {
+      const related = events.filter(event => event.company_id === activeEvent.company_id &&
+        String(event.property_address || "").trim().toLowerCase() === String(activeEvent.property_address || "").trim().toLowerCase() &&
+        (event.agent_id || null) === (activeEvent.agent_id || null));
+      const targets = related.length ? related : [activeEvent];
+      const { data: existingRows, error: existingError } = await supabase.from("dv_open_house_event_signs").select("event_id").in("event_id", targets.map(event => event.id)).eq("sign_location_id", location.id);
+      if (existingError) throw existingError;
+      const alreadyAdded = new Set((existingRows || []).map(row => row.event_id));
+      const rows = targets.filter(event => !alreadyAdded.has(event.id)).map(event => ({ company_id: companyId, event_id: event.id, sign_location_id: location.id, sequence: event.id === activeEvent.id ? eventSigns.length + 1 : 999, status: "PLANNED" }));
+      if (!rows.length) { setMessage("This sign location is already included in all dates for this property."); return; }
+      const { data, error: insertError } = await supabase.from("dv_open_house_event_signs").insert(rows).select("*,location:dv_open_house_sign_locations(*)");
+      if (insertError) throw insertError;
+      const current = (data || []).find(row => row.event_id === activeEvent.id);
+      if (current) setEventSigns(prev => [...prev, current]);
+      setMessage("Sign location added to the checklist for every scheduled date at this property.");
+    } catch (e) { setError(errorText(e)); }
+    finally { setSaving(false); }
+  }
+
+  async function savePendingPoint() {
+    if (!pendingPoint || !activeEvent || !supabase) return;
+    setSaving(true); setError("");
+    try {
+      const { data: location, error: locationError } = await supabase.from("dv_open_house_sign_locations").insert({
+        company_id: companyId, created_by: user.id, label: pointForm.label.trim() || "Directional sign",
+        address: pendingPoint.address, latitude: pendingPoint.lat, longitude: pendingPoint.lng,
+        direction: pointForm.direction.trim() || null, notes: pointForm.notes.trim() || null, active: true
+      }).select("*").single();
+      if (locationError) throw locationError;
+      setLocations(prev => [location, ...prev]);
+      setPendingPoint(null);
+      await attachLocation(location);
+    } catch (e) { setError(errorText(e)); setSaving(false); }
+  }
+
+  async function suggestIntersections() {
+    if (!activeEvent || !propertyPoint || !window.google) return;
+    setSuggesting(true); setError(""); setSuggestions([]);
+    try {
+      const { Place } = await window.google.maps.importLibrary("places");
+      const { places = [] } = await Place.searchByText({
+        textQuery: "major road intersections near " + activeEvent.property_address,
+        fields: ["id", "displayName", "formattedAddress", "location"],
+        locationBias: { center: propertyPoint, radius: 5000 },
+        maxResultCount: 10,
+        language: "en",
+        region: "ca"
+      });
+      const seen = new Set();
+      const options = places.map(place => {
+        const location = place.location;
+        const point = {
+          lat: typeof location?.lat === "function" ? location.lat() : Number(location?.lat),
+          lng: typeof location?.lng === "function" ? location.lng() : Number(location?.lng)
+        };
+        const name = typeof place.displayName === "string" ? place.displayName : place.displayName?.text || "Suggested intersection";
+        return { id: place.id || name + ":" + point.lat + ":" + point.lng, name, address: place.formattedAddress || name, ...point, distance: distanceKm(propertyPoint, point) };
+      }).filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng) && item.distance > .08 && item.distance <= 5)
+        .filter(item => { if (seen.has(item.id)) return false; seen.add(item.id); return true; })
+        .filter(item => !locations.some(saved => distanceKm(item, { lat: Number(saved.latitude), lng: Number(saved.longitude) }) < .06))
+        .slice(0, 10);
+      setSuggestions(options);
+      if (!options.length) setMessage("No new nearby suggestions. Check your saved sign locations or add a pin manually.");
+    } catch (e) {
+      setError("Google Maps could not suggest nearby places: " + errorText(e) + " You can still tap the map to place signs manually.");
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  async function addSuggestion(item) {
+    if (!activeEvent || !supabase) return;
+    setSaving(true); setError("");
+    try {
+      const { data: location, error: insertError } = await supabase.from("dv_open_house_sign_locations").insert({
+        company_id: companyId, created_by: user.id, label: "Suggested intersection",
+        address: item.address, latitude: item.lat, longitude: item.lng, direction: item.name, active: true
+      }).select("*").single();
+      if (insertError) throw insertError;
+      setLocations(prev => [location, ...prev]);
+      setSuggestions(prev => prev.filter(x => x.id !== item.id));
+      await attachLocation(location);
+    } catch (e) { setError(errorText(e)); setSaving(false); }
+  }
+
+  function consecutiveEventIds(event) {
+    const sameProperty = events.filter(candidate =>
+      candidate.company_id === event.company_id &&
+      String(candidate.property_address || "").trim().toLowerCase() === String(event.property_address || "").trim().toLowerCase() &&
+      (candidate.agent_id || null) === (event.agent_id || null)
+    ).sort((a,b) => String(a.event_date).localeCompare(String(b.event_date)));
+    const index = sameProperty.findIndex(candidate => candidate.id === event.id);
+    if (index < 0) return [event.id];
+    const dayNumber = value => Math.floor(Date.parse(value + "T00:00:00Z") / 86400000);
+    let first = index, last = index;
+    while (first > 0 && dayNumber(sameProperty[first].event_date) - dayNumber(sameProperty[first-1].event_date) === 1) first--;
+    while (last < sameProperty.length - 1 && dayNumber(sameProperty[last+1].event_date) - dayNumber(sameProperty[last].event_date) === 1) last++;
+    return sameProperty.slice(first, last + 1).map(candidate => candidate.id);
+  }
+
+  async function updateSignStatus(item, status) {
+    if (!supabase) return;
+    setError("");
+    const now = new Date().toISOString();
+    let collectionNote = "";
+    if (["LOST", "DAMAGED"].includes(status)) {
+      if (!window.confirm(`Mark this sign as ${status.toLowerCase()}? The agent inventory will be updated automatically.`)) return;
+      collectionNote = window.prompt("Optional note about this sign:", "") || "";
+    }
+    const patch = { status, updated_at: now };
+    if (["COLLECTED", "LOST", "DAMAGED"].includes(status)) patch.collection_note = collectionNote;
+    if (status === "INSTALLED") { patch.installed_at = now; patch.installed_by = user.id; patch.collected_at = null; patch.collected_by = null; }
+    if (["COLLECTED", "LOST", "DAMAGED"].includes(status)) { patch.collected_at = now; patch.collected_by = user.id; }
+    if (status === "PLANNED") { patch.installed_at = null; patch.installed_by = null; patch.collected_at = null; patch.collected_by = null; }
+    const sharedEventIds = activeEvent ? consecutiveEventIds(activeEvent) : [activeEventId];
+    const { data: siblingRows, error: siblingError } = await supabase.from("dv_open_house_event_signs")
+      .select("id").in("event_id", sharedEventIds).eq("sign_location_id", item.sign_location_id);
+    if (siblingError) { setError(errorText(siblingError)); return; }
+    const rowIds = (siblingRows || []).map(row => row.id);
+    const { error: updateError } = await supabase.from("dv_open_house_event_signs").update(patch).in("id", rowIds);
+    if (updateError) { setError(errorText(updateError)); return; }
+    const { data, error: refreshError } = await supabase.from("dv_open_house_event_signs")
+      .select("*,location:dv_open_house_sign_locations(*)").eq("id", item.id).single();
+    if (refreshError) { setError(errorText(refreshError)); return; }
+    setEventSigns(prev => prev.map(row => row.id === item.id ? data : row));
+    setMessage(sharedEventIds.length > 1
+      ? (status === "INSTALLED" ? "Sign marked installed for both consecutive open house days." : status === "COLLECTED" ? "Sign marked collected after the final open house day." : "Sign status reset for both consecutive open house days.")
+      : (status === "INSTALLED" ? "Sign marked as installed." : status === "COLLECTED" ? "Sign marked as collected." : "Sign returned to the plan."));
+  }
+
+  async function removeSign(item) {
+    if (!window.confirm("Remove this sign from the open house plan? The saved location will remain in the shared location library.")) return;
+    const { error: deleteError } = await supabase.from("dv_open_house_event_signs").delete().eq("id", item.id);
+    if (deleteError) setError(errorText(deleteError));
+    else setEventSigns(prev => prev.filter(row => row.id !== item.id));
+  }
+
+  async function uploadPhoto(item, file) {
+    if (!file || !supabase) return;
+    if (!file.type.startsWith("image/")) { setError("Please choose an image file."); return; }
+    if (file.size > 8 * 1024 * 1024) { setError("Photo must be 8 MB or smaller."); return; }
+    setPhotoBusyId(item.id); setError("");
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      const path = companyId + "/" + activeEvent.id + "/" + item.id + "-" + Date.now() + "." + ext;
+      const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(path, file, { upsert: true, contentType: file.type });
+      if (uploadError) throw uploadError;
+      const photoEventIds = consecutiveEventIds(activeEvent);
+      const { data: photoRows, error: photoRowsError } = await supabase.from("dv_open_house_event_signs")
+        .select("id").in("event_id", photoEventIds).eq("sign_location_id", item.sign_location_id);
+      if (photoRowsError) throw photoRowsError;
+      const { error: updateError } = await supabase.from("dv_open_house_event_signs")
+        .update({ photo_path: path, updated_at: new Date().toISOString() }).in("id", (photoRows || []).map(row => row.id));
+      if (updateError) throw updateError;
+      const { data: signed } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(path, 3600);
+      setEventSigns(prev => prev.map(row => row.id === item.id ? { ...row, photo_path: path, photo_url: signed?.signedUrl || "" } : row));
+      setMessage("Sign photo saved for this open house date.");
+    } catch (e) { setError(errorText(e)); }
+    finally { setPhotoBusyId(""); }
+  }
+
+  async function openPhoto(path) {
+    if (!path || !supabase) return;
+    const { data, error: urlError } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(path, 300);
+    if (urlError) { setError(errorText(urlError)); return; }
+    if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
+  function openDirections() {
+    if (!activeEvent || !eventSigns.length) return;
+    const ordered = [...eventSigns].sort((a, b) => a.sequence - b.sequence);
+    const origin = ordered[0].location.address;
+    const destination = activeEvent.property_address;
+    const waypoints = ordered.slice(1, 10).map(item => item.location.address);
+    const url = "https://www.google.com/maps/dir/?api=1&origin=" + encodeURIComponent(origin) + "&destination=" + encodeURIComponent(destination) + (waypoints.length ? "&waypoints=" + encodeURIComponent("optimize:true|" + waypoints.join("|")) : "") + "&travelmode=driving";
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  async function drawRoute() {
+    if (!activeEvent || !propertyPoint || !eventSigns.length || !window.google) return;
+    setRouteBusy(true);
+    setError("");
+    try {
+      const { Route: GoogleRoute } = await window.google.maps.importLibrary("routes");
+      const ordered = [...eventSigns].sort((a, b) => a.sequence - b.sequence);
+      const origin = { lat: Number(ordered[0].location.latitude), lng: Number(ordered[0].location.longitude) };
+      const intermediates = ordered.slice(1, 10).map(item => ({
+        location: { lat: Number(item.location.latitude), lng: Number(item.location.longitude) }
+      }));
+      const { routes = [] } = await GoogleRoute.computeRoutes({
+        origin,
+        destination: propertyPoint,
+        intermediates,
+        optimizeWaypointOrder: true,
+        travelMode: "DRIVING",
+        fields: ["path", "optimizedIntermediateWaypointIndices"]
+      });
+      if (!routes.length) throw new Error("Google Maps could not calculate a driving route for these sign locations.");
+      routePolylinesRef.current.forEach(polyline => polyline.setMap(null));
+      routePolylinesRef.current = routes[0].createPolylines();
+      routePolylinesRef.current.forEach(polyline => polyline.setMap(mapRef.current));
+      setMessage("Driving route displayed on the map. Use Get route for turn-by-turn navigation.");
+    } catch (e) { setError(errorText(e)); }
+    finally { setRouteBusy(false); }
+  }
+
+  const statusLabel = status => ({ INSTALLED: "Installed", COLLECTED: "Collected", LOST: "Lost", DAMAGED: "Damaged", PLANNED: "To install" }[status] || "To install");
+  if (loading) return <div className="oh-loading"><LoaderCircle className="oh-spin"/> Loading Open House Signs…</div>;
+
+  return <div className="oh-wrap">
+    <div className="oh-field-inventory-toggle"><button type="button" className="oh-primary" onClick={() => setShowInventory(v => !v)}><Signpost size={16}/>{showInventory ? "Close sign inventory" : "Sign inventory · Report lost or damaged"}</button></div>
+    <div className="oh-heading">
+      <div><div className="oh-brand-lockup"><img src="/dv-logo.svg" alt="Dream Valley Realty logo"/><div><div className="oh-eyebrow">DREAM VALLEY REALTY · FIELD TOOLS</div><h1>Open House Signs</h1><p>Plan sign locations, remember where they were placed, and reuse them at future open houses.</p></div></div></div>
+      <button className="oh-secondary" onClick={() => setShowInventory(v => !v)}><Signpost size={15}/>{showInventory ? "Close inventory" : "Sign inventory"}</button><button className="oh-primary" onClick={() => { setTemplateEventId(""); setEventForm({ property_address: "", start_time: "13:00", end_time: "16:00", notes: "" }); setDateRows([{ event_date: "", start_time: "13:00", end_time: "16:00" }]); setShowNewEvent(true); setError(""); }}><Plus size={16}/> New Open House</button>
+    </div>
+    {error && <div className="oh-alert oh-alert-error"><AlertTriangle size={17}/><span>{error}</span><button onClick={() => setError("")}><X size={15}/></button></div>}
+    {message && <div className="oh-alert oh-alert-ok"><CheckCircle2 size={17}/><span>{message}</span><button onClick={() => setMessage("")}><X size={15}/></button></div>}
+    {!MAPS_KEY && <div className="oh-key-warning"><AlertTriangle size={18}/><div><strong>Google Maps API key required</strong><p>Add <code>VITE_GOOGLE_MAPS_API_KEY</code> to the Railway environment and enable Maps JavaScript API, Places API and Geocoding API in Google Cloud. The map and address lookup will activate after redeployment.</p></div></div>}
+
+    {showInventory && <section className="oh-inventory-panel">
+      <div className="oh-section-head"><div><h3>Agent sign inventory</h3><p>Each agent owns their own signs. Transfers move ownership and update both agents’ totals. Lost and damaged signs are excluded from available stock.</p></div><button type="button" className="oh-secondary" onClick={loadSignInventory} disabled={inventoryLoading}><RefreshCw size={14}/> Refresh</button></div>
+      {inventoryLoading ? <div className="oh-empty-list">Loading sign inventory…</div> : <>
+        {adminMode && <div className="oh-inventory-agent-list">{agents.map(agent => {
+          const row = inventoryRows.find(item => item.agent_id === agent.id);
+          const name = agent.name || [agent.first_name, agent.last_name].filter(Boolean).join(" ") || agent.email || "Agent";
+          return <button type="button" key={agent.id} className={"oh-inventory-agent " + (inventoryAgentId === agent.id ? "selected" : "")} onClick={() => {
+            setInventoryAgentId(agent.id);
+            setInventoryForm({ total_signs: String(row?.total_signs ?? 0), lost_signs: String(row?.lost_signs ?? 0), damaged_signs: String(row?.damaged_signs ?? 0), notes: row?.notes || "" });
+          }}><strong>{name}</strong><span>{row ? row.total_signs + " owned · " + (row.total_signs-(row.lost_signs||0)-row.damaged_signs) + " available · " + (row.lost_signs||0) + " lost · " + row.damaged_signs + " damaged" : "No inventory recorded"}</span></button>;
+        })}</div>}
+        {(!adminMode || inventoryAgentId) ? <form className="oh-inventory-form" onSubmit={saveSignInventory}>
+          <div className="oh-inventory-form-title"><strong>{adminMode ? (inventoryAgent?.name || [inventoryAgent?.first_name, inventoryAgent?.last_name].filter(Boolean).join(" ") || inventoryAgent?.email || "Selected agent") : "My sign inventory"}</strong><span>{adminMode ? "Management view" : "Your assigned signs"}</span></div>
+          <div className="oh-inventory-fields">
+            <label>Total signs<input type="number" min="0" step="1" required value={inventoryForm.total_signs} onChange={e => setInventoryForm(v => ({...v,total_signs:e.target.value}))}/></label>
+            <label>Lost signs<input type="number" min="0" step="1" required value={inventoryForm.lost_signs} onChange={e => setInventoryForm(v => ({...v,lost_signs:e.target.value}))}/></label>
+            <label>Damaged signs<input type="number" min="0" step="1" required value={inventoryForm.damaged_signs} onChange={e => setInventoryForm(v => ({...v,damaged_signs:e.target.value}))}/></label>
+            <div className="oh-inventory-available"><span>Serviceable signs</span><strong>{Math.max(0, (Number.parseInt(inventoryForm.total_signs,10)||0) - (Number.parseInt(inventoryForm.lost_signs,10)||0) - (Number.parseInt(inventoryForm.damaged_signs,10)||0))}</strong></div>
+          </div>
+          <label className="oh-inventory-notes">Notes<textarea value={inventoryForm.notes} onChange={e => setInventoryForm(v => ({...v,notes:e.target.value}))} placeholder="Storage location, missing parts, sign condition…"/></label>
+          <div className="oh-card-actions"><button type="submit" className="oh-primary" disabled={saving}>{saving ? "Saving…" : "Save inventory"}</button></div>
+        </form> : <div className="oh-empty-list">Select an agent to view or update their sign inventory.</div>}
+        {adminMode && inventoryAgentId && <>
+          <form className="oh-inventory-form oh-transfer-form" onSubmit={transferAgentSigns}>
+            <div className="oh-inventory-form-title"><strong>Transfer signs to another agent</strong><span>Ownership moves from the selected agent to the recipient.</span></div>
+            <div className="oh-inventory-fields">
+              <label>Recipient<select required value={transferForm.to_agent_id} onChange={e => setTransferForm(v => ({...v,to_agent_id:e.target.value}))}><option value="">Select agent</option>{agents.filter(agent => agent.id !== inventoryAgentId).map(agent => <option key={agent.id} value={agent.id}>{agent.name || [agent.first_name,agent.last_name].filter(Boolean).join(" ") || agent.email}</option>)}</select></label>
+              <label>Number of signs<input type="number" min="1" step="1" required value={transferForm.quantity} onChange={e => setTransferForm(v => ({...v,quantity:e.target.value}))}/></label>
+              <label>Transfer note<input value={transferForm.notes} onChange={e => setTransferForm(v => ({...v,notes:e.target.value}))} placeholder="Optional"/></label>
+            </div>
+            <div className="oh-card-actions"><button type="submit" className="oh-primary" disabled={saving}>{saving ? "Transferring…" : "Record transfer"}</button></div>
+          </form>
+          <div className="oh-transfer-history"><strong>Recent transfers</strong>{inventoryTransfers.length ? inventoryTransfers.map(item => <div key={item.id}><span>{item.from_agent?.name || [item.from_agent?.first_name,item.from_agent?.last_name].filter(Boolean).join(" ") || "Agent"} → {item.to_agent?.name || [item.to_agent?.first_name,item.to_agent?.last_name].filter(Boolean).join(" ") || "Agent"}</span><b>{item.quantity} signs</b><small>{new Date(item.created_at).toLocaleDateString("en-CA")}{item.notes ? " · "+item.notes : ""}</small></div>) : <p>No transfers recorded yet.</p>}</div>
+        </>}
+      </>}
+    </section>}
+    <div className="oh-layout">
+      <aside className="oh-side">
+        <div className="oh-side-head"><div><strong>Open houses</strong><span>{groupedEvents.length} properties · {events.length} dates</span></div><div className="oh-side-head-actions"><button className="oh-icon-btn" title="Refresh" onClick={() => loadDirectories(companyId)}><RefreshCw size={15}/></button><button type="button" className="oh-primary oh-new-open-house" onClick={() => { setTemplateEventId(""); setEditingEventId(""); setEventForm({ property_address: "", start_time: "13:00", end_time: "16:00", notes: "" }); setDateRows([{ event_date: "", start_time: "13:00", end_time: "16:00" }]); setShowNewEvent(true); setError(""); }}><Plus size={14}/> New</button></div></div>
+        <div className="oh-search"><Search size={15}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search property or agent"/></div>
+        <div className="oh-event-list">
+          {groupedEvents.length ? groupedEvents.map(group => <div className="oh-address-group" key={group.address.toLowerCase()}>
+            <div className="oh-address-heading"><span className="oh-event-icon"><MapPin size={17}/></span><strong title={group.address}>{group.address}</strong><span className="oh-date-count">{group.events.length} {group.events.length === 1 ? "date" : "dates"}</span></div>
+            <div className="oh-address-dates">{group.events.map(event => <button key={event.id} className={"oh-event-row oh-date-event-row " + (event.id === activeEventId ? "selected" : "")} onClick={() => { setActiveEventId(event.id); setPendingPoint(null); setSuggestions([]); }}>
+              <span className="oh-event-copy"><strong>{prettyDate(event.event_date)}</strong><small>{event.start_time ? event.start_time.slice(0,5) : "Time TBD"} – {event.end_time ? event.end_time.slice(0,5) : "Time TBD"} · {event.agent_name || "Agent"}</small></span><span className={"oh-dot " + String(event.status || "PLANNED").toLowerCase()} />
+            </button>)}</div>
+          </div>) : <div className="oh-empty-list">No open houses yet. Create one to start planning.</div>}
+        </div>
+        <div className="oh-side-foot"><History size={15}/> Saved sign locations are shared with active users in your brokerage.</div>
+      </aside>
+      <section className="oh-main">
+        {activeEvent ? <>
+          <div className="oh-event-header">
+            <div><div className="oh-property-label">SELECTED OPEN HOUSE</div><h2>{activeEvent.property_address}</h2><div className="oh-meta"><span><CalendarDays size={14}/>{prettyDate(activeEvent.event_date)}</span><span><Clock3 size={14}/>{activeEvent.start_time ? activeEvent.start_time.slice(0,5) : "Time TBD"} – {activeEvent.end_time ? activeEvent.end_time.slice(0,5) : "Time TBD"}</span><span><MapPinned size={14}/>{eventSigns.length} sign locations</span></div></div>
+            <div className="oh-event-actions"><button className="oh-secondary" onClick={openEditEvent}><Pencil size={15}/> Edit</button><button className="oh-secondary" onClick={() => { setTemplateEventId(activeEvent.id); setSelectedAgentId(activeEvent.agent_id || selectedAgentId); setEventForm({ property_address: activeEvent.property_address, start_time: activeEvent.start_time?.slice(0,5) || "13:00", end_time: activeEvent.end_time?.slice(0,5) || "16:00", notes: activeEvent.notes || "" }); setDateRows([{ event_date: "", start_time: activeEvent.start_time?.slice(0,5) || "13:00", end_time: activeEvent.end_time?.slice(0,5) || "16:00" }]); setShowNewEvent(true); setError(""); }}><Plus size={15}/> Add dates</button><button className="oh-secondary" onClick={suggestIntersections} disabled={suggesting || !mapReady}><Search size={15}/>{suggesting ? "Searching…" : "Suggest locations"}</button><button className="oh-primary" onClick={openDirections} disabled={!eventSigns.length}><Navigation size={15}/> Get route</button></div>
+          </div>
+          <div className="oh-tabs"><button className={selectedTab === "plan" ? "active" : ""} onClick={() => setSelectedTab("plan")}>Sign plan</button><button className={selectedTab === "saved" ? "active" : ""} onClick={() => setSelectedTab("saved")}>Saved nearby ({nearbyLocations.length})</button><button className={selectedTab === "suggestions" ? "active" : ""} onClick={() => setSelectedTab("suggestions")}>Suggestions ({suggestions.length})</button></div>
+          <div className="oh-map-wrap">
+            <div ref={mapElement} className="oh-map"/>
+            {mapReady && <div className="oh-map-location-controls">
+              <button type="button" className="oh-current-location" onClick={locateCurrentPosition} disabled={locating} title="Show my current location"><LocateFixed size={17}/><span>{locating ? "Locating…" : "Current location"}</span></button>
+              <button type="button" className={"oh-live-location" + (liveTracking ? " is-active" : "")} onClick={toggleLiveTracking} disabled={locating && !liveTracking} title={liveTracking ? "Stop live location tracking" : "Start live location tracking"}><span className="oh-live-dot"/><span>{liveTracking ? "Stop live tracking" : "Live tracking"}</span></button>
+            </div>}
+            {!mapReady && <div className="oh-map-overlay">{mapError ? <><AlertTriangle size={22}/><strong>Map unavailable</strong><span>{mapError}</span></> : <><LoaderCircle className="oh-spin"/><span>Loading Google Maps…</span></>}</div>}
+            {mapReady && <div className="oh-map-tip"><MapPin size={14}/> Tap anywhere on the map to add a sign location</div>}
+          </div>
+          <div className="oh-map-actions"><span><i className="oh-legend-property"/> Property</span><span><i className="oh-legend-planned"/> Planned sign</span><span><i className="oh-legend-installed"/> Installed sign</span><button className="oh-secondary" onClick={drawRoute} disabled={!eventSigns.length || routeBusy}><Route size={15}/>{routeBusy ? "Drawing…" : "Show route on map"}</button></div>
+          {pendingPoint && <div className="oh-pending-card"><div className="oh-pending-head"><div><strong>New sign location</strong><small>{pendingPoint.address}</small></div><button className="oh-icon-btn" onClick={() => setPendingPoint(null)}><X size={16}/></button></div><div className="oh-form-grid"><label>Sign label<input value={pointForm.label} onChange={e => setPointForm(p => ({ ...p, label: e.target.value }))}/></label><label>Direction / traffic flow<input value={pointForm.direction} onChange={e => setPointForm(p => ({ ...p, direction: e.target.value }))} placeholder="e.g. Facing westbound traffic"/></label><label className="full">Notes<textarea value={pointForm.notes} onChange={e => setPointForm(p => ({ ...p, notes: e.target.value }))} placeholder="Landmark, safe placement note, side of street…"/></label></div><div className="oh-card-actions"><button className="oh-secondary" onClick={() => setPendingPoint(null)}>Cancel</button><button className="oh-primary" onClick={savePendingPoint} disabled={saving}><Plus size={15}/> Save location & add to plan</button></div></div>}
+          {selectedTab === "plan" && <div className="oh-sign-list"><div className="oh-section-head"><div><h3>Directional sign checklist</h3><p>Update each sign as you install it and collect it after the open house.</p></div><span>{eventSigns.filter(item => item.status === "INSTALLED").length} / {eventSigns.length} installed</span></div>
+            {eventSigns.length ? eventSigns.map((item, index) => <div className="oh-sign-card" key={item.id}><div className="oh-number">{index + 1}</div><div className="oh-sign-details"><strong>{item.location.label || "Directional sign"}</strong><span>{item.location.address}</span>{item.location.direction && <small>{item.location.direction}</small>}{item.location.notes && <small>{item.location.notes}</small>}<div className="oh-sign-status"><span className={"oh-status " + item.status.toLowerCase()}>{statusLabel(item.status)}</span>{(item.photo_path || item.location.photo_path) && <button className="oh-text-btn" onClick={() => openPhoto(item.photo_path || item.location.photo_path)}>View photo</button>}</div></div><div className="oh-sign-tools"><label className="oh-photo-btn" title="Take a photo or choose one from your phone"><Camera size={15}/><span>{item.photo_path || item.location.photo_path ? "Change photo" : "Add photo"}</span><input type="file" accept="image/*" capture="environment" aria-label="Take a photo or choose a sign photo" onChange={e => { const file = e.target.files?.[0]; if (file) uploadPhoto(item, file); e.target.value = ""; }} disabled={photoBusyId === item.id}/></label>{photoBusyId === item.id && <LoaderCircle className="oh-spin"/>}{item.status === "PLANNED" ? <button className="oh-small-primary" onClick={() => updateSignStatus(item, "INSTALLED")}>Installed</button> : item.status === "INSTALLED" ? <><button className="oh-small-success" onClick={() => updateSignStatus(item, "COLLECTED")}>Collected</button><button className="oh-small-muted" onClick={() => updateSignStatus(item, "LOST")}>Lost</button><button className="oh-small-muted" onClick={() => updateSignStatus(item, "DAMAGED")}>Damaged</button></> : (item.status === "LOST" || item.status === "DAMAGED") ? null : <button className="oh-small-muted" onClick={() => updateSignStatus(item, "PLANNED")}>Reset</button>}<button type="button" className="oh-remove-sign" title="Remove this sign from the current open house plan" onClick={() => removeSign(item)}><Trash2 size={15}/><span>Remove</span></button></div></div>) : <div className="oh-empty-list">No signs added yet. Tap the map, or reuse a saved location from the Saved nearby tab.</div>}
+          </div>}
+          {selectedTab === "saved" && <div className="oh-sign-list"><div className="oh-section-head"><div><h3>Saved locations near this property</h3><p>Locations within 5 km of the open house. These stay in the shared brokerage library.</p></div><span>{nearbyLocations.length} saved</span></div>{nearbyLocations.length ? nearbyLocations.map(location => <div className="oh-library-row" key={location.id}><div className="oh-library-pin"><MapPin size={17}/></div><div className="oh-library-copy"><strong>{location.label}</strong><span>{location.address}</span><small>{distanceKm(propertyPoint, { lat: Number(location.latitude), lng: Number(location.longitude) }).toFixed(1)} km from property{location.direction ? " · " + location.direction : ""}</small></div><button className="oh-small-primary" disabled={saving || eventSigns.some(item => item.sign_location_id === location.id)} onClick={() => attachLocation(location)}>{eventSigns.some(item => item.sign_location_id === location.id) ? "Added" : "Add to plan"}</button></div>) : <div className="oh-empty-list">No saved locations within 5 km yet. Add pins to build your shared sign library.</div>}</div>}
+          {selectedTab === "suggestions" && <div className="oh-sign-list"><div className="oh-section-head"><div><h3>Google Maps suggestions</h3><p>Review each suggestion before adding it. Google results may be nearby places rather than safe sign locations.</p></div><button className="oh-secondary" onClick={suggestIntersections} disabled={suggesting || !mapReady}><RefreshCw size={14}/> Refresh suggestions</button></div>{suggestions.length ? suggestions.map(item => <div className="oh-library-row" key={item.id}><div className="oh-library-pin"><MapPin size={17}/></div><div className="oh-library-copy"><strong>{item.name}</strong><span>{item.address}</span><small>{item.distance.toFixed(1)} km away · Check local sign rules and visibility before placing</small></div><button className="oh-small-primary" onClick={() => addSuggestion(item)} disabled={saving}>Add</button></div>) : <div className="oh-empty-list">No suggestions yet. Select “Suggest locations” to ask Google Maps for nearby intersections.</div>}</div>}
+        </> : <div className="oh-no-event"><MapPinned size={42}/><h2>Plan your first open house</h2><p>Enter a property address to map the route and save directional sign locations for future use.</p><button className="oh-primary" onClick={() => setShowNewEvent(true)}><Plus size={16}/> Create open house</button></div>}
+      </section>
+    </div>
+    {showNewEvent && <div className="oh-modal-backdrop"><form className="oh-modal" onSubmit={createEvent}><div className="oh-modal-head"><div><strong>{editingEventId ? "Edit open house" : "New open house"}</strong><span>{editingEventId ? "Update this date without changing its sign installation history." : "Start with the property address and event details."}</span></div><button type="button" className="oh-icon-btn" onClick={() => { setShowNewEvent(false); setEditingEventId(""); }}><X size={17}/></button></div><div className="oh-modal-body">{adminMode && <label className="full">Assign open house to agent<select required value={selectedAgentId} onChange={e => setSelectedAgentId(e.target.value)}><option value="">Select an agent</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name || [agent.first_name, agent.last_name].filter(Boolean).join(" ") || agent.email}</option>)}</select></label>}<label className="full">Property address<input autoFocus required value={eventForm.property_address} onChange={e => setEventForm(f => ({ ...f, property_address: e.target.value }))} placeholder="Street address, city, province, postal code"/></label>{editingEventId && <div className="oh-date-row"><label>Open house date<input required type="date" value={dateRows[0]?.event_date || ""} onChange={e => setDateRows([{ ...dateRows[0], event_date: e.target.value }])}/></label><div className="oh-form-grid"><label>Start time<input type="time" value={dateRows[0]?.start_time || "13:00"} onChange={e => setDateRows([{ ...dateRows[0], start_time: e.target.value }])}/></label><label>End time<input type="time" value={dateRows[0]?.end_time || "16:00"} onChange={e => setDateRows([{ ...dateRows[0], end_time: e.target.value }])}/></label></div></div>}{!editingEventId && <div className="oh-date-schedule"><div className="oh-date-schedule-head"><strong>Open house dates</strong><button type="button" className="oh-secondary" onClick={() => setDateRows(rows => [...rows, { event_date: "", start_time: rows[rows.length-1]?.start_time || "13:00", end_time: rows[rows.length-1]?.end_time || "16:00" }])}><Plus size={14}/> Add another date</button></div>{dateRows.map((row,index) => <div className="oh-date-row" key={index}><div className="oh-date-row-title"><strong>Date {index+1}</strong>{dateRows.length>1 && <button type="button" className="oh-text-btn" onClick={() => setDateRows(rows => rows.filter((_,i)=>i!==index))}>Remove</button>}</div><label>Date<input required type="date" value={row.event_date} onChange={e => setDateRows(rows => rows.map((item,i)=>i===index?{...item,event_date:e.target.value}:item))}/></label><div className="oh-form-grid"><label>Start time<input type="time" value={row.start_time} onChange={e => setDateRows(rows => rows.map((item,i)=>i===index?{...item,start_time:e.target.value}:item))}/></label><label>End time<input type="time" value={row.end_time} onChange={e => setDateRows(rows => rows.map((item,i)=>i===index?{...item,end_time:e.target.value}:item))}/></label></div></div>)}</div>}<label className="full">Notes<textarea value={eventForm.notes} onChange={e => setEventForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional instructions"/></label><div className="oh-modal-note"><AlertTriangle size={15}/> Sign suggestions are starting points only. Check municipal rules and place signs where they do not obstruct sidewalks, roads or sightlines.</div></div><div className="oh-modal-actions"><button type="button" className="oh-secondary" onClick={() => { setShowNewEvent(false); setEditingEventId(""); }}>Cancel</button><button type="submit" className="oh-primary" disabled={saving}>{saving ? "Saving…" : editingEventId ? "Save changes" : "Save open house"}</button></div></form></div>}
+  </div>;
 }
 
 
-/* iPhone overflow containment v1.16: constrain page-level layout while keeping wide data tables swipe-scrollable. */
-html {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: clip;
-  -webkit-text-size-adjust: 100%;
-}
-body, #root {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: clip;
-}
-@supports not (overflow: clip) {
-  html, body, #root { overflow-x: hidden; }
-}
-@media (max-width: 760px) {
-  .app, main, .content, .top, .pagehead, .toolbar, .panel, .card,
-  .modal, .tx-modal, .modalhead, .modal form, .tx-editor,
-  .tablewrap, .table-wrap, .table-scroll, .table-responsive {
-    box-sizing: border-box !important;
-    min-width: 0 !important;
-  }
-  .content { padding-left: max(10px, env(safe-area-inset-left)) !important; padding-right: max(10px, env(safe-area-inset-right)) !important; }
-  .content > *, .content section, .content article, .content form,
-  .content .panel > *, .content .card > * {
-    min-width: 0;
-    max-width: 100%;
-  }
-  .content [style*="grid-template-columns"] {
-    min-width: 0 !important;
-  }
-  .content :is(input, select, textarea, button) {
-    box-sizing: border-box;
-    max-width: 100%;
-  }
-  /* Make tables scroll within their own region instead of widening the whole screen. */
-  .content :is(.tablewrap, .table-wrap, .table-scroll, .table-responsive) {
-    overflow-x: auto !important;
-    overflow-y: visible;
-    max-width: 100% !important;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
-  }
-  .content table {
-    display: table;
-    width: max-content !important;
-    max-width: none !important;
-  }
-  .content :not(.tablewrap):not(.table-wrap):not(.table-scroll):not(.table-responsive) > table {
-    max-width: 100%;
-  }
-  .content .pagehead > *, .content .toolbar > *, .content .modalactions > *,
-  .content .modal-actions > * {
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .overlay {
-    box-sizing: border-box;
-    width: 100%;
-    max-width: 100%;
-    padding-left: max(8px, env(safe-area-inset-left)) !important;
-    padding-right: max(8px, env(safe-area-inset-right)) !important;
-  }
-  .modal, .tx-modal {
-    width: 100% !important;
-    max-width: 100% !important;
-  }
-  .top { padding-left: max(8px, env(safe-area-inset-left)) !important; padding-right: max(8px, env(safe-area-inset-right)) !important; }
-  .top .logout { flex-shrink: 0; }
-  .content p, .content h1, .content h2, .content h3, .content label,
-  .content td, .content th { overflow-wrap: anywhere; }
-}
-@media (max-width: 390px) {
-  .content { padding-left: 8px !important; padding-right: 8px !important; }
-  .content .panel, .content .card { padding: 10px !important; }
-  .top { gap: 5px !important; }
-  .top .logout { padding: 7px 6px !important; }
-}
-
-
-/* Transaction list: keep status labels readable and action menus above adjacent rows. */
-.transaction-list-table td:nth-child(8) select{
-  width:100%!important;
-  max-width:none!important;
-  min-width:0;
-  height:34px!important;
-  min-height:34px!important;
-  padding:6px 22px 6px 8px!important;
-  font-size:12px!important;
-  line-height:1.2;
-  white-space:nowrap;
-}
-.transaction-list-table td:last-child{position:relative;overflow:visible!important}
-.transaction-actions-dropdown{position:relative;display:inline-block;z-index:2}
-.transaction-actions-dropdown[open]{z-index:1000}
-.transaction-actions-dropdown>summary{
-  display:inline-flex;align-items:center;justify-content:center;gap:4px;
-  min-height:32px;padding:6px 9px;border:1px solid #d0dbea;border-radius:6px;
-  background:#fff;color:#344054;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer;
-  list-style:none;
-}
-.transaction-actions-dropdown>summary::-webkit-details-marker{display:none}
-.transaction-actions-dropdown[open]>summary{border-color:#9e8556;background:#fbf8f2}
-.transaction-actions-menu{
-  position:fixed;right:24px;bottom:24px;top:auto;z-index:99999;
-  width:max-content;min-width:240px;max-width:min(420px,calc(100vw - 32px));
-  max-height:min(70vh,600px);overflow-y:auto;
-  padding:12px;background:#fff;border:1px solid #d0dbea;border-radius:10px;
-  box-shadow:0 16px 40px rgba(16,24,40,.28);white-space:normal;
-}
-.transaction-actions-menu>div{display:flex;flex-wrap:wrap;gap:6px}
-.transaction-actions-menu button{white-space:normal;max-width:100%}
-@media(max-width:900px){
- .transaction-list-table td:nth-child(8) select{font-size:12px!important;min-height:36px!important}
- .transaction-actions-menu{position:fixed;right:12px;top:auto;bottom:12px;max-width:calc(100vw - 24px);max-height:70vh;overflow:auto}
-}
-
-
-/* Explicitly toggled transaction actions menu (not native details/summary). */
-.transaction-actions-dropdown{position:relative;display:inline-block;overflow:visible!important;z-index:5}
-.transaction-actions-trigger{
- display:inline-flex!important;align-items:center;justify-content:center;gap:5px;
- min-height:34px!important;padding:7px 10px!important;border:1px solid #d0dbea!important;
- border-radius:6px!important;background:#fff!important;color:#344054!important;
- font-size:12px!important;font-weight:650!important;line-height:1.2!important;white-space:nowrap!important;
- cursor:pointer;
-}
-.transaction-actions-trigger[aria-expanded="true"]{border-color:#9e8556!important;background:#fbf8f2!important}
-.transaction-actions-menu{
- position:fixed!important;right:24px!important;bottom:24px!important;top:auto!important;z-index:2147483000!important;
- width:max-content;min-width:250px;max-width:min(440px,calc(100vw - 32px));
- max-height:min(72vh,620px);overflow-y:auto;overscroll-behavior:contain;
- padding:12px;background:#fff;border:1px solid #d0dbea;border-radius:10px;
- box-shadow:0 18px 48px rgba(16,24,40,.32);white-space:normal;
-}
-.transaction-actions-menu>div{display:flex;flex-wrap:wrap;gap:6px}
-.transaction-actions-menu button{white-space:normal;max-width:100%}
-@media(max-width:900px){.transaction-actions-menu{right:12px!important;bottom:12px!important;max-width:calc(100vw - 24px);max-height:70vh}}
-
-
-/* Banking & Reconciliation: compact, readable trust-ledger filters */
-.trust-ledger-filters{display:grid;grid-template-columns:minmax(260px,2fr) repeat(4,minmax(145px,1fr));gap:12px;align-items:end;margin:14px 0 16px;padding:14px;background:#f8f9fb;border:1px solid #e6e9ee;border-radius:10px}
-.trust-ledger-filters>label{display:flex;flex-direction:column;gap:6px;min-width:0;font-size:11px;line-height:1.3}
-.trust-ledger-filters input,.trust-ledger-filters select{display:block;width:100%;height:38px;min-height:38px;max-height:38px;padding:8px 10px;font-size:12px;box-sizing:border-box}
-.trust-ledger-filters .trust-filter-search{grid-column:span 2}
-.trust-ledger-filters .trust-filter-clear{display:flex;align-items:end;min-height:38px}
-.trust-ledger-filters .trust-filter-clear button{height:38px;white-space:nowrap}
-@media(max-width:1100px){.trust-ledger-filters{grid-template-columns:repeat(3,minmax(150px,1fr))}.trust-ledger-filters .trust-filter-search{grid-column:span 2}}
-@media(max-width:650px){.trust-ledger-filters{grid-template-columns:1fr 1fr;gap:9px;padding:10px}.trust-ledger-filters .trust-filter-search{grid-column:1/-1}.trust-ledger-filters .trust-filter-clear{grid-column:1/-1}}
+/* Field App navigation: navy and gold visual system */
+.field-shell{min-height:100vh;padding-bottom:0;background:#f4f6f9}.field-content{max-width:1600px;margin:0 auto;padding:24px 28px 36px}.field-topbar{height:72px;padding:0 max(22px,calc((100vw - 1544px)/2));background:#0f2141;color:#fff;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 18px rgba(15,33,65,.16)}.field-brand strong{color:#fff}.field-brand small{color:#c8b17e}.field-signout{border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.08);color:#fff;border-radius:9px;padding:9px 12px}.field-nav{position:sticky;top:0;z-index:50;display:flex;justify-content:center;gap:8px;padding:10px 18px;background:#fff;border-bottom:1px solid #e3e8ef;box-shadow:0 4px 14px rgba(15,33,65,.06)}.field-nav button{min-width:150px;border:1px solid transparent;border-radius:10px;background:transparent;color:#66748a;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:9px;font-size:12px;font-weight:700;cursor:pointer;transition:.18s}.field-nav button svg{width:17px;height:17px}.field-nav button:hover{background:#f5f2eb;color:#0f2141}.field-nav button.active{background:#0f2141;border-color:#0f2141;color:#fff;box-shadow:0 5px 14px rgba(15,33,65,.18)}.field-nav button.active svg{color:#c6a96e}.field-version{text-align:center;padding:0 12px 12px;color:#9aa4b2;font-size:9px;letter-spacing:1px}.field-welcome{background:linear-gradient(115deg,#0f2141,#19375d);border-radius:15px;padding:22px 26px;margin:0 0 20px;color:#fff;display:flex;align-items:center;justify-content:space-between;box-shadow:0 8px 22px rgba(15,33,65,.13)}.field-welcome span{color:#c6a96e;font-size:10px;font-weight:800;letter-spacing:1.5px}.field-welcome h1{color:#fff;margin:5px 0;font-size:24px}.field-welcome p{margin:0;color:#c5d0df;font-size:12px}.field-hero-icon{width:48px;height:48px;border-radius:13px;background:rgba(198,169,110,.16);color:#d4b77c;display:grid;place-items:center}.field-account{max-width:620px;margin:32px auto;background:#fff;border:1px solid #e2e7ee;border-radius:16px;padding:30px;box-shadow:0 8px 28px rgba(15,33,65,.07)}.field-account-mark{width:56px;height:56px;border-radius:15px;background:#0f2141;color:#d0b477;display:grid;place-items:center;margin-bottom:18px}.field-account>span{font-size:10px;font-weight:800;letter-spacing:1.4px;color:#9e8556}.field-account h2{margin:7px 0 3px;color:#0f2141}.field-account>p{margin:0 0 22px;color:#7d8797;font-size:12px}.field-account-detail{display:flex;justify-content:space-between;padding:13px 0;border-top:1px solid #edf0f3}.field-account-detail small{color:#8791a0}.field-account-detail strong{color:#0f2141;font-size:12px}.field-account-signout{margin-top:18px;display:flex;align-items:center;gap:9px;padding:11px 15px;background:#0f2141;color:#fff;border:0;border-radius:9px;font-weight:700;cursor:pointer}.field-auth{background:radial-gradient(circle at 75% 15%,rgba(158,133,86,.24),transparent 30%),linear-gradient(135deg,#09182f,#17365d)}.field-login-card{border-radius:18px;box-shadow:0 25px 70px rgba(0,0,0,.28)}.field-submit{background:#9e8556}.field-submit:hover{background:#876f46}
+@media(max-width:760px){.field-shell{padding-bottom:82px}.field-content{padding:16px 12px 24px}.field-topbar{height:62px;padding:0 14px}.field-nav{position:fixed;top:auto;bottom:0;left:0;right:0;z-index:100;justify-content:space-around;gap:0;padding:7px 4px calc(7px + env(safe-area-inset-bottom));border-top:1px solid #e3e8ef;border-bottom:0;box-shadow:0 -5px 18px rgba(15,33,65,.1)}.field-nav button{min-width:0;flex:1;flex-direction:column;gap:4px;padding:7px 2px;border-radius:9px;font-size:9px}.field-nav button svg{width:19px;height:19px}.field-version{padding-bottom:0;font-size:8px}.field-welcome{padding:17px 18px;margin-bottom:14px}.field-welcome h1{font-size:20px}.field-account{margin:12px auto;padding:22px}.field-account-signout{width:100%;justify-content:center}}
