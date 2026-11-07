@@ -40,3 +40,7 @@
 .oh-inventory-fields label{min-width:0}
 
 .oh-transfer-form{margin-top:14px}.oh-transfer-history{max-width:680px;margin-top:14px;padding:12px 14px;border:1px solid #edf0f3;border-radius:10px;background:#fff}.oh-transfer-history>strong{display:block;margin-bottom:8px;color:#0f2141;font-size:11px}.oh-transfer-history>div{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:9px 0;border-top:1px solid #edf0f3;font-size:10px;color:#39465b}.oh-transfer-history>div small{grid-column:1/-1;color:#8791a0}.oh-transfer-history>div b{color:#806b45}.oh-transfer-history p{font-size:10px;color:#8791a0}
+
+.oh-field-inventory-toggle{display:none}
+.field-content .oh-field-inventory-toggle{display:flex;justify-content:flex-end;margin:0 0 12px}
+.field-content .oh-field-inventory-toggle button{min-height:44px;width:100%;justify-content:center;white-space:normal;text-align:center;line-height:1.35;padding:12px 14px;font-size:12px}

@@ -716,6 +716,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   if (loading) return <div className="oh-loading"><LoaderCircle className="oh-spin"/> Loading Open House Signs…</div>;
 
   return <div className="oh-wrap">
+    <div className="oh-field-inventory-toggle"><button type="button" className="oh-primary" onClick={() => setShowInventory(v => !v)}><Signpost size={16}/>{showInventory ? "Close sign inventory" : "Sign inventory · Report lost or damaged"}</button></div>
     <div className="oh-heading">
       <div><div className="oh-brand-lockup"><img src="/dv-logo.svg" alt="Dream Valley Realty logo"/><div><div className="oh-eyebrow">DREAM VALLEY REALTY · FIELD TOOLS</div><h1>Open House Signs</h1><p>Plan sign locations, remember where they were placed, and reuse them at future open houses.</p></div></div></div>
       <button className="oh-secondary" onClick={() => setShowInventory(v => !v)}><Signpost size={15}/>{showInventory ? "Close inventory" : "Sign inventory"}</button><button className="oh-primary" onClick={() => { setTemplateEventId(""); setEventForm({ property_address: "", start_time: "13:00", end_time: "16:00", notes: "" }); setDateRows([{ event_date: "", start_time: "13:00", end_time: "16:00" }]); setShowNewEvent(true); setError(""); }}><Plus size={16}/> New Open House</button>

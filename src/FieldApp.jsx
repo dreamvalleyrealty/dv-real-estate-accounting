@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "./lib/supabase";
 import OpenHouseSigns from "./OpenHouseSigns";
 import { Camera, LogOut, MapPin, ShieldCheck } from "lucide-react";
+import packageJson from "../package.json";
 
 const ADMIN_ROLES = ["SUPERADMIN","ADMIN","MANAGER","BROKER","BROKER_OF_RECORD","BROKER OF RECORD","OWNER"];
 
@@ -95,6 +96,6 @@ export default function FieldApp() {
         <div className="field-welcome"><div><span>FIELD TOOLS</span><h1>Open House Signs</h1><p>Hi {profile?.display_name?.split(" ")[0] || "there"}, ready to plan?</p></div><div className="field-hero-icon"><MapPin/></div></div>
         <OpenHouseSigns user={user} agentId={agentId} role={profile?.role || "AGENT"} adminMode={isAdmin}/>
       </div>}
-    <nav className="field-bottom"><span><MapPin size={16}/> Plan</span><span><Camera size={16}/> Install</span><small>Synced with DV Back Office</small></nav>
+    <nav className="field-bottom"><span><MapPin size={16}/> Plan</span><span><Camera size={16}/> Install</span><small>Synced with DV Back Office · v{packageJson.version}</small></nav>
   </div>;
 }
