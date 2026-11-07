@@ -41,7 +41,7 @@ const distanceKm = (a, b) => {
 const prettyDate = value => value ? new Date(value + "T12:00:00").toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" }) : "Date not set";
 const errorText = error => error?.message || String(error || "Something went wrong.");
 
-export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMode = false }) {
+export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMode = false, activePage = "openhouses" }) {
   const mapElement = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef([]);
@@ -87,6 +87,8 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [transferForm, setTransferForm] = useState({ to_agent_id: "", quantity: "1", notes: "" });
   const [inventoryTransfers, setInventoryTransfers] = useState([]);
+
+  useEffect(() => { setShowInventory(activePage === "inventory"); }, [activePage]);
 
   const activeEvent = useMemo(() => events.find(event => event.id === activeEventId) || null, [events, activeEventId]);
   const propertyPoint = useMemo(() => activeEvent?.property_lat != null && activeEvent?.property_lng != null
@@ -733,7 +735,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const statusLabel = status => ({ INSTALLED: "Installed", COLLECTED: "Collected", LOST: "Lost", DAMAGED: "Damaged", PLANNED: "To install" }[status] || "To install");
   if (loading) return <div className="oh-loading"><LoaderCircle className="oh-spin"/> Loading Open House Signs…</div>;
 
-  return <div className="oh-wrap">
+  return <div className={"oh-wrap oh-page-" + activePage}>
     <div className="oh-field-inventory-toggle"><button type="button" className="oh-primary" onClick={() => setShowInventory(v => !v)}><Signpost size={16}/>{showInventory ? "Close sign inventory" : "Sign inventory · Report lost or damaged"}</button></div>
     <div className="oh-heading">
       <div><div className="oh-brand-lockup"><img src="/dv-logo.svg" alt="Dream Valley Realty logo"/><div><div className="oh-eyebrow">DREAM VALLEY REALTY · FIELD TOOLS</div><h1>Open House Signs</h1><p>Plan sign locations, remember where they were placed, and reuse them at future open houses.</p></div></div></div>
@@ -779,7 +781,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
         </>}
       </>}
     </section>}
-    <div className="oh-layout">
+    {activePage !== "inventory" && <div className={"oh-layout" + (activePage === "locations" ? " oh-locations-focus" : "")}>
       <aside className="oh-side">
         <div className="oh-side-head"><div><strong>Open houses</strong><span>{groupedEvents.length} properties · {events.length} dates</span></div><div className="oh-side-head-actions"><button className="oh-icon-btn" title="Refresh" onClick={() => loadDirectories(companyId)}><RefreshCw size={15}/></button><button type="button" className="oh-primary oh-new-open-house" onClick={() => { setTemplateEventId(""); setEditingEventId(""); setEventForm({ property_address: "", start_time: "13:00", end_time: "16:00", notes: "" }); setDateRows([{ event_date: "", start_time: "13:00", end_time: "16:00" }]); setShowNewEvent(true); setError(""); }}><Plus size={14}/> New</button></div></div>
         <div className="oh-search"><Search size={15}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search property or agent"/></div>
