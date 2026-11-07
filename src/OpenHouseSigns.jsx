@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "./lib/supabase";
 import {
   AlertTriangle, CalendarDays, Camera, CheckCircle2, Clock3, ExternalLink,
-  History, LoaderCircle, MapPin, MapPinned, Navigation, Pencil, Plus, RefreshCw,
+  History, LoaderCircle, LocateFixed, MapPin, MapPinned, Navigation, Pencil, Plus, RefreshCw,
   Route, Search, Signpost, Trash2, X
 } from "lucide-react";
 import "./OpenHouseSigns.css";
@@ -58,6 +58,8 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const [activeEventId, setActiveEventId] = useState("");
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState("");
+  const [userLocation, setUserLocation] = useState(null);
+  const [locating, setLocating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -218,6 +220,23 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       mapRef.current.panTo(propertyPoint);
       mapRef.current.setZoom(14);
     }
+    if (userLocation) {
+      const currentMarker = new google.maps.Marker({
+        map: mapRef.current,
+        position: userLocation,
+        title: "Your current location",
+        zIndex: 1000,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: "#2878e5",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 3
+        }
+      });
+      markersRef.current.push(currentMarker);
+    }
     eventSigns.forEach((item, index) => {
       const location = item.location;
       const installed = item.status === "INSTALLED";
@@ -234,7 +253,37 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       eventSigns.forEach(item => bounds.extend({ lat: Number(item.location.latitude), lng: Number(item.location.longitude) }));
       mapRef.current.fitBounds(bounds);
     }
-  }, [mapReady, propertyPoint, eventSigns, activeEvent?.property_address]);
+  }, [mapReady, propertyPoint, eventSigns, activeEvent?.property_address, userLocation]);
+
+  const locateCurrentPosition = useCallback(() => {
+    if (!navigator.geolocation) {
+      setError("Location is not supported by this browser. Please allow location access in your phone settings.");
+      return;
+    }
+    setLocating(true);
+    setError("");
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const point = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setUserLocation(point);
+        if (mapRef.current) {
+          mapRef.current.panTo(point);
+          mapRef.current.setZoom(16);
+        }
+        setLocating(false);
+      },
+      locationError => {
+        const message = locationError.code === 1
+          ? "Location access is blocked. Allow location access for this website in your browser settings."
+          : locationError.code === 2
+            ? "Your current location could not be determined. Check that Location Services are enabled."
+            : "The location request timed out. Please try again.";
+        setError(message);
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+    );
+  }, []);
 
   const geocodeAddress = useCallback(async address => {
     if (!geocoderRef.current) throw new Error("Google Maps is still loading.");
@@ -563,6 +612,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
           <div className="oh-tabs"><button className={selectedTab === "plan" ? "active" : ""} onClick={() => setSelectedTab("plan")}>Sign plan</button><button className={selectedTab === "saved" ? "active" : ""} onClick={() => setSelectedTab("saved")}>Saved nearby ({nearbyLocations.length})</button><button className={selectedTab === "suggestions" ? "active" : ""} onClick={() => setSelectedTab("suggestions")}>Suggestions ({suggestions.length})</button></div>
           <div className="oh-map-wrap">
             <div ref={mapElement} className="oh-map"/>
+            {mapReady && <button type="button" className="oh-current-location" onClick={locateCurrentPosition} disabled={locating} title="Show my current location"><LocateFixed size={17}/><span>{locating ? "Locating…" : "Current location"}</span></button>}
             {!mapReady && <div className="oh-map-overlay">{mapError ? <><AlertTriangle size={22}/><strong>Map unavailable</strong><span>{mapError}</span></> : <><LoaderCircle className="oh-spin"/><span>Loading Google Maps…</span></>}</div>}
             {mapReady && <div className="oh-map-tip"><MapPin size={14}/> Tap anywhere on the map to add a sign location</div>}
           </div>
