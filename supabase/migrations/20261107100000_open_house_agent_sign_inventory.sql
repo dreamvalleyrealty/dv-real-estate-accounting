@@ -25,7 +25,7 @@ with check (
   public.dv_open_house_company_access(company_id)
   and exists (
     select 1 from public.dv_accounting_agents a
-    where a.id = agent_id and a.company_id = company_id
+    where a.id = agent_id and a.company_id = dv_open_house_agent_sign_inventory.company_id
       and (
         a.user_id = (select auth.uid())
         or lower(btrim(coalesce(a.email,''))) = lower(btrim(coalesce(auth.jwt()->>'email','')))
@@ -40,7 +40,7 @@ using (
   public.dv_open_house_company_access(company_id)
   and exists (
     select 1 from public.dv_accounting_agents a
-    where a.id = agent_id and a.company_id = company_id
+    where a.id = agent_id and a.company_id = dv_open_house_agent_sign_inventory.company_id
       and (
         a.user_id = (select auth.uid())
         or lower(btrim(coalesce(a.email,''))) = lower(btrim(coalesce(auth.jwt()->>'email','')))
@@ -52,7 +52,7 @@ with check (
   public.dv_open_house_company_access(company_id)
   and exists (
     select 1 from public.dv_accounting_agents a
-    where a.id = agent_id and a.company_id = company_id
+    where a.id = agent_id and a.company_id = dv_open_house_agent_sign_inventory.company_id
       and (
         a.user_id = (select auth.uid())
         or lower(btrim(coalesce(a.email,''))) = lower(btrim(coalesce(auth.jwt()->>'email','')))
