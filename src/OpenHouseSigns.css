@@ -55,3 +55,6 @@
 
 /* Navigation views */
 .oh-page-inventory .oh-heading,.oh-page-inventory .oh-field-inventory-toggle{display:none}.oh-page-inventory .oh-inventory-panel{margin-top:0}.oh-locations-focus{grid-template-columns:minmax(0,1fr)}.oh-locations-focus .oh-side{display:none}.oh-locations-focus .oh-main{min-width:0}.oh-locations-focus .oh-map-wrap{height:min(58vh,620px)}.oh-page-locations .oh-heading{display:none}.oh-page-locations .oh-field-inventory-toggle{display:none}
+
+/* Expand or collapse dates under each property address. */
+.oh-address-toggle{width:27px;height:27px;display:grid;place-items:center;flex:none;border:1px solid #e2e6ec;border-radius:7px;background:#fff;color:#9e8556;cursor:pointer;padding:0}.oh-address-toggle:hover{border-color:#9e8556;background:#faf7f1;color:#0f2141}.oh-address-toggle:focus-visible{outline:2px solid #9e8556;outline-offset:2px}
