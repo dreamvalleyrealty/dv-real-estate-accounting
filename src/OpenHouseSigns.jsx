@@ -83,7 +83,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const [showInventory, setShowInventory] = useState(false);
   const [inventoryRows, setInventoryRows] = useState([]);
   const [inventoryAgentId, setInventoryAgentId] = useState(agentId || "");
-  const [inventoryForm, setInventoryForm] = useState({ total_signs: "0", damaged_signs: "0", notes: "" });
+  const [inventoryForm, setInventoryForm] = useState({ total_signs: "0", lost_signs: "0", damaged_signs: "0", notes: "" });
   const [inventoryLoading, setInventoryLoading] = useState(false);
 
   const activeEvent = useMemo(() => events.find(event => event.id === activeEventId) || null, [events, activeEventId]);
@@ -356,8 +356,8 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       setInventoryRows(rows);
       const selectedAgentForInventory = adminMode ? inventoryAgentId : currentInventoryAgentId;
       const own = rows.find(row => row.agent_id === selectedAgentForInventory);
-      if (own) setInventoryForm({ total_signs: String(own.total_signs), damaged_signs: String(own.damaged_signs), notes: own.notes || "" });
-      else setInventoryForm({ total_signs: "0", damaged_signs: "0", notes: "" });
+      if (own) setInventoryForm({ total_signs: String(own.total_signs), lost_signs: String(own.lost_signs || 0), damaged_signs: String(own.damaged_signs), notes: own.notes || "" });
+      else setInventoryForm({ total_signs: "0", lost_signs: "0", damaged_signs: "0", notes: "" });
       if (!inventoryAgentId && currentInventoryAgentId) setInventoryAgentId(currentInventoryAgentId);
     } catch (e) { setError("Could not load sign inventory: " + errorText(e)); }
     finally { setInventoryLoading(false); }
@@ -370,9 +370,9 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     const targetAgentId = adminMode ? inventoryAgentId : currentInventoryAgentId;
     if (!targetAgentId || !supabase) { setError("Your agent profile could not be identified. Ask an administrator to link your login to your agent profile."); return; }
     const total = Number.parseInt(inventoryForm.total_signs, 10);
-    const damaged = Number.parseInt(inventoryForm.damaged_signs, 10);
-    if (!Number.isInteger(total) || !Number.isInteger(damaged) || total < 0 || damaged < 0 || damaged > total) {
-      setError("Enter valid sign counts. Damaged signs cannot exceed total signs."); return;
+    const lost = Number.parseInt(inventoryForm.lost_signs, 10);\n    const damaged = Number.parseInt(inventoryForm.damaged_signs, 10);
+    if (!Number.isInteger(total) || !Number.isInteger(lost) || !Number.isInteger(damaged) || total < 0 || lost < 0 || damaged < 0 || lost + damaged > total) {
+      setError("Enter valid sign counts. Lost and damaged signs combined cannot exceed total signs."); return;
     }
     setSaving(true); setError(""); setMessage("");
     try {
@@ -704,15 +704,15 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
           const name = agent.name || [agent.first_name, agent.last_name].filter(Boolean).join(" ") || agent.email || "Agent";
           return <button type="button" key={agent.id} className={"oh-inventory-agent " + (inventoryAgentId === agent.id ? "selected" : "")} onClick={() => {
             setInventoryAgentId(agent.id);
-            setInventoryForm({ total_signs: String(row?.total_signs ?? 0), damaged_signs: String(row?.damaged_signs ?? 0), notes: row?.notes || "" });
-          }}><strong>{name}</strong><span>{row ? row.total_signs + " total · " + (row.total_signs-row.damaged_signs) + " serviceable · " + row.damaged_signs + " damaged" : "No inventory recorded"}</span></button>;
+            setInventoryForm({ total_signs: String(row?.total_signs ?? 0), lost_signs: String(row?.lost_signs ?? 0), damaged_signs: String(row?.damaged_signs ?? 0), notes: row?.notes || "" });
+          }}><strong>{name}</strong><span>{row ? row.total_signs + " total · " + (row.total_signs-(row.lost_signs||0)-row.damaged_signs) + " available · " + (row.lost_signs||0) + " lost · " + row.damaged_signs + " damaged" : "No inventory recorded"}</span></button>;
         })}</div>}
         {(!adminMode || inventoryAgentId) ? <form className="oh-inventory-form" onSubmit={saveSignInventory}>
           <div className="oh-inventory-form-title"><strong>{adminMode ? (inventoryAgent?.name || [inventoryAgent?.first_name, inventoryAgent?.last_name].filter(Boolean).join(" ") || inventoryAgent?.email || "Selected agent") : "My sign inventory"}</strong><span>{adminMode ? "Management view" : "Your assigned signs"}</span></div>
           <div className="oh-inventory-fields">
             <label>Total signs<input type="number" min="0" step="1" required value={inventoryForm.total_signs} onChange={e => setInventoryForm(v => ({...v,total_signs:e.target.value}))}/></label>
-            <label>Damaged signs<input type="number" min="0" step="1" required value={inventoryForm.damaged_signs} onChange={e => setInventoryForm(v => ({...v,damaged_signs:e.target.value}))}/></label>
-            <div className="oh-inventory-available"><span>Serviceable signs</span><strong>{Math.max(0, (Number.parseInt(inventoryForm.total_signs,10)||0) - (Number.parseInt(inventoryForm.damaged_signs,10)||0))}</strong></div>
+            <label>Lost signs<input type="number" min="0" step="1" required value={inventoryForm.lost_signs} onChange={e => setInventoryForm(v => ({...v,lost_signs:e.target.value}))}/></label>\n            <label>Damaged signs<input type="number" min="0" step="1" required value={inventoryForm.damaged_signs} onChange={e => setInventoryForm(v => ({...v,damaged_signs:e.target.value}))}/></label>
+            <div className="oh-inventory-available"><span>Serviceable signs</span><strong>{Math.max(0, (Number.parseInt(inventoryForm.total_signs,10)||0) - (Number.parseInt(inventoryForm.lost_signs,10)||0) - (Number.parseInt(inventoryForm.damaged_signs,10)||0))}</strong></div>
           </div>
           <label className="oh-inventory-notes">Notes<textarea value={inventoryForm.notes} onChange={e => setInventoryForm(v => ({...v,notes:e.target.value}))} placeholder="Storage location, missing parts, sign condition…"/></label>
           <div className="oh-card-actions"><button type="submit" className="oh-primary" disabled={saving}>{saving ? "Saving…" : "Save inventory"}</button></div>
