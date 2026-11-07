@@ -537,7 +537,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
 
   return <div className="oh-wrap">
     <div className="oh-heading">
-      <div><div className="oh-eyebrow">DREAM VALLEY REALTY · FIELD TOOLS</div><h1>Open House Signs</h1><p>Plan sign locations, remember where they were placed, and reuse them at future open houses.</p></div>
+      <div><div className="oh-brand-lockup"><img src="/dv-logo.svg" alt="Dream Valley Realty logo"/><div><div className="oh-eyebrow">DREAM VALLEY REALTY · FIELD TOOLS</div><h1>Open House Signs</h1><p>Plan sign locations, remember where they were placed, and reuse them at future open houses.</p></div></div></div>
       <button className="oh-primary" onClick={() => { setTemplateEventId(""); setEventForm({ property_address: "", start_time: "13:00", end_time: "16:00", notes: "" }); setDateRows([{ event_date: "", start_time: "13:00", end_time: "16:00" }]); setShowNewEvent(true); setError(""); }}><Plus size={16}/> New Open House</button>
     </div>
     {error && <div className="oh-alert oh-alert-error"><AlertTriangle size={17}/><span>{error}</span><button onClick={() => setError("")}><X size={15}/></button></div>}
