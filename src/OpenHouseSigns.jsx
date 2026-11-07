@@ -306,6 +306,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       { enableHighAccuracy: true, timeout: 20000, maximumAge: 3000 }
     );
     locationWatchRef.current = watchId;
+    setLiveTracking(true);
   }, [liveTracking, stopLiveTracking]);
 
   useEffect(() => () => {
