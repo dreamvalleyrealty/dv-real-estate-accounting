@@ -31,3 +31,10 @@
 .oh-live-location:disabled{opacity:.65;cursor:wait}
 .oh-live-dot{width:8px;height:8px;border-radius:50%;background:#8793a3}
 .oh-live-location.is-active .oh-live-dot{background:#269653;box-shadow:0 0 0 4px rgba(38,150,83,.14)}
+
+/* Keep inventory controls easy to find on narrow field-app screens. */
+.oh-heading{flex-wrap:wrap}
+.oh-heading>div{min-width:0;flex:1 1 100%}
+.oh-heading>.oh-secondary,.oh-heading>.oh-primary{flex:1 1 auto}
+.oh-inventory-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+.oh-inventory-fields label{min-width:0}
