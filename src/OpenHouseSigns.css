@@ -46,3 +46,6 @@
 .field-content .oh-field-inventory-toggle button{min-height:44px;width:100%;justify-content:center;white-space:normal;text-align:center;line-height:1.35;padding:12px 14px;font-size:12px}
 
 .oh-status.lost{background:#fff0ed;color:#a43d2f}.oh-status.damaged{background:#fff6df;color:#8a651b}
+
+/* Group multiple open-house dates under one property address. */
+.oh-address-group{border-top:1px solid #f0f1f4}.oh-address-heading{display:flex;align-items:center;gap:9px;padding:11px 13px 7px}.oh-address-heading>strong{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:#263650}.oh-date-count{flex:none;font-size:9px;color:#929baa}.oh-address-dates{padding:0 0 5px 53px}.oh-date-event-row{width:100%;border-top:0;border-left:2px solid #e8ebef;padding:8px 11px 8px 10px;gap:8px}.oh-date-event-row.selected{border-left-color:#9e8556;padding-left:10px}.oh-date-event-row .oh-event-copy strong{font-size:10px}.oh-date-event-row .oh-event-copy small{font-size:9px}
