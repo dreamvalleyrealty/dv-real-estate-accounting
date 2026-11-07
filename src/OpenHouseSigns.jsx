@@ -788,7 +788,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
         <div className="oh-search"><Search size={15}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search property or agent"/></div>
         <div className="oh-event-list">
           {groupedEvents.length ? groupedEvents.map(group => {
-            const addressKey = group.address.trim().replace(/\\s+/g, " ").toLowerCase();
+            const addressKey = group.address.trim().replace(/\s+/g, " ").toLowerCase();
             const expanded = expandedAddressGroups.has(addressKey);
             return <div className="oh-address-group" key={addressKey}>
               <div className="oh-address-heading">
