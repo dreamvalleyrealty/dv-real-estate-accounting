@@ -521,7 +521,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
         intermediates,
         optimizeWaypointOrder: true,
         travelMode: "DRIVING",
-        fields: ["path"]
+        fields: ["path", "optimizedIntermediateWaypointIndices"]
       });
       if (!routes.length) throw new Error("Google Maps could not calculate a driving route for these sign locations.");
       routePolylinesRef.current.forEach(polyline => polyline.setMap(null));
