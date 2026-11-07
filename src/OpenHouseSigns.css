@@ -5,3 +5,5 @@
 @media(max-width:480px){.oh-date-schedule-head{align-items:flex-start;flex-direction:column}.oh-date-schedule-head button{width:100%;min-height:40px}.oh-date-row input{font-size:16px;min-height:44px}}
 
 .oh-brand-lockup{display:flex;align-items:center;gap:13px;min-width:0}.oh-brand-lockup img{width:48px;height:58px;object-fit:contain;flex:none}.oh-brand-lockup>div{min-width:0}@media(max-width:600px){.oh-heading{align-items:center}.oh-brand-lockup img{width:40px;height:48px}.oh-heading h1{font-size:22px}.oh-heading p{max-width:250px}}
+.oh-current-location{position:absolute;z-index:5;top:12px;right:12px;display:inline-flex;align-items:center;gap:7px;padding:10px 12px;border:1px solid #dce1e8;border-radius:9px;background:#fff;color:#0f2141;box-shadow:0 2px 10px rgba(15,33,65,.16);font:700 11px "DM Sans",system-ui,sans-serif;cursor:pointer}.oh-current-location:hover{border-color:#9e8556}.oh-current-location:disabled{opacity:.65;cursor:wait}.oh-current-location svg{color:#2878e5}
+@media(max-width:640px){.oh-current-location{top:10px;right:10px;padding:10px}.oh-current-location span{display:none}}
