@@ -78,6 +78,11 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const [photoBusyId, setPhotoBusyId] = useState("");
   const [routeBusy, setRouteBusy] = useState(false);
   const [selectedTab, setSelectedTab] = useState("plan");
+  const [showInventory, setShowInventory] = useState(false);
+  const [inventoryRows, setInventoryRows] = useState([]);
+  const [inventoryAgentId, setInventoryAgentId] = useState(agentId || "");
+  const [inventoryForm, setInventoryForm] = useState({ total_signs: "0", damaged_signs: "0", notes: "" });
+  const [inventoryLoading, setInventoryLoading] = useState(false);
 
   const activeEvent = useMemo(() => events.find(event => event.id === activeEventId) || null, [events, activeEventId]);
   const propertyPoint = useMemo(() => activeEvent?.property_lat != null && activeEvent?.property_lng != null
@@ -87,6 +92,8 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     return locations.filter(location => location.active && distanceKm(propertyPoint, { lat: Number(location.latitude), lng: Number(location.longitude) }) <= 5)
       .sort((a, b) => distanceKm(propertyPoint, { lat: Number(a.latitude), lng: Number(a.longitude) }) - distanceKm(propertyPoint, { lat: Number(b.latitude), lng: Number(b.longitude) }));
   }, [locations, propertyPoint]);
+  const currentInventoryAgentId = agentId || agents.find(agent => String(agent.email || "").toLowerCase() === String(user?.email || "").toLowerCase())?.id || "";
+  const inventoryAgent = agents.find(agent => agent.id === inventoryAgentId);
   const filteredEvents = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return events.filter(event => !needle || String(event.property_address || "").toLowerCase().includes(needle) || String(event.agent_name || "").toLowerCase().includes(needle));
@@ -286,6 +293,50 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
     );
   }, []);
+
+
+  const loadSignInventory = useCallback(async () => {
+    if (!supabase || !companyId) return;
+    setInventoryLoading(true);
+    try {
+      let request = supabase.from("dv_open_house_agent_sign_inventory").select("*").eq("company_id", companyId).order("updated_at", { ascending: false });
+      if (!adminMode && currentInventoryAgentId) request = request.eq("agent_id", currentInventoryAgentId);
+      const { data, error: inventoryError } = await request;
+      if (inventoryError) throw inventoryError;
+      const rows = data || [];
+      setInventoryRows(rows);
+      const own = rows.find(row => row.agent_id === currentInventoryAgentId);
+      if (own) setInventoryForm({ total_signs: String(own.total_signs), damaged_signs: String(own.damaged_signs), notes: own.notes || "" });
+      else setInventoryForm({ total_signs: "0", damaged_signs: "0", notes: "" });
+      if (!inventoryAgentId && currentInventoryAgentId) setInventoryAgentId(currentInventoryAgentId);
+    } catch (e) { setError("Could not load sign inventory: " + errorText(e)); }
+    finally { setInventoryLoading(false); }
+  }, [companyId, adminMode, currentInventoryAgentId, inventoryAgentId]);
+
+  useEffect(() => { if (companyId) loadSignInventory(); }, [companyId, loadSignInventory]);
+
+  async function saveSignInventory(event) {
+    event.preventDefault();
+    const targetAgentId = adminMode ? inventoryAgentId : currentInventoryAgentId;
+    if (!targetAgentId || !supabase) { setError("Your agent profile could not be identified. Ask an administrator to link your login to your agent profile."); return; }
+    const total = Number.parseInt(inventoryForm.total_signs, 10);
+    const damaged = Number.parseInt(inventoryForm.damaged_signs, 10);
+    if (!Number.isInteger(total) || !Number.isInteger(damaged) || total < 0 || damaged < 0 || damaged > total) {
+      setError("Enter valid sign counts. Damaged signs cannot exceed total signs."); return;
+    }
+    setSaving(true); setError(""); setMessage("");
+    try {
+      const { error: saveError } = await supabase.from("dv_open_house_agent_sign_inventory").upsert({
+        company_id: companyId, agent_id: targetAgentId, total_signs: total,
+        damaged_signs: damaged, notes: inventoryForm.notes.trim() || null,
+        updated_by: user.id, updated_at: new Date().toISOString()
+      }, { onConflict: "agent_id" });
+      if (saveError) throw saveError;
+      setMessage("Sign inventory saved.");
+      await loadSignInventory();
+    } catch (e) { setError("Could not save sign inventory: " + errorText(e)); }
+    finally { setSaving(false); }
+  }
 
   const geocodeAddress = useCallback(async address => {
     if (!geocoderRef.current) throw new Error("Google Maps is still loading.");
@@ -589,11 +640,35 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   return <div className="oh-wrap">
     <div className="oh-heading">
       <div><div className="oh-brand-lockup"><img src="/dv-logo.svg" alt="Dream Valley Realty logo"/><div><div className="oh-eyebrow">DREAM VALLEY REALTY · FIELD TOOLS</div><h1>Open House Signs</h1><p>Plan sign locations, remember where they were placed, and reuse them at future open houses.</p></div></div></div>
-      <button className="oh-primary" onClick={() => { setTemplateEventId(""); setEventForm({ property_address: "", start_time: "13:00", end_time: "16:00", notes: "" }); setDateRows([{ event_date: "", start_time: "13:00", end_time: "16:00" }]); setShowNewEvent(true); setError(""); }}><Plus size={16}/> New Open House</button>
+      <button className="oh-secondary" onClick={() => setShowInventory(v => !v)}><Signpost size={15}/>{showInventory ? "Close inventory" : "Sign inventory"}</button><button className="oh-primary" onClick={() => { setTemplateEventId(""); setEventForm({ property_address: "", start_time: "13:00", end_time: "16:00", notes: "" }); setDateRows([{ event_date: "", start_time: "13:00", end_time: "16:00" }]); setShowNewEvent(true); setError(""); }}><Plus size={16}/> New Open House</button>
     </div>
     {error && <div className="oh-alert oh-alert-error"><AlertTriangle size={17}/><span>{error}</span><button onClick={() => setError("")}><X size={15}/></button></div>}
     {message && <div className="oh-alert oh-alert-ok"><CheckCircle2 size={17}/><span>{message}</span><button onClick={() => setMessage("")}><X size={15}/></button></div>}
     {!MAPS_KEY && <div className="oh-key-warning"><AlertTriangle size={18}/><div><strong>Google Maps API key required</strong><p>Add <code>VITE_GOOGLE_MAPS_API_KEY</code> to the Railway environment and enable Maps JavaScript API, Places API and Geocoding API in Google Cloud. The map and address lookup will activate after redeployment.</p></div></div>}
+
+    {showInventory && <section className="oh-inventory-panel">
+      <div className="oh-section-head"><div><h3>Agent sign inventory</h3><p>Record physical directional signs assigned to each agent. Damaged signs are included in the total but excluded from serviceable stock.</p></div><button type="button" className="oh-secondary" onClick={loadSignInventory} disabled={inventoryLoading}><RefreshCw size={14}/> Refresh</button></div>
+      {inventoryLoading ? <div className="oh-empty-list">Loading sign inventory…</div> : <>
+        {adminMode && <div className="oh-inventory-agent-list">{agents.map(agent => {
+          const row = inventoryRows.find(item => item.agent_id === agent.id);
+          const name = agent.name || [agent.first_name, agent.last_name].filter(Boolean).join(" ") || agent.email || "Agent";
+          return <button type="button" key={agent.id} className={"oh-inventory-agent " + (inventoryAgentId === agent.id ? "selected" : "")} onClick={() => {
+            setInventoryAgentId(agent.id);
+            setInventoryForm({ total_signs: String(row?.total_signs ?? 0), damaged_signs: String(row?.damaged_signs ?? 0), notes: row?.notes || "" });
+          }}><strong>{name}</strong><span>{row ? row.total_signs + " total · " + (row.total_signs-row.damaged_signs) + " serviceable · " + row.damaged_signs + " damaged" : "No inventory recorded"}</span></button>;
+        })}</div>}
+        {(!adminMode || inventoryAgentId) ? <form className="oh-inventory-form" onSubmit={saveSignInventory}>
+          <div className="oh-inventory-form-title"><strong>{adminMode ? (inventoryAgent?.name || [inventoryAgent?.first_name, inventoryAgent?.last_name].filter(Boolean).join(" ") || inventoryAgent?.email || "Selected agent") : "My sign inventory"}</strong><span>{adminMode ? "Management view" : "Your assigned signs"}</span></div>
+          <div className="oh-inventory-fields">
+            <label>Total signs<input type="number" min="0" step="1" required value={inventoryForm.total_signs} onChange={e => setInventoryForm(v => ({...v,total_signs:e.target.value}))}/></label>
+            <label>Damaged signs<input type="number" min="0" step="1" required value={inventoryForm.damaged_signs} onChange={e => setInventoryForm(v => ({...v,damaged_signs:e.target.value}))}/></label>
+            <div className="oh-inventory-available"><span>Serviceable signs</span><strong>{Math.max(0, (Number.parseInt(inventoryForm.total_signs,10)||0) - (Number.parseInt(inventoryForm.damaged_signs,10)||0))}</strong></div>
+          </div>
+          <label className="oh-inventory-notes">Notes<textarea value={inventoryForm.notes} onChange={e => setInventoryForm(v => ({...v,notes:e.target.value}))} placeholder="Storage location, missing parts, sign condition…"/></label>
+          <div className="oh-card-actions"><button type="submit" className="oh-primary" disabled={saving}>{saving ? "Saving…" : "Save inventory"}</button></div>
+        </form> : <div className="oh-empty-list">Select an agent to view or update their sign inventory.</div>}
+      </>}
+    </section>}
     <div className="oh-layout">
       <aside className="oh-side">
         <div className="oh-side-head"><div><strong>Open houses</strong><span>{events.length} saved</span></div><button className="oh-icon-btn" title="Refresh" onClick={() => loadDirectories(companyId)}><RefreshCw size={15}/></button></div>
