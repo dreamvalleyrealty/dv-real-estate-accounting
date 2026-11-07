@@ -42,7 +42,7 @@ begin
   insert into public.dv_open_house_agent_sign_inventory
     (company_id, agent_id, total_signs, lost_signs, damaged_signs, updated_by, updated_at)
   values
-    (v_company_id, v_agent_id, 0,
+    (v_company_id, v_agent_id, 1,
       case when new.status = 'LOST' then 1 else 0 end,
       case when new.status = 'DAMAGED' then 1 else 0 end,
       auth.uid(), now())
