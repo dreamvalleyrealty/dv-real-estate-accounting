@@ -118,7 +118,12 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
           agent = data;
           cid = cid || data?.company_id || "";
         }
-        if (!cid) throw new Error("Your account is not linked to a brokerage company. Ask an administrator to check your user profile.");
+        if (!cid && ["SUPERADMIN","ADMIN","MANAGER","BROKER","BROKER_OF_RECORD","BROKER OF RECORD","OWNER"].includes(String(role || profile?.role || "").toUpperCase())) {
+          const { data: company, error: companyError } = await supabase.from("dv_accounting_companies").select("id").limit(1).maybeSingle();
+          if (companyError) throw companyError;
+          cid = company?.id || "";
+        }
+        if (!cid) throw new Error("Your account is not linked to a brokerage company. Ask an administrator to check your agent profile.");
         if (cancelled) return;
         setCompanyId(cid);
         setAgentName(agent?.name || [agent?.first_name, agent?.last_name].filter(Boolean).join(" ") || profile?.display_name || user.email || "Agent");
@@ -131,7 +136,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     }
     init();
     return () => { cancelled = true; };
-  }, [agentId, user?.id, loadDirectories]);
+  }, [agentId, user?.id, role, loadDirectories]);
 
   useEffect(() => {
     if (!activeEventId || !supabase) { setEventSigns([]); return; }
