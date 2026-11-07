@@ -102,6 +102,18 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     const needle = query.trim().toLowerCase();
     return events.filter(event => !needle || String(event.property_address || "").toLowerCase().includes(needle) || String(event.agent_name || "").toLowerCase().includes(needle));
   }, [events, query]);
+  const groupedEvents = useMemo(() => {
+    const groups = new Map();
+    filteredEvents.forEach(event => {
+      const addressKey = String(event.property_address || "").trim().replace(/\s+/g, " ").toLowerCase();
+      if (!groups.has(addressKey)) groups.set(addressKey, { address: event.property_address || "Address not set", events: [] });
+      groups.get(addressKey).events.push(event);
+    });
+    return Array.from(groups.values()).map(group => ({
+      ...group,
+      events: group.events.sort((a, b) => String(b.event_date || "").localeCompare(String(a.event_date || "")))
+    }));
+  }, [filteredEvents]);
 
   const loadDirectories = useCallback(async (cid) => {
     if (!supabase || !cid) return;
@@ -769,12 +781,15 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     </section>}
     <div className="oh-layout">
       <aside className="oh-side">
-        <div className="oh-side-head"><div><strong>Open houses</strong><span>{events.length} saved</span></div><button className="oh-icon-btn" title="Refresh" onClick={() => loadDirectories(companyId)}><RefreshCw size={15}/></button></div>
+        <div className="oh-side-head"><div><strong>Open houses</strong><span>{groupedEvents.length} properties · {events.length} dates</span></div><button className="oh-icon-btn" title="Refresh" onClick={() => loadDirectories(companyId)}><RefreshCw size={15}/></button></div>
         <div className="oh-search"><Search size={15}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search property or agent"/></div>
         <div className="oh-event-list">
-          {filteredEvents.length ? filteredEvents.map(event => <button key={event.id} className={"oh-event-row " + (event.id === activeEventId ? "selected" : "")} onClick={() => { setActiveEventId(event.id); setPendingPoint(null); setSuggestions([]); }}>
-            <span className="oh-event-icon"><MapPin size={17}/></span><span className="oh-event-copy"><strong>{event.property_address}</strong><small>{prettyDate(event.event_date)} · {event.agent_name || "Agent"}</small></span><span className={"oh-dot " + String(event.status || "PLANNED").toLowerCase()} />
-          </button>) : <div className="oh-empty-list">No open houses yet. Create one to start planning.</div>}
+          {groupedEvents.length ? groupedEvents.map(group => <div className="oh-address-group" key={group.address.toLowerCase()}>
+            <div className="oh-address-heading"><span className="oh-event-icon"><MapPin size={17}/></span><strong title={group.address}>{group.address}</strong><span className="oh-date-count">{group.events.length} {group.events.length === 1 ? "date" : "dates"}</span></div>
+            <div className="oh-address-dates">{group.events.map(event => <button key={event.id} className={"oh-event-row oh-date-event-row " + (event.id === activeEventId ? "selected" : "")} onClick={() => { setActiveEventId(event.id); setPendingPoint(null); setSuggestions([]); }}>
+              <span className="oh-event-copy"><strong>{prettyDate(event.event_date)}</strong><small>{event.start_time ? event.start_time.slice(0,5) : "Time TBD"} – {event.end_time ? event.end_time.slice(0,5) : "Time TBD"} · {event.agent_name || "Agent"}</small></span><span className={"oh-dot " + String(event.status || "PLANNED").toLowerCase()} />
+            </button>)}</div>
+          </div>) : <div className="oh-empty-list">No open houses yet. Create one to start planning.</div>}
         </div>
         <div className="oh-side-foot"><History size={15}/> Saved sign locations are shared with active users in your brokerage.</div>
       </aside>
