@@ -10,6 +10,7 @@
   "background_color": "#0f2141",
   "theme_color": "#0f2141",
   "icons": [
-    { "src": "/dv-logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "/dv-home-icon-180.png?v=4", "sizes": "180x180", "type": "image/png", "purpose": "any" },
+    { "src": "/dv-home-icon-512.png?v=4", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
