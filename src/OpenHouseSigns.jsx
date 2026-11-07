@@ -221,6 +221,8 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       mapRef.current.setZoom(14);
     }
     if (userLocation) {
+      mapRef.current.panTo(userLocation);
+      mapRef.current.setZoom(16);
       const currentMarker = new google.maps.Marker({
         map: mapRef.current,
         position: userLocation,
