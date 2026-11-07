@@ -70,7 +70,7 @@ export default function FieldApp() {
 
   if (!user) return <main className="field-auth">
     <div className="field-login-card">
-      <div className="field-mark">DV</div>
+      <img className="field-login-logo" src="/dv-logo.svg" alt="Dream Valley Realty"/>
       <p className="field-kicker">DREAM VALLEY REALTY</p>
       <h1>Open House Signs</h1>
       <p className="field-subtitle">Plan your signs. Take photos. Keep everything in sync.</p>
@@ -87,7 +87,7 @@ export default function FieldApp() {
   const isAdmin = ADMIN_ROLES.includes(String(profile?.role || "").toUpperCase());
   return <div className="field-shell">
     <header className="field-topbar">
-      <div className="field-brand"><span className="field-brand-mark">DV</span><div><strong>Dream Valley</strong><small>OPEN HOUSE SIGNS</small></div></div>
+      <div className="field-brand"><img className="field-brand-logo" src="/dv-logo.svg" alt="Dream Valley Realty"/><div><strong>Dream Valley</strong><small>OPEN HOUSE SIGNS</small></div></div>
       <button className="field-signout" onClick={signOut} aria-label="Sign out"><LogOut size={18}/></button>
     </header>
     {loading ? <div className="field-loading">Preparing your sign workspace…</div> : error ? <div className="field-message"><ShieldCheck/><h2>Account setup needed</h2><p>{error}</p><button onClick={signOut}>Sign out</button></div> :
