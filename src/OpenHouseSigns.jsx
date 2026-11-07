@@ -85,6 +85,8 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const [inventoryAgentId, setInventoryAgentId] = useState(agentId || "");
   const [inventoryForm, setInventoryForm] = useState({ total_signs: "0", lost_signs: "0", damaged_signs: "0", notes: "" });
   const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [transferForm, setTransferForm] = useState({ to_agent_id: "", quantity: "1", notes: "" });
+  const [inventoryTransfers, setInventoryTransfers] = useState([]);
 
   const activeEvent = useMemo(() => events.find(event => event.id === activeEventId) || null, [events, activeEventId]);
   const propertyPoint = useMemo(() => activeEvent?.property_lat != null && activeEvent?.property_lng != null
@@ -354,6 +356,11 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       if (inventoryError) throw inventoryError;
       const rows = data || [];
       setInventoryRows(rows);
+      if (adminMode) {
+        const { data: transfers, error: transferError } = await supabase.from("dv_open_house_sign_transfers").select("*,from_agent:dv_accounting_agents!from_agent_id(name,first_name,last_name,email),to_agent:dv_accounting_agents!to_agent_id(name,first_name,last_name,email)").eq("company_id", companyId).order("created_at", { ascending: false }).limit(20);
+        if (transferError) throw transferError;
+        setInventoryTransfers(transfers || []);
+      }
       const selectedAgentForInventory = adminMode ? inventoryAgentId : currentInventoryAgentId;
       const own = rows.find(row => row.agent_id === selectedAgentForInventory);
       if (own) setInventoryForm({ total_signs: String(own.total_signs), lost_signs: String(own.lost_signs || 0), damaged_signs: String(own.damaged_signs), notes: own.notes || "" });
@@ -379,13 +386,33 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     try {
       const { error: saveError } = await supabase.from("dv_open_house_agent_sign_inventory").upsert({
         company_id: companyId, agent_id: targetAgentId, total_signs: total,
-        damaged_signs: damaged, notes: inventoryForm.notes.trim() || null,
+        lost_signs: lost, damaged_signs: damaged, notes: inventoryForm.notes.trim() || null,
         updated_by: user.id, updated_at: new Date().toISOString()
       }, { onConflict: "agent_id" });
       if (saveError) throw saveError;
       setMessage("Sign inventory saved.");
       await loadSignInventory();
     } catch (e) { setError("Could not save sign inventory: " + errorText(e)); }
+    finally { setSaving(false); }
+  }
+
+  async function transferAgentSigns(event) {
+    event.preventDefault();
+    const quantity = Number.parseInt(transferForm.quantity, 10);
+    if (!adminMode || !inventoryAgentId || !transferForm.to_agent_id || transferForm.to_agent_id === inventoryAgentId || !Number.isInteger(quantity) || quantity < 1) {
+      setError("Choose two different agents and enter a valid transfer quantity."); return;
+    }
+    setSaving(true); setError(""); setMessage("");
+    try {
+      const { error: transferError } = await supabase.from("dv_open_house_sign_transfers").insert({
+        company_id: companyId, from_agent_id: inventoryAgentId, to_agent_id: transferForm.to_agent_id,
+        quantity, notes: transferForm.notes.trim() || null, transferred_by: user.id
+      });
+      if (transferError) throw transferError;
+      setMessage("Sign transfer recorded. Both agents’ inventories have been updated.");
+      setTransferForm({ to_agent_id: "", quantity: "1", notes: "" });
+      await loadSignInventory();
+    } catch (e) { setError("Could not transfer signs: " + errorText(e)); }
     finally { setSaving(false); }
   }
 
@@ -698,7 +725,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     {!MAPS_KEY && <div className="oh-key-warning"><AlertTriangle size={18}/><div><strong>Google Maps API key required</strong><p>Add <code>VITE_GOOGLE_MAPS_API_KEY</code> to the Railway environment and enable Maps JavaScript API, Places API and Geocoding API in Google Cloud. The map and address lookup will activate after redeployment.</p></div></div>}
 
     {showInventory && <section className="oh-inventory-panel">
-      <div className="oh-section-head"><div><h3>Agent sign inventory</h3><p>Record physical directional signs assigned to each agent. Damaged signs are included in the total but excluded from serviceable stock.</p></div><button type="button" className="oh-secondary" onClick={loadSignInventory} disabled={inventoryLoading}><RefreshCw size={14}/> Refresh</button></div>
+      <div className="oh-section-head"><div><h3>Agent sign inventory</h3><p>Each agent owns their own signs. Transfers move ownership and update both agents’ totals. Lost and damaged signs are excluded from available stock.</p></div><button type="button" className="oh-secondary" onClick={loadSignInventory} disabled={inventoryLoading}><RefreshCw size={14}/> Refresh</button></div>
       {inventoryLoading ? <div className="oh-empty-list">Loading sign inventory…</div> : <>
         {adminMode && <div className="oh-inventory-agent-list">{agents.map(agent => {
           const row = inventoryRows.find(item => item.agent_id === agent.id);
@@ -706,18 +733,31 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
           return <button type="button" key={agent.id} className={"oh-inventory-agent " + (inventoryAgentId === agent.id ? "selected" : "")} onClick={() => {
             setInventoryAgentId(agent.id);
             setInventoryForm({ total_signs: String(row?.total_signs ?? 0), lost_signs: String(row?.lost_signs ?? 0), damaged_signs: String(row?.damaged_signs ?? 0), notes: row?.notes || "" });
-          }}><strong>{name}</strong><span>{row ? row.total_signs + " total · " + (row.total_signs-(row.lost_signs||0)-row.damaged_signs) + " available · " + (row.lost_signs||0) + " lost · " + row.damaged_signs + " damaged" : "No inventory recorded"}</span></button>;
+          }}><strong>{name}</strong><span>{row ? row.total_signs + " owned · " + (row.total_signs-(row.lost_signs||0)-row.damaged_signs) + " available · " + (row.lost_signs||0) + " lost · " + row.damaged_signs + " damaged" : "No inventory recorded"}</span></button>;
         })}</div>}
         {(!adminMode || inventoryAgentId) ? <form className="oh-inventory-form" onSubmit={saveSignInventory}>
           <div className="oh-inventory-form-title"><strong>{adminMode ? (inventoryAgent?.name || [inventoryAgent?.first_name, inventoryAgent?.last_name].filter(Boolean).join(" ") || inventoryAgent?.email || "Selected agent") : "My sign inventory"}</strong><span>{adminMode ? "Management view" : "Your assigned signs"}</span></div>
           <div className="oh-inventory-fields">
             <label>Total signs<input type="number" min="0" step="1" required value={inventoryForm.total_signs} onChange={e => setInventoryForm(v => ({...v,total_signs:e.target.value}))}/></label>
-            <label>Lost signs<input type="number" min="0" step="1" required value={inventoryForm.lost_signs} onChange={e => setInventoryForm(v => ({...v,lost_signs:e.target.value}))}/></label>\n            <label>Damaged signs<input type="number" min="0" step="1" required value={inventoryForm.damaged_signs} onChange={e => setInventoryForm(v => ({...v,damaged_signs:e.target.value}))}/></label>
+            <label>Lost signs<input type="number" min="0" step="1" required value={inventoryForm.lost_signs} onChange={e => setInventoryForm(v => ({...v,lost_signs:e.target.value}))}/></label>
+            <label>Damaged signs<input type="number" min="0" step="1" required value={inventoryForm.damaged_signs} onChange={e => setInventoryForm(v => ({...v,damaged_signs:e.target.value}))}/></label>
             <div className="oh-inventory-available"><span>Serviceable signs</span><strong>{Math.max(0, (Number.parseInt(inventoryForm.total_signs,10)||0) - (Number.parseInt(inventoryForm.lost_signs,10)||0) - (Number.parseInt(inventoryForm.damaged_signs,10)||0))}</strong></div>
           </div>
           <label className="oh-inventory-notes">Notes<textarea value={inventoryForm.notes} onChange={e => setInventoryForm(v => ({...v,notes:e.target.value}))} placeholder="Storage location, missing parts, sign condition…"/></label>
           <div className="oh-card-actions"><button type="submit" className="oh-primary" disabled={saving}>{saving ? "Saving…" : "Save inventory"}</button></div>
         </form> : <div className="oh-empty-list">Select an agent to view or update their sign inventory.</div>}
+        {adminMode && inventoryAgentId && <>
+          <form className="oh-inventory-form oh-transfer-form" onSubmit={transferAgentSigns}>
+            <div className="oh-inventory-form-title"><strong>Transfer signs to another agent</strong><span>Ownership moves from the selected agent to the recipient.</span></div>
+            <div className="oh-inventory-fields">
+              <label>Recipient<select required value={transferForm.to_agent_id} onChange={e => setTransferForm(v => ({...v,to_agent_id:e.target.value}))}><option value="">Select agent</option>{agents.filter(agent => agent.id !== inventoryAgentId).map(agent => <option key={agent.id} value={agent.id}>{agent.name || [agent.first_name,agent.last_name].filter(Boolean).join(" ") || agent.email}</option>)}</select></label>
+              <label>Number of signs<input type="number" min="1" step="1" required value={transferForm.quantity} onChange={e => setTransferForm(v => ({...v,quantity:e.target.value}))}/></label>
+              <label>Transfer note<input value={transferForm.notes} onChange={e => setTransferForm(v => ({...v,notes:e.target.value}))} placeholder="Optional"/></label>
+            </div>
+            <div className="oh-card-actions"><button type="submit" className="oh-primary" disabled={saving}>{saving ? "Transferring…" : "Record transfer"}</button></div>
+          </form>
+          <div className="oh-transfer-history"><strong>Recent transfers</strong>{inventoryTransfers.length ? inventoryTransfers.map(item => <div key={item.id}><span>{item.from_agent?.name || [item.from_agent?.first_name,item.from_agent?.last_name].filter(Boolean).join(" ") || "Agent"} → {item.to_agent?.name || [item.to_agent?.first_name,item.to_agent?.last_name].filter(Boolean).join(" ") || "Agent"}</span><b>{item.quantity} signs</b><small>{new Date(item.created_at).toLocaleDateString("en-CA")}{item.notes ? " · "+item.notes : ""}</small></div>) : <p>No transfers recorded yet.</p>}</div>
+        </>}
       </>}
     </section>}
     <div className="oh-layout">
