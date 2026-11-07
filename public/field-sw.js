@@ -1,5 +1,5 @@
-const CACHE = "dv-signs-shell-v1";
-const SHELL = ["/field.html", "/field.webmanifest", "/dv-field-icon.svg"];
+const CACHE = "dv-signs-shell-v2";
+const SHELL = ["/field.html", "/field.webmanifest", "/dv-home-icon-180.png"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
 });
