@@ -265,9 +265,31 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
    else result=await supabase.from("dv_accounting_listing_submissions").insert([{...payload,agent_id:targetAgentId,company_id:resolvedCompanyId,created_by:user?.id||null}]).select().single();
    if(result.error)throw new Error("Could not save listing: "+result.error.message);
    const saved=result.data;
+   // A listing is the source of truth for its property address. Keep linked trade
+   // submissions and accounting transactions in sync whenever the listing is corrected.
+   const addressParts=splitStreetAddress(saved.property_address,saved.street_number||form.street_number,saved.street_name||form.street_name);
+   const streetAddress=[addressParts.street_number,addressParts.street_name].filter(Boolean).join(" ")||String(saved.property_address||"").trim();
+   const transactionAddress=[streetAddress,saved.unit_number?"Unit "+saved.unit_number:""].filter(Boolean).join(" ");
+   const tradeAddress=[streetAddress,saved.unit_number?"Unit "+saved.unit_number:"",saved.city,saved.province||"ON",saved.postal_code].filter(Boolean).join(", ");
+   const addressPatch={street_number:addressParts.street_number||null,street_name:addressParts.street_name||null,unit_number:saved.unit_number||null,city:saved.city||null,province:saved.province||"ON",postal_code:saved.postal_code||null};
+   let addressSyncWarning="";
+   try{
+    const {data:linkedTrades,error:tradeReadError}=await supabase.from("dv_accounting_agent_trade_submissions").select("id,payload").eq("listing_id",saved.id);
+    if(tradeReadError)throw new Error("Could not read linked trade submissions: "+tradeReadError.message);
+    for(const trade of linkedTrades||[]){
+     const nextPayload={...(trade.payload||{}),...addressPatch,property_address:tradeAddress};
+     const {error:tradeUpdateError}=await supabase.from("dv_accounting_agent_trade_submissions").update({payload:nextPayload,updated_at:new Date().toISOString()}).eq("id",trade.id);
+     if(tradeUpdateError)throw new Error("Trade submission "+trade.id+": "+tradeUpdateError.message);
+    }
+    const {error:transactionUpdateError}=await supabase.from("dv_accounting_transactions").update({property_address:transactionAddress,...addressPatch}).eq("listing_id",saved.id);
+    if(transactionUpdateError)throw new Error("Could not update linked transactions: "+transactionUpdateError.message);
+   }catch(syncError){
+    addressSyncWarning=" Listing saved, but linked trade/transaction address sync needs attention: "+(syncError?.message||String(syncError));
+    console.warn("Listing address synchronization failed:",syncError);
+   }
    setSelected(saved);setAssignedAgentId(saved.agent_id||targetAgentId);setAdditionalAgentIds(Array.isArray(saved.additional_agent_ids)?saved.additional_agent_ids.filter(id=>id!==saved.agent_id):[]);setForm({...blank,...saved,...splitStreetAddress(saved.property_address,saved.street_number,saved.street_name)});setNewListing(false);
    try{window.localStorage.removeItem(localDraftKey)}catch{}
-   setMessage(submit?(missingRequiredDocuments.length?"Listing submitted for admin review with your missing-document explanation.":"Listing paperwork submitted for admin review."):(regularSave?"Listing saved.":"Listing draft saved."));if(submit){setSubmissionReason("");setMissingRequiredDocuments([])}
+   setMessage((submit?(missingRequiredDocuments.length?"Listing submitted for admin review with your missing-document explanation.":"Listing paperwork submitted for admin review."):(regularSave?"Listing saved.":"Listing draft saved."))+addressSyncWarning);if(submit){setSubmissionReason("");setMissingRequiredDocuments([])}
    if(submit && String(selected?.status||"").toUpperCase() !== "SUBMITTED"){
     supabase.functions.invoke("admin-review-notify",{body:{type:"LISTING",submissionId:saved.id}})
      .then(({error:notifyError})=>{if(notifyError)console.warn("Listing review notification failed:",notifyError.message)})
