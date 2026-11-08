@@ -25,7 +25,7 @@ function BuyerRebatePanel({trades,accounts,role}){
 }
 
 
-export default function BuyerRebates({role=""}) {
+export function BuyerRebates({role=""}) {
  const [trades,setTrades]=useState([]),[accounts,setAccounts]=useState([]),[loading,setLoading]=useState(true);
  useEffect(()=>{let active=true;(async()=>{if(!supabase){setLoading(false);return}const [tx,ba]=await Promise.all([supabase.from("dv_accounting_transactions").select("*").eq("status","CLOSED"),supabase.from("dv_accounting_bank_accounts").select("*").eq("active",true)]);if(!active)return;if(tx.error)alert("Could not load closed buyer trades: "+tx.error.message);if(ba.error)alert("Could not load trust accounts: "+ba.error.message);setTrades((tx.data||[]).filter(t=>String(t.side||"").toUpperCase()==="BUYER"));setAccounts(ba.data||[]);setLoading(false)})();return()=>{active=false}},[]);
  return <div><div className="pagehead"><div><h1>Buyer Rebates</h1><p>Record rebates paid to buyers from the agent's commission when Dream Valley represented the buyer. Payments are made from Commission Trust after closing.</p></div></div>{loading?<section className="panel">Loading closed buyer trades and trust accounts…</section>:<section className="panel"><BuyerRebatePanel trades={trades} accounts={accounts} role={role}/></section>}</div>;
