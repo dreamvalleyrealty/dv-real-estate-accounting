@@ -70,3 +70,33 @@
 
 /* Inline uploaded sign photo preview */
 .oh-inline-photo{margin-top:10px;padding:8px;border:1px solid #e4e8ed;border-radius:9px;background:#f7f8fa;max-width:520px}.oh-inline-photo img{display:block;width:100%;max-height:420px;object-fit:contain;border-radius:6px}.oh-inline-photo>span{display:block;padding:10px;color:#596579;font-size:12px;line-height:1.5}.oh-inline-photo .oh-inline-photo-error{color:#a13c35}
+
+
+/* Larger touch targets for the field sign checklist */
+.oh-sign-tools{gap:9px}
+.oh-sign-tools .oh-photo-btn,
+.oh-sign-tools .oh-remove-sign,
+.oh-sign-tools .oh-small-primary,
+.oh-sign-tools .oh-small-success,
+.oh-sign-tools .oh-small-muted{
+  min-height:48px;
+  padding:0 16px;
+  border-radius:9px;
+  font-size:13px;
+  font-weight:700;
+  gap:8px;
+}
+.oh-sign-tools .oh-photo-btn svg,
+.oh-sign-tools .oh-remove-sign svg{width:17px;height:17px}
+@media(max-width:760px){
+  .oh-sign-tools{margin:10px 0 0 38px;gap:9px}
+  .oh-sign-tools>*{min-height:50px}
+}
+@media(max-width:480px){
+  .oh-sign-tools{margin:10px 0 0;width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  .oh-sign-tools .oh-photo-btn,
+  .oh-sign-tools .oh-remove-sign,
+  .oh-sign-tools .oh-small-primary,
+  .oh-sign-tools .oh-small-success,
+  .oh-sign-tools .oh-small-muted{width:100%;min-height:52px;padding:0 10px;font-size:13px}
+}
