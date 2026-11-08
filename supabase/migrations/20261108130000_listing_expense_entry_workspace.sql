@@ -4,6 +4,7 @@
 
 alter table public.dv_listing_expenses
   alter column supplier_contact_id drop not null,
+  add column if not exists supplier_name text,
   add column if not exists receipt_storage_path text,
   add column if not exists receipt_file_name text;
 
