@@ -597,7 +597,7 @@ Deno.serve(async (req: Request) => {
       const gold = rgb(158 / 255, 133 / 255, 86 / 255);
       const muted = rgb(100 / 255, 116 / 255, 139 / 255);
       const line = rgb(203 / 255, 213 / 255, 225 / 255);
-      const light = rgb(248 / 255, 250 / 255, 252);
+      const light = rgb(248 / 255, 250 / 255, 252 / 255);
       const receiptLogoBytes = Uint8Array.from(atob(DV_LOGO_PNG_BASE64), (char) => char.charCodeAt(0));
       const receiptLogo = await document.embedPng(receiptLogoBytes);
       const logoScale = Math.min(82 / receiptLogo.width, 94 / receiptLogo.height);
