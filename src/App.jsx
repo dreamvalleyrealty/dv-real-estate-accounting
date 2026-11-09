@@ -1729,52 +1729,63 @@ function Agents({user,mode="agents",permissions={},setActive,role}){
  async function editService(x){setServiceEditId(x.id);setServiceForm({agent_id:x.agent_id||"",name:x.name||"",amount:x.amount??"",hst_amount:x.hst_amount??0,frequency:x.frequency||"MONTHLY",start_date:x.start_date||today(),end_date:x.end_date||"",next_charge_date:x.next_charge_date||today(),notes:x.notes||""});setServiceShow(true)}
  async function deleteService(id){if(!supabase)return;if(!confirm("Delete this agent service subscription? Existing charges remain."))return;const{error}=await supabase.from("dv_accounting_agent_service_subscriptions").delete().eq("id",id);if(error)return alert(error.message);serviceSubs.setRows(r=>r.filter(x=>x.id!==id))}
  function runMonthlyAgentStatements(){
-  const month=statementMonth||today().slice(0,7);
-  const [year,monthNo]=month.split("-").map(Number);
+  const month=statementMonth||today().slice(0,7),parts=month.split("-").map(Number),year=parts[0],monthNo=parts[1];
   if(!year||!monthNo)return alert("Choose a valid statement month.");
-  const start=month+"-01";
-  const end=new Date(year,monthNo,0).toISOString().slice(0,10);
-  const dateOfCharge=ch=>String(ch.created_at||ch.charge_date||"").slice(0,10);
-  const dateOfPayment=p=>String(p.payment_date||p.created_at||p.paid_at||"").slice(0,10);
-  const relevantCharges=charges.rows.filter(ch=>Number(ch.amount||0)>0.005&&dateOfCharge(ch)<=end);
-  const relevantPayments=chargePayments.rows.filter(p=>Number(p.amount||0)>0.005&&dateOfPayment(p)<=end);
-  const agentIds=new Set([
-   ...relevantCharges.filter(ch=>dateOfCharge(ch)>=start&&dateOfCharge(ch)<=end).map(ch=>ch.agent_id),
-   ...relevantPayments.filter(p=>dateOfPayment(p)>=start&&dateOfPayment(p)<=end).map(p=>charges.rows.find(ch=>ch.id===p.charge_id)?.agent_id).filter(Boolean)
-  ]);
-  const agents=[...agentIds].map(id=>a.rows.find(agent=>agent.id===id)).filter(Boolean).sort((x,y)=>String(x.name||"").localeCompare(String(y.name||"")));
+  const start=month+"-01",end=new Date(year,monthNo,0).toISOString().slice(0,10);
+  const dateOfCharge=ch=>String(ch.charge_date||ch.created_at||"").slice(0,10),dateOfPayment=p=>String(p.payment_date||p.created_at||p.paid_at||"").slice(0,10);
+  const base=ch=>Math.max(0,Number(ch.base_amount??ch.amount??0)),tax=ch=>ch.hst_applicable===false?0:Math.max(0,Number(ch.hst_amount||0)),total=ch=>base(ch)+tax(ch);
+  const allCharges=charges.rows.filter(ch=>Number(ch.amount||ch.base_amount||0)>0.005&&dateOfCharge(ch)<=end);
+  const allPayments=chargePayments.rows.filter(p=>Number(p.amount||0)>0.005&&dateOfPayment(p)<=end);
+  const ids=new Set([...allCharges.filter(ch=>dateOfCharge(ch)>=start&&dateOfCharge(ch)<=end).map(ch=>ch.agent_id),...allPayments.filter(p=>dateOfPayment(p)>=start&&dateOfPayment(p)<=end).map(p=>allCharges.find(ch=>String(ch.id)===String(p.charge_id))?.agent_id).filter(Boolean)]);
+  const agents=[...ids].map(id=>a.rows.find(agent=>String(agent.id)===String(id))).filter(Boolean).sort((x,y)=>String(x.name||"").localeCompare(String(y.name||"")));
   if(!agents.length)return alert("No agents have charges or payments for "+month+".");
   const esc=v=>String(v??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-  const fmt=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
+  const moneyFmt=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
+  const num=n=>Number(n||0).toLocaleString("en-CA",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const statementNo=String(year)+String(monthNo).padStart(2,"0"),statementDate=new Date(year,monthNo,0).toLocaleDateString("en-CA",{month:"long",day:"numeric",year:"numeric"});
   const monthLabel=new Date(year,monthNo-1,1).toLocaleDateString("en-CA",{month:"long",year:"numeric"});
   const statements=agents.map(agent=>{
-   const agentCharges=relevantCharges.filter(ch=>ch.agent_id===agent.id);
-   const agentPayments=relevantPayments.filter(p=>agentCharges.some(ch=>ch.id===p.charge_id));
-   const entries=[];
-   for(const ch of agentCharges){
-    const d=dateOfCharge(ch);if(d<start||d>end)continue;
-    entries.push({date:d,kind:"Charge",description:ch.description||String(ch.charge_type||"Agent charge").replaceAll("_"," "),reference:t.rows.find(tx=>tx.id===ch.transaction_id)?.transaction_number||"—",charge:Number(ch.amount||0),payment:0});
-   }
-   for(const p of agentPayments){
-    const d=dateOfPayment(p);if(d<start||d>end)continue;
-    const ch=charges.rows.find(x=>x.id===p.charge_id);
-    entries.push({date:d,kind:"Payment",description:"Payment received"+(p.method?" ("+p.method+")":""),reference:p.reference||ch?.description||"—",charge:0,payment:Number(p.amount||0)});
-   }
-   const priorCharges=agentCharges.filter(ch=>dateOfCharge(ch)<start).reduce((n,ch)=>n+Number(ch.amount||0),0);
-   const priorPayments=agentPayments.filter(p=>dateOfPayment(p)<start).reduce((n,p)=>n+Number(p.amount||0),0);
-   const opening=Math.max(0,priorCharges-priorPayments-agentCharges.filter(ch=>ch.status==="APPLIED"&&dateOfCharge(ch)<start).reduce((n,ch)=>n+Number(ch.amount||0),0));
-   const totalCharges=entries.reduce((n,e)=>n+e.charge,0);
-   const totalPayments=entries.reduce((n,e)=>n+e.payment,0);
-   const appliedThisPeriod=agentCharges.filter(ch=>ch.status==="APPLIED"&&dateOfCharge(ch)>=start&&dateOfCharge(ch)<=end).reduce((n,ch)=>n+Number(ch.amount||0),0);
-   const closing=Math.max(0,opening+totalCharges-totalPayments-appliedThisPeriod);
-   entries.sort((x,y)=>x.date.localeCompare(y.date)||x.kind.localeCompare(y.kind));
-   let running=opening;
-   const rows=entries.map(e=>{running+=e.charge-e.payment;return "<tr><td>"+esc(e.date)+"</td><td>"+esc(e.description)+"</td><td>"+esc(e.reference)+"</td><td class='num'>"+(e.charge?fmt(e.charge):"—")+"</td><td class='num'>"+(e.payment?fmt(e.payment):"—")+"</td><td class='num'>"+fmt(Math.max(0,running))+"</td></tr>"}).join("");
-   return "<article class='statement'><header><div><h1>Dream Valley Realty Inc.</h1><h2>Agent Monthly Statement</h2><p>"+esc(monthLabel)+"</p></div><div class='agent'><strong>"+esc(agent.name)+"</strong><br>"+esc(agent.email||"")+"</div></header><div class='summary'><div><small>Opening Balance</small><strong>"+fmt(opening)+"</strong></div><div><small>Charges This Month</small><strong>"+fmt(totalCharges)+"</strong></div><div><small>Payments This Month</small><strong>"+fmt(totalPayments)+"</strong></div><div><small>Closing Balance</small><strong>"+fmt(closing)+"</strong></div></div><table><thead><tr><th>Date</th><th>Description</th><th>Reference / Trade</th><th class='num'>Charge</th><th class='num'>Payment</th><th class='num'>Balance</th></tr></thead><tbody>"+(rows||"<tr><td colspan='6'>No activity in this period.</td></tr>")+"</tbody><tfoot><tr><th colspan='3'>Monthly Total</th><th class='num'>"+fmt(totalCharges)+"</th><th class='num'>"+fmt(totalPayments)+"</th><th class='num'>"+fmt(closing)+"</th></tr></tfoot></table><p class='note'>Charges and payments shown are based on records entered in the accounting system as of statement generation. Charges applied to a commission cheque are treated as settled.</p></article>";
+   const ac=allCharges.filter(ch=>String(ch.agent_id)===String(agent.id)),ap=allPayments.filter(p=>ac.some(ch=>String(ch.id)===String(p.charge_id)));
+   const prior=ac.filter(ch=>dateOfCharge(ch)<start),priorPays=ap.filter(p=>dateOfPayment(p)<start);
+   const appliedPrior=prior.filter(ch=>String(ch.status||"").toUpperCase()==="APPLIED").reduce((n,ch)=>n+total(ch),0);
+   const previous=Math.max(0,prior.reduce((n,ch)=>n+total(ch),0)-priorPays.reduce((n,p)=>n+Number(p.amount||0),0)-appliedPrior);
+   const mc=ac.filter(ch=>dateOfCharge(ch)>=start&&dateOfCharge(ch)<=end),mp=ap.filter(p=>dateOfPayment(p)>=start&&dateOfPayment(p)<=end);
+   const expenses=mc.reduce((n,ch)=>n+base(ch),0),hst=mc.reduce((n,ch)=>n+tax(ch),0),payments=mp.reduce((n,p)=>n+Number(p.amount||0),0);
+   const appliedThis=mc.filter(ch=>String(ch.status||"").toUpperCase()==="APPLIED").reduce((n,ch)=>n+total(ch),0);
+   const due=Math.max(0,previous+expenses+hst-payments-appliedThis);
+   const company=agent.legal_name||agent.company_name||agent.business_name||agent.corporation_name||agent.name||[agent.first_name,agent.last_name].filter(Boolean).join(" ");
+   const contact=[agent.first_name,agent.last_name].filter(Boolean).join(" ")||agent.name||"";
+   const address=[agent.address,agent.unit,agent.city,agent.province||"ON",agent.postal_code].filter(Boolean).join(", ");
+   const chargeRows=mc.map(ch=>{
+    const tx=t.rows.find(x=>String(x.id)===String(ch.transaction_id));
+    const type=String(ch.charge_type||"").toUpperCase(),code=ch.charge_code||ch.item_code||(type==="DESK_FEE"?"45":type==="ADMIN_FEE"?"46":type==="LEAD_FEE"?"47":"");
+    return "<tr><td>"+esc(code)+"</td><td>"+esc(ch.description||ch.name||String(ch.charge_type||"Agent charge").replaceAll("_"," "))+"</td><td>"+esc(ch.supplier_number||ch.supplementary_number||"")+"</td><td>"+esc(ch.invoice_number||ch.invoice_no||"")+"</td><td>"+esc(dateOfCharge(ch))+"</td><td class='num'>"+num(base(ch))+"</td><td class='num'>"+num(tax(ch))+"</td><td class='num'>"+num(total(ch))+"</td></tr>";
+   }).join("");
+   const paymentRows=mp.map(p=>{
+    const ch=ac.find(x=>String(x.id)===String(p.charge_id)),tx=t.rows.find(x=>String(x.id)===String(ch?.transaction_id));
+    return "<tr><td>CH</td><td>Commission cheque</td><td>"+esc(p.cheque_number||p.reference||p.payment_method||"—")+"</td><td>"+esc(dateOfPayment(p))+"</td><td>"+esc(tx?.transaction_number||ch?.transaction_number||"—")+"</td><td>"+esc(tx?.property_address||tx?.address||tx?.property||"—")+"</td><td class='num'>"+num(-Number(p.amount||0))+"</td></tr>";
+   }).join("");
+   const aging=[0,0,0,0,0],paidMap=new Map();
+   ap.forEach(p=>paidMap.set(String(p.charge_id),(paidMap.get(String(p.charge_id))||0)+Number(p.amount||0)));
+   ac.forEach(ch=>{
+    if(String(ch.status||"").toUpperCase()==="APPLIED")return;
+    const outstanding=Math.max(0,total(ch)-(paidMap.get(String(ch.id))||0));if(outstanding<=.005)return;
+    const age=Math.max(0,Math.floor((new Date(end+"T12:00:00")-new Date(dateOfCharge(ch)+"T12:00:00"))/86400000));
+    aging[age<=30?0:age<=60?1:age<=90?2:age<=120?3:4]+=outstanding;
+   });
+   const expiry=String(agent.reco_license_expiry||"").slice(0,10),renewal=expiry&&expiry<=end?"<div class='renewal'>*** YOUR REAL ESTATE LICENSE NEEDS TO BE RENEWED ***</div>":"";
+   const agingCells=aging.map(v=>"<td class='num'>"+num(v)+"</td>").join("");
+   return "<article class='statement'><header><div class='company'><strong>Dream Valley Realty Inc.</strong><br>885 Progress Ave., Suite 109<br>Toronto ON M1H-3G3</div><div class='statement-title'><strong>General EXPENSE STATEMENT # "+statementNo+"</strong><br>Statement Date: "+statementDate+"</div></header>"+renewal+
+    "<section class='top-grid'><div class='recipient'><div class='agent-no'>Agt. # "+esc(agent.agent_number||"")+"</div><strong>"+esc(company)+"</strong>"+(contact&&contact!==company?"<br>c/o "+esc(contact):"")+"<br>"+esc(address)+"</div><div class='summary'><strong>Summary Of Expense Account Activity</strong><div><span>Previous Balances:</span><b>"+moneyFmt(previous)+"</b></div><div><span>Expenses Charged:</span><b>"+num(expenses)+"</b></div><div><span>HST Charged# 771957610:</span><b>"+num(hst)+"</b></div><div><span>Payments Received:</span><b>"+num(-payments-appliedThis)+"</b></div><div class='due'><span>Expense Total Now Due:</span><b>"+moneyFmt(due)+"</b></div></div></section>"+
+    "<h3>Summary Of New Charges</h3><h4>Office Charges</h4><table><thead><tr><th>CD</th><th>Description</th><th>Supp#</th><th>Invoice#</th><th>Date</th><th class='num'>Expense</th><th class='num'>HST</th><th class='num'>Extended</th></tr></thead><tbody>"+(chargeRows||"<tr><td colspan='8' class='empty'>No new charges this period</td></tr>")+"<tr class='total'><td colspan='5'></td><td class='num'>"+num(expenses)+"</td><td class='num'>"+num(hst)+"</td><td class='num'>"+num(expenses+hst)+"</td></tr></tbody></table>"+
+    "<h4 class='payments-heading'>Payments Made In This Period</h4><table><thead><tr><th>CD</th><th>Description</th><th>Cheque #</th><th>Date</th><th>Trade #</th><th>Address</th><th class='num'>Amount</th></tr></thead><tbody>"+(paymentRows||"<tr><td colspan='7' class='empty'>No payments made this period</td></tr>")+"<tr class='total'><td colspan='6'></td><td class='num'>"+num(-payments)+"</td></tr></tbody></table>"+
+    "<div class='statement-totals'><div><span>Previous Balance</span><b>"+moneyFmt(previous)+"</b></div><div><span>Expenses Charged</span><b>"+num(expenses)+"</b></div><div><span>HST Charged</span><b>"+num(hst)+"</b></div><div><span>Payments Received</span><b>"+num(-payments-appliedThis)+"</b></div><div><span>Total Now Due</span><b>"+moneyFmt(due)+"</b></div></div>"+
+    "<h4 class='aging-title'>Overdue Expense Breakdown</h4><table class='aging'><thead><tr><th>Current</th><th>31-60 Days</th><th>61-90 Days</th><th>91-120 Days</th><th>Over 120 Days</th></tr></thead><tbody><tr>"+agingCells+"</tr></tbody></table>"+
+    "<p class='terms'>Pay outstanding balance by e-Transfer to <strong>admin@dvrealty.ca</strong> by "+new Date(year,monthNo,6).toLocaleDateString("en-CA",{month:"long",day:"numeric",year:"numeric"})+"; otherwise deducted commission or charged to your card (3.5% fee).</p>"+
+    "<footer><span>Prepared by: Sabbir Khan<br>"+new Date().toLocaleString("en-CA")+"</span><span>Dream Valley Realty Inc. | Agent Expense Statement<br>Page 1</span></footer></article>";
   }).join("");
-  const w=window.open("","_blank");
-  if(!w)return alert("Your browser blocked the statements window. Allow pop-ups for this app and try again.");
-  w.document.write("<!doctype html><html><head><title>Agent Statements - "+esc(monthLabel)+"</title><style>@page{size:A4;margin:14mm}*{box-sizing:border-box}body{font:12px Arial,sans-serif;color:#172033;margin:0}.statement{page-break-after:always;break-after:page}.statement:last-child{page-break-after:auto;break-after:auto}header{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #0f2141;padding-bottom:14px;margin-bottom:18px}h1{font-size:20px;color:#0f2141;margin:0 0 8px}h2{font-size:16px;margin:0 0 5px}.agent{text-align:right;max-width:45%;overflow-wrap:anywhere}p{margin:5px 0}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:18px 0}.summary div{border:1px solid #d8dde5;padding:10px;border-radius:4px}.summary small{display:block;color:#596273;margin-bottom:6px}.summary strong{font-size:14px}.statement table{width:100%;border-collapse:collapse;margin-top:12px}.statement th,.statement td{border:1px solid #d8dde5;padding:7px;text-align:left;vertical-align:top}.statement th{background:#f0f3f7}.num{text-align:right!important;white-space:nowrap}.statement tfoot th{background:#e8edf4}.note{margin-top:18px;color:#596273;font-size:10px}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>"+statements+"<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>");
+  const w=window.open("","_blank");if(!w)return alert("Your browser blocked the statements window. Allow pop-ups for this app and try again.");
+  w.document.write("<!doctype html><html><head><title>General Expense Statements - "+esc(monthLabel)+"</title><style>@page{size:letter portrait;margin:.42in}*{box-sizing:border-box}body{font:10px Arial,Helvetica,sans-serif;color:#111;margin:0}.statement{page-break-after:always;break-after:page;min-height:9.9in;position:relative}.statement:last-child{page-break-after:auto;break-after:auto}header{position:relative;min-height:1.05in;border-bottom:1px solid #777;padding-bottom:8px}.company{font-size:10px;line-height:1.4}.company strong{font-size:12px}.statement-title{position:absolute;right:0;top:0;text-align:center;font-size:10px;line-height:1.6;font-weight:600}.renewal{text-align:center;font-weight:bold;font-size:11px;margin:12px 0 7px}.top-grid{display:grid;grid-template-columns:47% 53%;gap:10px;min-height:1.35in;margin:7px 0 14px}.recipient{position:relative;padding-top:27px;font-size:10px;line-height:1.5}.agent-no{position:absolute;right:0;top:0;font-weight:bold}.summary{font-size:10px;line-height:1.55}.summary>strong{display:block;text-align:center;margin-bottom:4px}.summary div{display:flex;justify-content:space-between;gap:8px}.summary b{min-width:75px;text-align:right;font-weight:normal}.summary .due{border-top:1px solid #777;font-weight:bold;padding-top:3px}.summary .due b{font-weight:bold}h3{font-size:11px;text-align:center;margin:8px 0 6px}h4{font-size:10px;margin:6px 0 4px}table{width:100%;border-collapse:collapse;font-size:8.5px;margin-bottom:10px}th{text-align:left;font-weight:bold;border-bottom:1px solid #888;padding:4px 3px;white-space:nowrap}td{padding:4px 3px;vertical-align:top;border-bottom:1px solid #ddd}.num{text-align:right;white-space:nowrap}.total td{border-top:1px solid #777;border-bottom:0;font-weight:bold}.empty{text-align:center;color:#555;padding:10px}.payments-heading{text-align:center;margin:13px 0 5px}.statement-totals{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:16px 0 18px;text-align:center}.statement-totals div{display:flex;flex-direction:column;gap:5px}.statement-totals span{font-size:8px}.statement-totals b{font-size:10px}.aging-title{text-align:center;margin:10px 0 4px}.aging th,.aging td{text-align:center}.terms{text-align:center;font-size:9px;line-height:1.5;margin:16px 8px 12px}footer{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:space-between;gap:12px;border-top:1px solid #aaa;padding-top:6px;font-size:8px;line-height:1.5}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>"+statements+"<script>window.onload=()=>setTimeout(()=>window.print(),350)<\/script></body></html>");
   w.document.close();
  }
  async function deleteSelectedCharges(){
