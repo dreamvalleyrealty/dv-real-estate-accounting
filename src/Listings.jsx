@@ -530,7 +530,7 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
      if(error)throw new Error(error.message);
      if(data?.error)throw new Error(data.error);
     }else{
-     const {data:updatedTrustRows,error:e}=await supabase.from("dv_accounting_transaction_trust").update(patch).eq("transaction_id",item.transaction_id).select("id");
+     const {data:updatedTrustRows,error:e}=await supabase.from("dv_accounting_transaction_trust").update(patch).eq("transaction_id",item.transaction_id).eq("amount",item.amount).eq("deposit_date",item.deposit_date).eq("received_from",item.received_from).select("id");
      if(e)throw new Error("Could not update the deposit receipt: "+e.message);
      if(!updatedTrustRows?.length)throw new Error("No matching listing trust receipt record was updated. Refresh Deposit History and try again.");
     }
