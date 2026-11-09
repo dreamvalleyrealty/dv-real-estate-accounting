@@ -566,7 +566,7 @@ Deno.serve(async (req: Request) => {
       if (listingError) throw listingError;
       if (!listing) return json({ error: "The listing linked to this receipt could not be found." }, 404);
       const { data: issuance, error: issuanceError } = await admin.from("dv_accounting_deposit_receipt_issuances")
-        .select("issuer_name,issuer_signature_path,issued_at,approval_status").eq("trust_transaction_id", ledger.id).maybeSingle();
+        .select("issued_by,issuer_name,issuer_signature_path,issued_at,approval_status").eq("trust_transaction_id", ledger.id).maybeSingle();
       if (issuanceError) throw issuanceError;
       if (!issuance?.issuer_name) return json({ error: "This receipt has no authorized issuer record. Open and verify the receipt before emailing it." }, 409);
       if (issuance.approval_status !== "APPROVED") return json({ error: "This deposit receipt must be approved by an Admin before it can be emailed." }, 409);
@@ -633,16 +633,25 @@ Deno.serve(async (req: Request) => {
       }
 
       page.drawText("Issued by", { x: 34, y: 397, size: 9.5, font: bold, color: navy });
-      if (issuance.issuer_signature_path) {
-        const { data: signatureFile, error: signatureError } = await admin.storage.from("dv-user-signatures").download(issuance.issuer_signature_path);
-        if (!signatureError && signatureFile) {
-          const signatureBytes = new Uint8Array(await signatureFile.arrayBuffer());
-          try {
-            const signatureImage = /\\.jpe?g$/i.test(issuance.issuer_signature_path) ? await document.embedJpg(signatureBytes) : await document.embedPng(signatureBytes);
-            const dims = signatureImage.scale(Math.min(205 / signatureImage.width, 48 / signatureImage.height));
-            page.drawImage(signatureImage, { x: 34, y: 341, width: dims.width, height: dims.height });
-          } catch (imageError) { console.warn("Could not embed issuer signature in receipt PDF", String(imageError)); }
-        }
+      let issuerSignaturePath = issuance.issuer_signature_path || null;
+      // Older receipt records may not have captured the signature path. In that
+      // case, use the current signature saved on the original issuer's profile.
+      if (!issuerSignaturePath && issuance.issued_by) {
+        const { data: issuerProfile, error: issuerProfileError } = await admin.from("dv_accounting_user_profiles")
+          .select("signature_storage_path").eq("user_id", issuance.issued_by).maybeSingle();
+        if (issuerProfileError) throw issuerProfileError;
+        issuerSignaturePath = issuerProfile?.signature_storage_path || null;
+      }
+      if (issuerSignaturePath) {
+        const { data: signatureFile, error: signatureError } = await admin.storage.from("dv-user-signatures").download(issuerSignaturePath);
+        if (signatureError || !signatureFile) throw new Error("Could not load the issuer's saved signature for the email receipt: " + (signatureError?.message || "Signature file not found."));
+        const signatureBytes = new Uint8Array(await signatureFile.arrayBuffer());
+        const isPng = signatureBytes.length > 8 && signatureBytes[0] === 0x89 && signatureBytes[1] === 0x50 && signatureBytes[2] === 0x4e && signatureBytes[3] === 0x47;
+        const isJpeg = signatureBytes.length > 3 && signatureBytes[0] === 0xff && signatureBytes[1] === 0xd8 && signatureBytes[2] === 0xff;
+        if (!isPng && !isJpeg) throw new Error("The issuer signature file must be a PNG or JPEG image. Please update the signature in the issuer profile.");
+        const signatureImage = isJpeg ? await document.embedJpg(signatureBytes) : await document.embedPng(signatureBytes);
+        const dims = signatureImage.scale(Math.min(205 / signatureImage.width, 48 / signatureImage.height));
+        page.drawImage(signatureImage, { x: 34, y: 341, width: dims.width, height: dims.height });
       }
       page.drawLine({ start: { x: 34, y: 338 }, end: { x: 240, y: 338 }, thickness: 0.8, color: navy });
       page.drawText(issuerName, { x: 34, y: 324, size: 9.2, font: bold, color: navy });
