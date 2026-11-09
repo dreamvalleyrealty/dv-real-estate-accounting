@@ -661,7 +661,7 @@ function openDepositReceiptEmail(item){
    const selectedAgentEmails=agents.filter(a=>depositEmailAgentIds.includes(String(a.id))).map(a=>String(a.email||"").trim().toLowerCase()).filter(Boolean);
    const extraEmails=depositEmailExtraRecipients.split(/[;,\s]+/).map(value=>value.trim().toLowerCase()).filter(Boolean);
    const recipientEmails=[...new Set([...selectedAgentEmails,...extraEmails])];
-   if(!recipientEmails.length||recipientEmails.length>20||recipientEmails.some(email=>!/^([^\s@]+)@([^\s@]+)\.[^\s@]+$/.test(email)){setDepositError("Enter between 1 and 20 valid email addresses, separated by commas or new lines.");return}
+   if(!recipientEmails.length||recipientEmails.length>20||recipientEmails.some(email=>!/^([^\s@]+)@([^\s@]+)\.[^\s@]+$/.test(email))){setDepositError("Enter between 1 and 20 valid email addresses, separated by commas or new lines.");return}
    setDepositEmailBusy(true);setDepositError("");setMessage("");
    try{
     const {data,error}=await supabase.functions.invoke("trust-account-information",{body:{action:"send_deposit_receipt",trustTransactionId:depositEmailDialog.trust_transaction_id||depositEmailDialog.id,recipientEmails}});
