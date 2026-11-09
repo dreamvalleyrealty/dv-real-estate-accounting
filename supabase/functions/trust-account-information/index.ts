@@ -633,29 +633,33 @@ Deno.serve(async (req: Request) => {
       }
 
       page.drawText("Issued by", { x: 34, y: 397, size: 9.5, font: bold, color: navy });
-      let issuerSignaturePath = issuance.issuer_signature_path || null;
-      // Older receipt records may not have captured the signature path. In that
-      // case, use the current signature saved on the original issuer's profile.
-      if (!issuerSignaturePath && issuance.issued_by) {
+      // Use the original issuer profile signature, matching the browser Print / Save PDF view.
+      let issuerSignaturePath: string | null = null;
+      if (issuance.issued_by) {
         const { data: issuerProfile, error: issuerProfileError } = await admin.from("dv_accounting_user_profiles")
           .select("signature_storage_path").eq("user_id", issuance.issued_by).maybeSingle();
         if (issuerProfileError) throw issuerProfileError;
         issuerSignaturePath = issuerProfile?.signature_storage_path || null;
       }
-      if (issuerSignaturePath) {
-        const { data: signatureFile, error: signatureError } = await admin.storage.from("dv-user-signatures").download(issuerSignaturePath);
-        if (signatureError || !signatureFile) throw new Error("Could not load the issuer's saved signature for the email receipt: " + (signatureError?.message || "Signature file not found."));
-        const signatureBytes = new Uint8Array(await signatureFile.arrayBuffer());
-        const isPng = signatureBytes.length > 8 && signatureBytes[0] === 0x89 && signatureBytes[1] === 0x50 && signatureBytes[2] === 0x4e && signatureBytes[3] === 0x47;
-        const isJpeg = signatureBytes.length > 3 && signatureBytes[0] === 0xff && signatureBytes[1] === 0xd8 && signatureBytes[2] === 0xff;
-        if (!isPng && !isJpeg) throw new Error("The issuer signature file must be a PNG or JPEG image. Please update the signature in the issuer profile.");
-        const signatureImage = isJpeg ? await document.embedJpg(signatureBytes) : await document.embedPng(signatureBytes);
-        const dims = signatureImage.scale(Math.min(205 / signatureImage.width, 48 / signatureImage.height));
-        page.drawImage(signatureImage, { x: 34, y: 341, width: dims.width, height: dims.height });
-      }
-      page.drawLine({ start: { x: 34, y: 338 }, end: { x: 240, y: 338 }, thickness: 0.8, color: navy });
-      page.drawText(issuerName, { x: 34, y: 324, size: 9.2, font: bold, color: navy });
-      page.drawText("Authorized issuer · " + new Date(issuance.issued_at || Date.now()).toLocaleString("en-CA"), { x: 34, y: 311, size: 8, font: regular, color: muted });
+      issuerSignaturePath = issuerSignaturePath || issuance.issuer_signature_path || null;
+      if (!issuerSignaturePath) throw new Error("The original issuer's signature is missing. Update the issuer profile before emailing this receipt.");
+      const { data: signatureFile, error: signatureError } = await admin.storage.from("dv-user-signatures").download(issuerSignaturePath);
+      if (signatureError || !signatureFile) throw new Error("Could not load the issuer's saved signature for the email receipt: " + (signatureError?.message || "Signature file not found."));
+      const signatureBytes = new Uint8Array(await signatureFile.arrayBuffer());
+      const isPng = signatureBytes.length > 8 && signatureBytes[0] === 0x89 && signatureBytes[1] === 0x50 && signatureBytes[2] === 0x4e && signatureBytes[3] === 0x47;
+      const isJpeg = signatureBytes.length > 3 && signatureBytes[0] === 0xff && signatureBytes[1] === 0xd8 && signatureBytes[2] === 0xff;
+      if (!isPng && !isJpeg) throw new Error("The issuer signature file must be a PNG or JPEG image. Please update the signature in the issuer profile.");
+      const signatureImage = isJpeg ? await document.embedJpg(signatureBytes) : await document.embedPng(signatureBytes);
+      const dims = signatureImage.scale(Math.min(205 / signatureImage.width, 48 / signatureImage.height));
+      // Keep the signature directly below "Issued by", matching the print layout.
+      page.drawImage(signatureImage, { x: 34, y: 348, width: dims.width, height: dims.height });
+      page.drawLine({ start: { x: 34, y: 346 }, end: { x: 240, y: 346 }, thickness: 0.8, color: navy });
+      page.drawText(issuerName, { x: 34, y: 332, size: 9.2, font: bold, color: navy });
+      const issuedAt = new Date(issuance.issued_at || Date.now()).toLocaleString("en-CA", {
+        timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true,
+      });
+      page.drawText("Authorized issuer · " + issuedAt, { x: 34, y: 319, size: 8, font: regular, color: muted });
       page.drawLine({ start: { x: 34, y: 302 }, end: { x: 578, y: 302 }, thickness: 1, color: gold });
 
       // View / Reprint uses the receipt's own linked proof file, never every file
