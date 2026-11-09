@@ -143,6 +143,7 @@ function PropertyDepositCommunicationHistory({listingId,propertyAddress,adminMod
 
 function ListingExpensesPanel({listingId,listingStatus}){
  const [items,setItems]=useState([]),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
+ const [apItems,setApItems]=useState([]);
  const empty=()=>({id:"",description:"",supplier_name:"",invoice_number:"",quantity:"1",unit_price:"",receipt:null,existingReceiptPath:"",existingReceiptName:""});
  const [draft,setDraft]=useState(empty);
  const total=items.reduce((sum,x)=>sum+Number(x.line_total??Number(x.quantity||1)*Number(x.unit_price||0)),0);
