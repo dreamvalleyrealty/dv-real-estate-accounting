@@ -15,6 +15,57 @@ Deno.serve(async(req)=>{
  if(ue||!ud.user)return json({error:"Session could not be verified."},401);
  let body:any;try{body=await req.json()}catch{return json({error:"Invalid request."},400)}
  const type=String(body.type||"").toUpperCase(),id=String(body.submissionId||"");
+ 
+ if(type==="DEPOSIT_RECEIPT"){
+  const {data:ledger,error:ledgerError}=await db.from("dv_accounting_trust_transactions").select("*").eq("id",id).maybeSingle();
+  if(ledgerError||!ledger)return json({error:"Posted trust deposit not found."},404);
+  if(String(ledger.status||"").toUpperCase()!=="POSTED"||String(ledger.direction||"").toUpperCase()!=="DEPOSIT"||String(ledger.trust_account_type||"").toUpperCase()!=="REAL_ESTATE_TRUST")return json({error:"Only posted Real Estate Trust deposits can trigger this alert."},409);
+  const [{data:tx},{data:issuance},{data:caller}]=await Promise.all([
+   db.from("dv_accounting_transactions").select("*").eq("id",ledger.transaction_id).maybeSingle(),
+   db.from("dv_accounting_deposit_receipt_issuances").select("*").eq("trust_transaction_id",id).maybeSingle(),
+   db.from("dv_accounting_user_profiles").select("role,active").eq("user_id",ud.user.id).maybeSingle()
+  ]);
+  if(!tx||!issuance)return json({error:"Deposit receipt issuance record not found."},404);
+  if(String(issuance.approval_status||"PENDING").toUpperCase()!=="PENDING")return json({error:"This receipt is no longer pending approval."},409);
+  const isAdmin=!!caller?.active&&["ADMIN","SUPERADMIN","MANAGER"].includes(String(caller.role||"").toUpperCase());
+  if(!isAdmin&&String(issuance.issued_by)!==String(ud.user.id))return json({error:"You are not allowed to notify for this receipt."},403);
+  const companyId=tx.company_id||ledger.company_id;
+  if(!companyId)return json({error:"Brokerage company could not be identified."},400);
+  const {data:recipients,error:pe}=await db.from("dv_accounting_review_notification_recipients").select("*").eq("company_id",companyId).eq("listing_sms",true);
+  if(pe)return json({error:"Could not load notification recipients."},500);
+  const ids=(recipients||[]).map((r:any)=>r.user_id);
+  if(!ids.length)return json({ok:true,sent:0,message:"No admins have Listing SMS notifications enabled."});
+  const [{data:profiles},{data:employees}]=await Promise.all([
+   db.from("dv_accounting_user_profiles").select("user_id,display_name,phone,active").in("user_id",ids),
+   db.from("dv_accounting_employees").select("user_id,phone").in("user_id",ids)
+  ]);
+  const employeePhones=new Map((employees||[]).map((e:any)=>[e.user_id,e.phone]));
+  const profileMap=new Map((profiles||[]).map((p:any)=>[p.user_id,{...p,phone:p.phone||employeePhones.get(p.user_id)||""}]));
+  const address=String(tx.property_address||"Listing deposit");
+  const amount=new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(ledger.amount||0));
+  const reviewUrl="https://bo.dvrealty.ca/?page=listings&submission="+encodeURIComponent(String(tx.listing_id||""));
+  const eventKey="DEPOSIT_RECEIPT_SUBMITTED";
+  const outcomes=[];
+  for(const pref of recipients||[]){
+   const p:any=profileMap.get(pref.user_id);if(!p?.active)continue;
+   const phone=String(p.phone||"").trim();
+   if(!phone){outcomes.push({userId:p.user_id,channel:"SMS",status:"SKIPPED",reason:"No phone number on profile"});continue;}
+   const {data:existing}=await db.from("dv_accounting_review_notification_log").select("id,status").eq("submission_type","DEPOSIT_RECEIPT").eq("submission_id",id).eq("event_key",eventKey).eq("recipient_user_id",p.user_id).eq("channel","SMS").maybeSingle();
+   if(existing){outcomes.push({userId:p.user_id,channel:"SMS",status:"ALREADY_NOTIFIED"});continue;}
+   const {data:log,error:le}=await db.from("dv_accounting_review_notification_log").insert({company_id:companyId,submission_type:"DEPOSIT_RECEIPT",submission_id:id,event_key:eventKey,recipient_user_id:p.user_id,channel:"SMS",recipient:phone}).select("id").single();
+   if(le){outcomes.push({userId:p.user_id,channel:"SMS",status:"LOG_FAILED"});continue;}
+   try{
+    const sid=Deno.env.get("TWILIO_ACCOUNT_SID"),token=Deno.env.get("TWILIO_AUTH_TOKEN"),fromNumber=Deno.env.get("TWILIO_FROM_NUMBER");
+    if(!sid||!token||!fromNumber)throw new Error("Twilio is not configured.");
+    const sms="Dream Valley Realty: Deposit receipt awaiting approval. Property: "+address+". Amount: "+amount+". Review: "+reviewUrl;
+    const sr=await fetch("https://api.twilio.com/2010-04-01/Accounts/"+sid+"/Messages.json",{method:"POST",headers:{Authorization:"Basic "+btoa(sid+":"+token),"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({To:phone,From:fromNumber,Body:sms})});
+    const sj=await sr.json().catch(()=>({}));if(!sr.ok)throw new Error("Twilio rejected SMS (HTTP "+sr.status+").");
+    await db.from("dv_accounting_review_notification_log").update({status:"SENT",provider_id:sj.sid||null,sent_at:new Date().toISOString()}).eq("id",log.id);
+    outcomes.push({userId:p.user_id,channel:"SMS",status:"SENT"});
+   }catch(e){const msg=String((e as Error)?.message||"Notification failed").slice(0,350);await db.from("dv_accounting_review_notification_log").update({status:"FAILED",error_message:msg}).eq("id",log.id);outcomes.push({userId:p.user_id,channel:"SMS",status:"FAILED",reason:msg});}
+  }
+  return json({ok:true,outcomes});
+ }
  if(!["LISTING","TRADE"].includes(type)||!id)return json({error:"Submission type and ID are required."},400);
  const table=type==="LISTING"?"dv_accounting_listing_submissions":"dv_accounting_agent_trade_submissions";
  const {data:row,error:re}=await db.from(table).select("*").eq("id",id).maybeSingle();
