@@ -1761,10 +1761,16 @@ function Agents({user,mode="agents",permissions={},setActive,role}){
     const type=String(ch.charge_type||"").toUpperCase(),code=ch.charge_code||ch.item_code||(type==="DESK_FEE"?"45":type==="ADMIN_FEE"?"46":type==="LEAD_FEE"?"47":"");
     return "<tr><td>"+esc(code)+"</td><td>"+esc(ch.description||ch.name||String(ch.charge_type||"Agent charge").replaceAll("_"," "))+"</td><td>"+esc(ch.supplier_number||ch.supplementary_number||"")+"</td><td>"+esc(ch.invoice_number||ch.invoice_no||"")+"</td><td>"+esc(dateOfCharge(ch))+"</td><td class='num'>"+num(base(ch))+"</td><td class='num'>"+num(tax(ch))+"</td><td class='num'>"+num(total(ch))+"</td></tr>";
    }).join("");
-   const paymentRows=mp.map(p=>{
-    const ch=ac.find(x=>String(x.id)===String(p.charge_id)),tx=t.rows.find(x=>String(x.id)===String(ch?.transaction_id));
-    return "<tr><td>CH</td><td>Commission cheque</td><td>"+esc(p.cheque_number||p.reference||p.payment_method||"—")+"</td><td>"+esc(dateOfPayment(p))+"</td><td>"+esc(tx?.transaction_number||ch?.transaction_number||"—")+"</td><td>"+esc(tx?.property_address||tx?.address||tx?.property||"—")+"</td><td class='num'>"+num(-Number(p.amount||0))+"</td></tr>";
-   }).join("");
+   const appliedChequeRows=(cheques.rows||[]).filter(ch=>String(ch.agent_id)===String(agent.id)&&String(ch.status||"").toUpperCase()==="ISSUED"&&String(ch.cheque_date||"").slice(0,10)>=start&&String(ch.cheque_date||"").slice(0,10)<=end).map(ch=>{
+    const linked=ac.filter(x=>String(x.applied_to_cheque_id||"")===String(ch.id)||(!x.applied_to_cheque_id&&String(x.commission_id||"")===String(ch.commission_id)&&String(x.status||"").toUpperCase()==="APPLIED"));
+    if(!linked.length)return null;
+    const amount=linked.reduce((n,x)=>n+total(x),0),tx=t.rows.find(x=>String(x.id)===String(ch.transaction_id||linked[0]?.transaction_id));
+    return {date:String(ch.cheque_date||"").slice(0,10),number:ch.cheque_number||ch.payment_reference||ch.payment_method||"—",trade:tx?.transaction_number||"—",address:tx?.property_address||tx?.address||tx?.property||"—",amount};
+   }).filter(Boolean);
+   const paymentRows=[...mp.map(p=>{
+    const charge=ac.find(x=>String(x.id)===String(p.charge_id)),tx=t.rows.find(x=>String(x.id)===String(charge?.transaction_id));
+    return {date:dateOfPayment(p),number:p.cheque_number||p.reference||p.payment_method||"—",trade:tx?.transaction_number||charge?.transaction_number||"—",address:tx?.property_address||tx?.address||tx?.property||"—",amount:Number(p.amount||0),description:"Payment received"};
+   }),...appliedChequeRows.map(p=>({...p,description:"CH Commission cheque"}))].map(p=>"<tr><td>CH</td><td>"+esc(p.description)+"</td><td>"+esc(p.number)+"</td><td>"+esc(p.date)+"</td><td>"+esc(p.trade)+"</td><td>"+esc(p.address)+"</td><td class='num'>"+num(-p.amount)+"</td></tr>").join("");
    const aging=[0,0,0,0,0],paidMap=new Map();
    ap.forEach(p=>paidMap.set(String(p.charge_id),(paidMap.get(String(p.charge_id))||0)+Number(p.amount||0)));
    ac.forEach(ch=>{
