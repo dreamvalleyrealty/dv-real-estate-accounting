@@ -627,9 +627,16 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
    const issuerSignaturePath=issuerProfile?.signature_storage_path||null;
    const {data:issuance,error:issuanceError}=await supabase.from("dv_accounting_deposit_receipt_issuances").insert({trust_transaction_id:posted.id,transaction_id:transaction.id,issued_by:user.id,issuer_name:issuerName,issuer_signature_path:issuerSignaturePath}).select("id,issued_by,issuer_name,issuer_signature_path,issued_at").single();
    if(issuanceError)throw new Error("The deposit was posted, but its receipt issuer record could not be saved. Do not record the deposit again. Ask an administrator to review. Details: "+issuanceError.message);
+   let adminSmsWarning="";
+   try{
+    const {data:notifyData,error:notifyError}=await supabase.functions.invoke("admin-review-notify",{body:{type:"DEPOSIT_RECEIPT",submissionId:posted.id}});
+    if(notifyError||notifyData?.error)adminSmsWarning=" The receipt is pending approval, but the admin SMS alert could not be confirmed: "+(notifyData?.error||notifyError?.message||"Unknown notification error");
+    else if((notifyData?.outcomes||[]).some(x=>x.status==="FAILED"||x.status==="LOG_FAILED"))adminSmsWarning=" The receipt is pending approval, but at least one admin SMS could not be sent.";
+   }catch(notifyError){adminSmsWarning=" The receipt is pending approval, but the admin SMS alert could not be confirmed.";}
+
    let issuerSignatureUrl="";if(issuance.issuer_signature_path){const{data:signatureData}=await supabase.storage.from("dv-user-signatures").createSignedUrl(issuance.issuer_signature_path,3600);issuerSignatureUrl=signatureData?.signedUrl||""}
    const receipt={transaction_id:transaction.id,transaction_number:transaction.transaction_number||"—",property_address:[selected.property_address,selected.unit_number?"Unit "+selected.unit_number:"",selected.city,selected.province,selected.postal_code].filter(Boolean).join(", "),received_from:depositForm.received_from.trim(),date:depositForm.date,payment_type:depositForm.payment_type,reference_number:depositForm.reference_number.trim(),amount,bank_name:bank.name,receipt_number:"DR-"+String(transaction.transaction_number||transaction.id).replace(/[^A-Za-z0-9-]/g,""),issuer_name:issuance.issuer_name,issuer_signature_path:issuance.issuer_signature_path,issuer_signature_url:issuerSignatureUrl,issued_at:issuance.issued_at,approval_status:issuance.approval_status||"PENDING"};
-   setDepositReceipt(receipt);setMessage("Deposit posted to Real Estate Trust. The receipt is now pending Admin approval.");
+   setDepositReceipt(receipt);setMessage("Deposit posted to Real Estate Trust. The receipt is now pending Admin approval. Admin SMS notification was requested."+adminSmsWarning);
    await load(true);
   }catch(err){setDepositError(err?.message||String(err))}
   finally{setDepositSaving(false)}
