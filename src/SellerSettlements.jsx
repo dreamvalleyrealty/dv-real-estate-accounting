@@ -102,24 +102,27 @@ export default function SellerSettlements({initialTransactionId=null,role=""}){
   win.document.open();win.document.write(html);win.document.close();
  }
  const update=(key,value)=>setForm(f=>({...f,[key]:value}));
+ const selectedTrade=trades.find(t=>t.id===form.transaction_id);
+ const isLeaseTrade=String(selectedTrade?.transaction_type||"").toUpperCase()==="LEASE"||String(selectedTrade?.side||"").toUpperCase()==="LANDLORD";
+ const partyLabel=isLeaseTrade?"Landlord":"Seller";
  return <div className="seller-settlement-simple">
   <div className="pagehead">
-   <div><h1>Seller / Landlord Settlement</h1><p>Select a closed trade, review the balance, and record payments. Commission transfer is handled separately after seller/landlord payments are reconciled.</p></div>
+   <div><h1>{partyLabel} Settlement</h1><p>Select a closed trade, review the balance, and record payments. Commission transfer is handled separately after {partyLabel.toLowerCase()} payments are reconciled.</p></div>
    <div className="actions"><button type="button" className="secondary" onClick={()=>load()} disabled={busy}><RefreshCw size={16}/> Refresh</button><button type="button" className="primary" onClick={()=>{setEditing(null);setForm(emptyForm());setPaymentDraft(p=>({...p,payee_type:"SELLER",payee_name:"",amount:""}));setDirectionFile(null);setPaymentSupportFiles([])}}>New Settlement</button></div>
   </div>
   <section className="panel">
    <div className="paneltitle"><h2>1. Select Trade &amp; Review Amounts</h2>{form.transaction_id&&<span className="pill">{trades.find(t=>t.id===form.transaction_id)?.transaction_number||form.matter}</span>}</div>
    <form onSubmit={save}>
     <div className="formgrid">
-     <label>Closed Listing Trade<select required value={form.transaction_id||""} onChange={e=>chooseTrade(e.target.value)}><option value="">Select a closed seller/landlord trade</option>{eligibleTrades.map(t=><option key={t.id} value={t.id}>{t.transaction_number||"No trade number"} · {t.property_address||"Property"}</option>)}</select></label>
-     <label>Seller / Landlord<input readOnly value={form.seller_client_name||tradeDetails[form.transaction_id]?.sellerName||""} placeholder="Filled from trade record"/></label>
+     <label>Closed Listing Trade<select required value={form.transaction_id||""} onChange={e=>chooseTrade(e.target.value)}><option value="">Select a closed {partyLabel.toLowerCase()} trade</option>{eligibleTrades.map(t=><option key={t.id} value={t.id}>{t.transaction_number||"No trade number"} · {t.property_address||"Property"}</option>)}</select></label>
+     <label>{partyLabel}<input readOnly value={form.seller_client_name||tradeDetails[form.transaction_id]?.sellerName||""} placeholder="Filled from trade record"/></label>
      <label>Deposit Held in Real Estate Trust<input readOnly value={money(tradeDetails[form.transaction_id]?.deposit??(Number(form.seller_proceeds_amount||0)+commissionTotal))}/></label>
      <label>Listing Commission<input readOnly value={money(form.listing_commission_amount)}/></label>
      <label>Co-operating Commission<input readOnly value={money(form.cooperating_commission_amount)}/></label>
      <label>Commission HST<input readOnly value={money(form.commission_hst_amount)}/></label>
     </div>
     <div className="seller-settlement-balance" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",padding:16,marginTop:12,border:"1px solid #d0d5dd",borderRadius:8,background:"#f8fafc"}}>
-     <div><strong>Balance available to pay seller / landlord</strong><div className="subtle">Deposit held less commission and HST, less completed payments</div></div>
+     <div><strong>Balance available to pay {partyLabel.toLowerCase()}</strong><div className="subtle">Deposit held less commission and HST, less completed payments</div></div>
      <strong style={{fontSize:24,color:"#0f2141"}}>{money(Math.max(0,Number(form.seller_proceeds_amount||chequeAmount)-postedProceedsPaid(rows.find(x=>x.transaction_id===form.transaction_id))))}</strong>
     </div>
     <div className="formgrid" style={{marginTop:12}}>
