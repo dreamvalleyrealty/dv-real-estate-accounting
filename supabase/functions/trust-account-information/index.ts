@@ -528,7 +528,6 @@ Deno.serve(async (req: Request) => {
       if (issuanceError) throw issuanceError;
       if (!issuance) return json({ error: "The receipt issuer record could not be found." }, 404);
       if (issuance.approval_status === "APPROVED") return json({ error: "This receipt has already been approved and locked." }, 409);
-      if (actor.role !== "SUPERADMIN" && issuance.issued_by === actor.user.id) return json({ error: "You cannot approve a receipt you issued yourself. Another Admin or the Super Admin must approve it." }, 403);
       const nextStatus = action === "approve_deposit_receipt" ? "APPROVED" : "REJECTED";
       const rejectionReason = String(body.rejectionReason || "").trim();
       if (nextStatus === "REJECTED" && (!rejectionReason || rejectionReason.length > 500)) return json({ error: "Enter a reason for rejecting this receipt (maximum 500 characters)." }, 400);
