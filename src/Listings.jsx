@@ -248,7 +248,7 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
     setRequirements(defaults);
    }
   }
-  let q=supabase.from("dv_accounting_listing_submissions").select("*").order("created_at",{ascending:false});if(isAdmin){const term=listingSearch.trim().replace(/[,%()]/g," ").replace(/\\/g," ").slice(0,80);if(term){const pattern="%"+term+"%";q=q.or(["property_address.ilike."+pattern,"city.ilike."+pattern,"postal_code.ilike."+pattern,"mls_number.ilike."+pattern,"status.ilike."+pattern].join(","));}}
+  let q=supabase.from("dv_accounting_listing_submissions").select("*").order("created_at",{ascending:false});if(isAdmin){const term=listingSearch.trim().replace(/[,%()]/g," ").replace(/\\/g," ").slice(0,80);if(term){const pattern="%"+term+"%";const matchingAgentIds=(agentResult.data||[]).filter(a=>[a.first_name,a.last_name,a.full_name,a.email,a.agent_number].filter(Boolean).join(" ").toLowerCase().includes(term.toLowerCase())).map(a=>a.id).filter(Boolean);const clauses=["property_address.ilike."+pattern,"city.ilike."+pattern,"postal_code.ilike."+pattern,"mls_number.ilike."+pattern,"status.ilike."+pattern];if(matchingAgentIds.length)clauses.push("agent_id.in.("+matchingAgentIds.join(",")+")");q=q.or(clauses.join(","));}}
   if(!isAdmin)q=q.eq("agent_id",agentId);if(isAdmin)q=q.range(listingPage*50,listingPage*50+50);
   const {data,error:e}=await q;if(isAdmin)setListingHasNext((data||[]).length>50);
   if(e){setError("Could not load listing submissions: "+e.message);}else{
