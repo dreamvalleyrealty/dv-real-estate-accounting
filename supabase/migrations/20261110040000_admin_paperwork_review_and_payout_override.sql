@@ -63,7 +63,7 @@ BEGIN
  ORDER BY authorized_at DESC LIMIT 1 FOR UPDATE;
  IF v_authorization_id IS NOT NULL THEN
    UPDATE public.dv_accounting_paperwork_payout_authorizations
-   SET consumed_by_cheque_id=NEW.id,consumed_at=now()
+   SET consumed_by_cheque_id=NULL,consumed_at=now()
    WHERE id=v_authorization_id;
    RETURN NEW;
  END IF;
@@ -100,3 +100,37 @@ BEGIN
  RETURN NEW;
 END $$;
 REVOKE ALL ON FUNCTION public.dv_accounting_guard_commission_payout_for_trade_paperwork() FROM PUBLIC,anon,authenticated;
+
+
+-- Link the authorization to the cheque only after the cheque row exists.
+CREATE OR REPLACE FUNCTION public.dv_accounting_link_paperwork_authorization_to_cheque()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path=public
+AS $$
+BEGIN
+  UPDATE public.dv_accounting_paperwork_payout_authorizations a
+  SET consumed_by_cheque_id=NEW.id
+  WHERE a.id=(
+    SELECT id
+    FROM public.dv_accounting_paperwork_payout_authorizations
+    WHERE commission_id=NEW.commission_id
+      AND transaction_id=(SELECT transaction_id FROM public.dv_accounting_commissions WHERE id=NEW.commission_id)
+      AND consumed_at IS NOT NULL
+      AND consumed_by_cheque_id IS NULL
+    ORDER BY consumed_at DESC,authorized_at DESC
+    LIMIT 1
+    FOR UPDATE
+  );
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS dv_accounting_link_paperwork_authorization_after_cheque
+ ON public.dv_accounting_commission_cheques;
+CREATE TRIGGER dv_accounting_link_paperwork_authorization_after_cheque
+AFTER INSERT ON public.dv_accounting_commission_cheques
+FOR EACH ROW
+WHEN (upper(coalesce(NEW.status,''))='ISSUED')
+EXECUTE FUNCTION public.dv_accounting_link_paperwork_authorization_to_cheque();
+REVOKE ALL ON FUNCTION public.dv_accounting_link_paperwork_authorization_to_cheque() FROM PUBLIC,anon,authenticated;
