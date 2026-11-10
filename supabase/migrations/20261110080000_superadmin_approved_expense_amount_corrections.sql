@@ -48,6 +48,8 @@ DECLARE
   v_new_total numeric(14,2);
   v_old_total numeric(14,2);
   v_paid numeric(14,2) := 0;
+  v_legacy_paid_without_allocations boolean := false;
+  v_ap_gl uuid;
   v_delta_amount numeric(14,2);
   v_delta_hst numeric(14,2);
   v_delta_total numeric(14,2);
@@ -130,6 +132,9 @@ BEGIN
   -- Older invoices may have been marked paid before payment allocations were introduced.
   IF v_paid=0 AND e.payment_status='PAID' THEN
     v_paid := v_old_total;
+    v_legacy_paid_without_allocations := true;
+  ELSIF v_paid=0 AND e.payment_status='PARTIAL' THEN
+    RAISE EXCEPTION 'This partially paid invoice has no payment allocation history. Reconcile its payment records before correcting the amount';
   END IF;
 
   IF v_paid > v_new_total THEN
@@ -167,6 +172,18 @@ BEGIN
 
   IF v_expense_gl IS NULL OR v_offset_gl IS NULL THEN
     RAISE EXCEPTION 'The original expense journal entry is incomplete. The amount cannot be corrected automatically; contact the accounting administrator';
+  END IF;
+
+  -- Older paid invoices were sometimes posted directly against the bank without
+  -- payment allocation rows. Any newly unpaid difference must become Accounts Payable,
+  -- rather than another fictitious bank withdrawal.
+  IF v_legacy_paid_without_allocations AND v_new_total>v_old_total THEN
+    INSERT INTO public.dv_accounting_gl_accounts(company_id,code,name,account_type)
+    VALUES(e.company_id,'2000','Accounts Payable','LIABILITY')
+    ON CONFLICT(company_id,code) DO NOTHING;
+    SELECT id INTO v_ap_gl FROM public.dv_accounting_gl_accounts
+    WHERE company_id=e.company_id AND code='2000';
+    v_offset_gl := v_ap_gl;
   END IF;
 
   IF v_hst_gl IS NULL AND v_new_hst<>coalesce(e.hst_amount,0) THEN
