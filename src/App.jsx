@@ -521,32 +521,10 @@ function Expenses({canApprove=false,permissions={},role="STAFF"}){
    }
    const vendorName=String(form.vendor||"").trim();
    if(!vendorName){alert("Enter or select a vendor name.");setSaving(false);return}
-   const normalizeVendorName=value=>String(value||"").toLowerCase().replace(/[\\s\\p{P}\\p{S}]+/gu,"");
-   const invoiceCompanyId=companies.rows[0]?.id||null;
-   // Refresh the vendor directory before deciding to insert. The form's cached
-   // vendor list can be stale when another user has already added the vendor.
-   const{data:companyVendors,error:vendorLookupError}=await supabase.from("dv_accounting_vendors").select("*").eq("company_id",invoiceCompanyId);
-   if(vendorLookupError){alert("Could not verify the vendor: "+vendorLookupError.message);setSaving(false);return}
-   let existingVendor=(companyVendors||[]).find(v=>normalizeVendorName(v.name)===normalizeVendorName(vendorName));
-   if(!existingVendor){
-    const{data:newVendor,error:vendorError}=await supabase.from("dv_accounting_vendors").insert([{name:vendorName,company_id:invoiceCompanyId,active:true}]).select().single();
-    if(vendorError){
-     if(vendorError.code==="23505"){
-      // A duplicate may have been created between the lookup and insert.
-      const{data:latestVendors,error:refreshError}=await supabase.from("dv_accounting_vendors").select("*").eq("company_id",invoiceCompanyId);
-      existingVendor=(latestVendors||[]).find(v=>normalizeVendorName(v.name)===normalizeVendorName(vendorName));
-      if(refreshError||!existingVendor){alert("A vendor with this name already exists, but it could not be loaded into this company's vendor list. Refresh Contacts → Vendors and try again.");setSaving(false);return}
-      vendors.setRows(latestVendors||[]);
-     }else{alert("Could not add new vendor: "+vendorError.message);setSaving(false);return}
-    }else{
-     existingVendor=newVendor;
-     vendors.setRows(list=>[newVendor,...list.filter(v=>v.id!==newVendor.id)]);
-    }
-   }else{
-    vendors.setRows(list=>[existingVendor,...list.filter(v=>v.id!==existingVendor.id)]);
-   }
-   // Store the canonical spelling from the master vendor record.
-   payload.vendor=existingVendor.name;
+   // Expenses store the vendor name as a snapshot. Do not create a master
+   // vendor here: the vendor may already exist under another company scope
+   // or be hidden by row-level security. Master vendors are managed in Contacts.
+   payload.vendor=vendorName;
    const{payment_source:ignoredPaymentSource,payment_employee_id:ignoredPaymentEmployee,payment_payee_name:ignoredPaymentPayee,total_amount:ignoredGeneratedTotal,...dbPayload}=payload;const{data,error}=editId?await supabase.from("dv_accounting_expenses").update(dbPayload).eq("id",editId).is("posted_at",null).select().single():await supabase.from("dv_accounting_expenses").insert([dbPayload]).select().single();
    if(error){alert(error.message);setSaving(false);return}
    let uploadedPath=null;
