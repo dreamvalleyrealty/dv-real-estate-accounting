@@ -19,8 +19,8 @@ INSERT INTO public.dv_accounting_permission_catalog(code,module,label,descriptio
 VALUES (
   'expenses.approved.edit',
   'Expenses & A/P',
-  'Edit approved expense amount',
-  'Correct the subtotal and HST on an approved, posted vendor invoice. Requires a reason and creates a balanced adjustment journal entry and audit history.',
+  'Super Admin – Edit Approved Expense',
+  'Allows a Super Admin or explicitly authorized user to correct the subtotal and HST on an approved, posted vendor invoice. Requires a reason and creates a balanced adjustment journal entry and audit history.',
   44
 )
 ON CONFLICT (code) DO UPDATE
