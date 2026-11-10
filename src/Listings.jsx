@@ -178,6 +178,40 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
  const [depositProofFiles,setDepositProofFiles]=useState([]),[depositProofId,setDepositProofId]=useState("");
  useEffect(()=>{let cancelled=false;if(!supabase||!user?.id)return;supabase.from("dv_accounting_user_profiles").select("display_name,signature_storage_path,role").eq("user_id",user.id).maybeSingle().then(({data})=>{if(cancelled||!data)return;setReceiptIssuerProfile({display_name:data.display_name||"",signature_storage_path:data.signature_storage_path||null,role:String(data.role||"").toUpperCase()})});return()=>{cancelled=true}},[user?.id]);
  const isAdmin=adminMode;
+ useEffect(()=>{
+  if(!supabase||(!selected&&!newListing))return;
+  let active=true;
+  (async()=>{
+   const {data:company}=await supabase.from("dv_accounting_companies").select("id").limit(1).maybeSingle();
+   if(!active||!company?.id)return;
+   setCompanyId(company.id);
+   const {data:settings}=await supabase.from("dv_accounting_settings").select("key,value").eq("company_id",company.id).in("key",["TRADE_DOCUMENT_TYPES","TRADE_DOCUMENT_REQUIREMENTS_BY_SIDE","LISTING_DOCUMENT_REQUIREMENTS"]);
+   if(!active)return;
+   const map=Object.fromEntries((settings||[]).map(x=>[x.key,x.value]));
+   const master=Array.isArray(map.TRADE_DOCUMENT_TYPES)?map.TRADE_DOCUMENT_TYPES.filter(x=>Array.isArray(x)&&x.length>=2).map(([code,label])=>({code:String(code),label:String(label)})):[];
+   const listingRules=map.TRADE_DOCUMENT_REQUIREMENTS_BY_SIDE?.LISTING;
+   const hasListingRules=!!listingRules&&typeof listingRules==="object"&&!Array.isArray(listingRules);
+   const legacy=Array.isArray(map.LISTING_DOCUMENT_REQUIREMENTS)?map.LISTING_DOCUMENT_REQUIREMENTS:[];
+   const configuredTypes=Array.isArray(listingRules?.types)?listingRules.types:[];
+   const required=Array.isArray(listingRules?.required)?listingRules.required:configuredTypes;
+   const types=[...new Set([...configuredTypes,...required].map(code=>String(code).trim()).filter(Boolean))];
+   const normalizeCode=code=>String(code??"").trim().toUpperCase();
+   const configured=types.map(code=>{const normalizedCode=normalizeCode(code);const found=master.find(x=>normalizeCode(x.code)===normalizedCode)||legacy.find(x=>normalizeCode(x.code)===normalizedCode)||{code:normalizedCode,label:normalizedCode};return {...found,code:normalizedCode,label:normalizedCode==="OTHER"?"Other Supporting Documents":found.label};}).filter(x=>x.code);
+   if(!configured.some(x=>x.code==="RECO_INFORMATION_GUIDE"))configured.push({...recoGuide});
+   else configured.forEach(x=>{if(x.code==="RECO_INFORMATION_GUIDE"){x.label="RECO Information Guide";x.required=true}});
+   if(hasListingRules){
+    const withOther=configured.some(x=>x.code==="OTHER")?configured:[...configured,{code:"OTHER",label:"Other Supporting Documents"}];
+    setRequirements(withOther.map(x=>({...x,label:x.code==="OTHER"?"Other Supporting Documents":x.label,required:x.code==="OTHER"?false:x.code==="RECO_INFORMATION_GUIDE"||required.some(code=>normalizeCode(code)===normalizeCode(x.code))})));
+   }else if(legacy.length){
+    const withOther=legacy.filter(x=>x&&x.code&&x.label).map(x=>({code:normalizeCode(x.code),label:normalizeCode(x.code)==="OTHER"?"Other Supporting Documents":String(x.label),required:normalizeCode(x.code)==="RECO_INFORMATION_GUIDE"?true:x.required!==false}));
+    if(!withOther.some(x=>x.code==="RECO_INFORMATION_GUIDE"))withOther.push({...recoGuide});
+    if(!withOther.some(x=>x.code==="LISTING_CANCELLATION"))withOther.push({code:"LISTING_CANCELLATION",label:"Listing Cancellation Agreement",required:false});
+    if(!withOther.some(x=>x.code==="OTHER"))withOther.push({code:"OTHER",label:"Other Supporting Documents",required:false});
+    setRequirements(withOther);
+   }else setRequirements(defaults);
+  })().catch(error=>{if(active)setError("Could not load listing document settings: "+(error?.message||"Unknown error"))});
+  return()=>{active=false};
+ },[selected?.id,newListing]);
  const [requirementExceptions,setRequirementExceptions]=useState([]);
  const localDraftKey=`dv-listing-unsaved-draft:${user?.id||"unknown"}:${isAdmin?"staff":"agent"}:${agentId||"assigned"}`;
  const [draftRestored,setDraftRestored]=useState(false);
@@ -211,44 +245,12 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
  const load=useCallback(async(background=false)=>{
   if(!supabase){setLoading(false);return}
   if(!background){setLoading(true);setError("");}
-  const [companyResult,agentResult,branchResult]=await Promise.all([
-   supabase.from("dv_accounting_companies").select("id").limit(1).maybeSingle(),
-   supabase.from("dv_accounting_agents").select("*"),
-   supabase.from("dv_accounting_branches").select("id,name,branch_code")
-  ]);
-  const company=companyResult.data;
-  if(company?.id)setCompanyId(company.id);
-  if(agentResult.error)setError("Could not load agents: "+agentResult.error.message);else setAgents((agentResult.data||[]).filter(a=>a.active!==false).sort((a,b)=>String(a.last_name||"").localeCompare(String(b.last_name||""))));
-  if(branchResult.error)console.warn("Could not load listing branches:",branchResult.error.message);else setBranches(branchResult.data||[]);
-  if(company?.id){
-   const {data:settings}=await supabase.from("dv_accounting_settings").select("key,value").eq("company_id",company.id).in("key",["TRADE_DOCUMENT_TYPES","TRADE_DOCUMENT_REQUIREMENTS_BY_SIDE","LISTING_DOCUMENT_REQUIREMENTS"]);
-   const map=Object.fromEntries((settings||[]).map(x=>[x.key,x.value]));
-   const master=Array.isArray(map.TRADE_DOCUMENT_TYPES)?map.TRADE_DOCUMENT_TYPES.filter(x=>Array.isArray(x)&&x.length>=2).map(([code,label])=>({code:String(code),label:String(label)})):[];
-   const listingRules=map.TRADE_DOCUMENT_REQUIREMENTS_BY_SIDE?.LISTING;
-   const hasListingRules=!!listingRules&&typeof listingRules==="object"&&!Array.isArray(listingRules);
-   const legacy=Array.isArray(map.LISTING_DOCUMENT_REQUIREMENTS)?map.LISTING_DOCUMENT_REQUIREMENTS:[];
-   const configuredTypes=Array.isArray(listingRules?.types)?listingRules.types:[];
-   const required=Array.isArray(listingRules?.required)?listingRules.required:configuredTypes;
-   // Include required entries defensively if older settings omitted them from the enabled-types list.
-   const types=[...new Set([...configuredTypes,...required].map(code=>String(code).trim()).filter(Boolean))];
-   const normalizeCode=code=>String(code??"").trim().toUpperCase();
-   const configured=types.map(code=>{const normalizedCode=normalizeCode(code);const found=master.find(x=>normalizeCode(x.code)===normalizedCode)||legacy.find(x=>normalizeCode(x.code)===normalizedCode)||{code:normalizedCode,label:normalizedCode};return {...found,code:normalizedCode,label:normalizedCode==="OTHER"?"Other Supporting Documents":found.label};}).filter(x=>x.code);
-   if(!configured.some(x=>x.code==="RECO_INFORMATION_GUIDE"))configured.push({...recoGuide});
-   else configured.forEach(x=>{if(x.code==="RECO_INFORMATION_GUIDE"){x.label="RECO Information Guide";x.required=true}});
-
-   if(hasListingRules){
-    const withOther=configured.some(x=>x.code==="OTHER")?configured:[...configured,{code:"OTHER",label:"Other Supporting Documents"}];
-    setRequirements(withOther.map(x=>({...x,label:x.code==="OTHER"?"Other Supporting Documents":x.label,required:x.code==="OTHER"?false:x.code==="RECO_INFORMATION_GUIDE"||required.some(code=>normalizeCode(code)===normalizeCode(x.code))})));
-   }else if(legacy.length){
-    const withOther=legacy.filter(x=>x&&x.code&&x.label).map(x=>({code:normalizeCode(x.code),label:normalizeCode(x.code)==="OTHER"?"Other Supporting Documents":String(x.label),required:normalizeCode(x.code)==="RECO_INFORMATION_GUIDE"?true:x.required!==false}));
-    if(!withOther.some(x=>x.code==="RECO_INFORMATION_GUIDE"))withOther.push({...recoGuide});
-    if(!withOther.some(x=>x.code==="LISTING_CANCELLATION"))withOther.push({code:"LISTING_CANCELLATION",label:"Listing Cancellation Agreement",required:false});
-    if(!withOther.some(x=>x.code==="OTHER"))withOther.push({code:"OTHER",label:"Other Supporting Documents",required:false});
-    setRequirements(withOther);
-   }else{
-    setRequirements(defaults);
-   }
-  }
+   const [agentResult,branchResult]=await Promise.all([
+    supabase.from("dv_accounting_agents").select("*"),
+    supabase.from("dv_accounting_branches").select("id,name,branch_code")
+   ]);
+   if(agentResult.error)setError("Could not load agents: "+agentResult.error.message);else setAgents((agentResult.data||[]).filter(a=>a.active!==false).sort((a,b)=>String(a.last_name||"").localeCompare(String(b.last_name||""))));
+   if(branchResult.error)console.warn("Could not load listing branches:",branchResult.error.message);else setBranches(branchResult.data||[]);
   let q=supabase.from("dv_accounting_listing_submissions").select("*").order("created_at",{ascending:false});if(isAdmin){const term=debouncedListingSearch.trim().replace(/[,%()]/g," ").replace(/\\/g," ").slice(0,80);if(term){const pattern="%"+term+"%";const matchingAgentIds=(agentResult.data||[]).filter(a=>[a.first_name,a.last_name,a.full_name,a.email,a.agent_number].filter(Boolean).join(" ").toLowerCase().includes(term.toLowerCase())).map(a=>a.id).filter(Boolean);const clauses=["property_address.ilike."+pattern,"city.ilike."+pattern,"postal_code.ilike."+pattern,"mls_number.ilike."+pattern,"status.ilike."+pattern];if(matchingAgentIds.length)clauses.push("agent_id.in.("+matchingAgentIds.join(",")+")");q=q.or(clauses.join(","));}}
   if(!isAdmin)q=q.eq("agent_id",agentId);if(isAdmin)q=q.range(listingPage*50,listingPage*50+50);
   const {data,error:e}=await q;if(isAdmin)setListingHasNext((data||[]).length>50);
