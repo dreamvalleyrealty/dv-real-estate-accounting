@@ -620,6 +620,8 @@ function PayOurBrokerageModal({transaction,onClose,onPosted,reviewOnly=false}){
  const [paymentMethod,setPaymentMethod]=useState("EFT");
  const [paymentReference,setPaymentReference]=useState("");
  const [amount,setAmount]=useState(null);
+ const [grossAmount,setGrossAmount]=useState(null);
+ const [buyerRebateAmount,setBuyerRebateAmount]=useState(0);
  const [loading,setLoading]=useState(true);
  const [saving,setSaving]=useState(false);
  const [message,setMessage]=useState("");
@@ -654,9 +656,17 @@ function PayOurBrokerageModal({transaction,onClose,onPosted,reviewOnly=false}){
     chequeFees=Number(cheques[0].total_fees||0);adminFee=Number(info?.[0]?.admin_fee||0);
    }
    const brokerageShare=gross*(100-split)/100;
-   const total=Math.round((brokerageShare+brokerageShare*hstRate/100+adminFee*hstRate/100+chequeFees)*100)/100;
-   if(total<=0)throw new Error("The calculated brokerage payment must be greater than zero.");
-   if(live)setAmount(total);
+   const grossTotal=Math.round((brokerageShare+brokerageShare*hstRate/100+adminFee*hstRate/100+chequeFees)*100)/100;
+   let approvedBuyerRebate=0;
+   if(String(transaction.side||"").toUpperCase()==="BUYER"){
+    const {data:rebates,error:rebateError}=await supabase.from("dv_accounting_buyer_rebates").select("amount").eq("transaction_id",transaction.id).eq("status","APPROVED").is("trust_transaction_id",null);
+    if(rebateError)throw rebateError;
+    approvedBuyerRebate=Math.round((rebates||[]).reduce((sum,row)=>sum+Number(row.amount||0),0)*100)/100;
+   }
+   const total=Math.round((grossTotal-approvedBuyerRebate)*100)/100;
+   if(grossTotal<=0)throw new Error("The calculated brokerage payment must be greater than zero.");
+   if(total<=0)throw new Error("Approved buyer rebates ("+approvedBuyerRebate.toLocaleString("en-CA",{style:"currency",currency:"CAD"})+") equal or exceed the brokerage transfer. Review the rebate amount before proceeding.");
+   if(live){setGrossAmount(grossTotal);setBuyerRebateAmount(approvedBuyerRebate);setAmount(total);}
   }catch(error){if(live)setMessage(error?.message||String(error))}
   finally{if(live)setLoading(false)}
  })();return()=>{live=false}},[transaction?.id]);
@@ -678,7 +688,13 @@ function PayOurBrokerageModal({transaction,onClose,onPosted,reviewOnly=false}){
   <div className="modal tx-modal" style={{maxWidth:560,width:"min(560px,96vw)"}} onClick={e=>e.stopPropagation()}>
    <div className="modalhead"><div><h2>{reviewOnly?"Review / Adjust Payments":"Pay Dream Valley Realty"}</h2><p className="muted" style={{margin:"4px 0 0"}}>{transaction.transaction_number||"Trade"} · {transaction.property_address||[transaction.street_number,transaction.street_name].filter(Boolean).join(" ")}</p></div><button type="button" className="iconbtn" disabled={saving} onClick={onClose}>×</button></div>
    {loading?<p>Calculating brokerage payment…</p>:amount===null?<div className="error">{message||"Could not calculate payment."}</div>:<>
-    <div className="summary-card" style={{margin:"12px 0",padding:14,border:"1px solid #d0dbea",borderRadius:10}}><div className="muted">{reviewOnly?"Original brokerage payment":"Amount to transfer"}</div><div style={{fontSize:28,fontWeight:700}}>{amount.toLocaleString("en-CA",{style:"currency",currency:"CAD"})}</div><div className="muted">Commission Trust → General Operating</div></div>
+    <div className="summary-card" style={{margin:"12px 0",padding:14,border:"1px solid #d0dbea",borderRadius:10}}>
+     <div className="muted">Full brokerage amount</div><div style={{fontSize:20,fontWeight:700}}>{Number(grossAmount||amount).toLocaleString("en-CA",{style:"currency",currency:"CAD"})}</div>
+     {buyerRebateAmount>0&&<div style={{display:"flex",justifyContent:"space-between",gap:12,marginTop:8,color:"#9a5b16"}}><span>Less: approved buyer rebate retained in Commission Trust</span><strong>−{buyerRebateAmount.toLocaleString("en-CA",{style:"currency",currency:"CAD"})}</strong></div>}
+     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:12,borderTop:"1px solid #d0dbea",paddingTop:9,marginTop:9}}><span className="muted">{reviewOnly?"Original net brokerage transfer":"Net amount to transfer"}</span><strong style={{fontSize:26}}>{amount.toLocaleString("en-CA",{style:"currency",currency:"CAD"})}</strong></div>
+     <div className="muted">Commission Trust → General Operating</div>
+     {buyerRebateAmount>0&&<div className="muted" style={{marginTop:7}}>The buyer rebate remains in Commission Trust. Pay it separately to the buyer from the Buyer Rebates menu.</div>}
+    </div>
     <div className="formgrid">
      <label>Payment date<input type="date" value={paymentDate} onChange={e=>setPaymentDate(e.target.value)} required/></label>
      <label>Payment method<select value={paymentMethod} onChange={e=>setPaymentMethod(e.target.value)}><option value="EFT">EFT</option><option value="CHEQUE">Cheque</option><option value="INTERNAL_TRANSFER">Internal bank transfer</option></select></label>
