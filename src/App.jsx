@@ -1545,7 +1545,7 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,commissio
   if(method==="EFT"&&!reference.trim()){setError("Enter the EFT payment reference before issuing.");return}
   if(method==="CHEQUE"&&!reference.trim()){setError("Enter the cheque number before issuing.");return}
   setBusy(true);setError("");
-  const{data,error}=await supabase.rpc("dv_accounting_issue_commission_cheque",{p_commission_id:commission.id,p_cheque_number:reference.trim(),p_cheque_date:payDate,p_deduct_desk_fees:deductDeskFees});
+  const{data,error}=await supabase.rpc("dv_accounting_issue_commission_cheque",{p_commission_id:commission.id,p_cheque_number:reference.trim(),p_cheque_date:payDate,p_deduct_desk_fees:deductAgentCharges});
   if(error){setError(error.message);setBusy(false);return}
   const{error:updateError}=await supabase.from("dv_accounting_commission_cheques").update({payment_method:method,payment_reference:reference.trim()}).eq("id",data.cheque_id);
   if(updateError){setError("Payment was issued, but the payment method could not be saved. Run migration 0055 and contact an administrator before continuing. "+updateError.message);setBusy(false);return}
