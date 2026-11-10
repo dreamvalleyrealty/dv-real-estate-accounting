@@ -101,7 +101,10 @@ BEGIN
 
   SELECT coalesce(
     (SELECT tc.hst_rate FROM public.dv_accounting_transaction_commissions tc
-     WHERE tc.transaction_id=p_transaction_id AND upper(tc.side)='LISTING'
+     WHERE tc.transaction_id=p_transaction_id
+       AND upper(coalesce(tc.side,'')) =
+         CASE WHEN upper(coalesce(v_transaction_side,'')) IN ('SELLER','LANDLORD','LISTING')
+              THEN 'LISTING' ELSE 'BUYER' END
      ORDER BY tc.created_at DESC LIMIT 1),13
   ) INTO v_hst_rate;
 
