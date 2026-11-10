@@ -885,52 +885,21 @@ async function sendPreparedEmail(mode="send"){
 }
 async function approveAmount(id){if(!supabase)return;try{const{data:tx,error:txError}=await supabase.from("dv_accounting_transactions").select("*").eq("id",id).single();if(txError)throw txError;let gross=Number(tx.gross_commission||0),hst=Number(tx.hst_amount||0),agentPayable=Number(tx.agent_commission||0);if(gross<=0&&agentPayable<=0){const{data:lines,error:lineError}=await supabase.from("dv_accounting_transaction_commissions").select("*").eq("transaction_id",id);if(lineError)throw lineError;const ownSide=["SELLER","LANDLORD","LISTING"].includes(String(tx.side||"").toUpperCase())?"LISTING":"BUYER";const receivable=(lines||[]).filter(c=>String(c.settlement_direction||"").toUpperCase()==="RECEIVABLE");const ownRows=receivable.filter(c=>String(c.side||"").toUpperCase()===ownSide);const usable=ownRows.length?ownRows:receivable;gross=usable.reduce((sum,c)=>sum+Number(c.amount||((Number(tx.sale_price||0)*Number(c.rate||0))/100)||0),0);hst=usable.reduce((sum,c)=>sum+Number(c.hst_amount||((Number(c.amount||((Number(tx.sale_price||0)*Number(c.rate||0))/100)))*Number(c.hst_rate||13)/100)||0),0);if(gross>0){const{data:info,error:infoError}=await supabase.from("dv_accounting_transaction_agent_info").select("admin_fee,lead_fee,lead_fee_applies").eq("transaction_id",id).maybeSingle();if(infoError)throw infoError;const admin=Math.max(0,Number(info?.admin_fee||0)),lead=tx.is_brokerage_lead||info?.lead_fee_applies?Math.max(0,Number(info?.lead_fee||0)):0;agentPayable=Math.max(0,gross-admin-lead);const{error:updateError}=await supabase.from("dv_accounting_transactions").update({gross_commission:gross,hst_amount:hst,agent_commission:agentPayable}).eq("id",id);if(updateError)throw updateError;}}if(gross<=0&&agentPayable<=0){alert("No commission amount is saved for this transaction. Open Edit Transaction → Commission, enter the commission rate or amount for Dream Valley's side, save the transaction, then approve it.");return}const{error}=await supabase.rpc("dv_accounting_approve_transaction_commission",{p_transaction_id:id});if(error)throw error;await load();alert("Commission amount approved. Transaction status is now OPEN.");}catch(error){alert("Could not approve commission: "+(error?.message||String(error)))}} function finalize(id){if(!supabase)return;const tx=rows.find(r=>r.id===id);if(!tx||String(tx.status||"").toUpperCase()!=="OPEN"){alert("Only OPEN transactions can be finalized.");return}setFinalizeTarget(tx)} async function confirmFinalizeClosed(){if(!supabase||!finalizeTarget)return;setFinalizeBusy(true);const{error}=await supabase.rpc("dv_accounting_finalize_transaction",{p_transaction_id:finalizeTarget.id});if(error){alert("Could not finalize accounting: "+error.message);setFinalizeBusy(false);return}const tx={...finalizeTarget,status:"FINALIZED"};setFinalizeTarget(null);setFinalizeBusy(false);await load();closeAndSend(tx)} async function unfinalize(id){if(!supabase)return;if(!confirm("Unfinalize this transaction and return it to DRAFT? Commission approval will be reset and the trade can be corrected before it is finalized again."))return;const{error}=await supabase.rpc("dv_accounting_unfinalize_transaction",{p_transaction_id:id});if(error){alert("Could not unfinalize transaction: "+error.message);return}await load()} async function closeAndSend(tx){
  const listingSide=["SELLER","LANDLORD","LISTING"].includes(String(tx?.side||"").toUpperCase());
- const ownListing=tx?.is_own_listing===true||!!tx?.listing_id;
- // A listing-side trade with a posted Real Estate Trust deposit is funded through
- // the seller-settlement workflow. It is not a new Commission A/R receipt.
- if(supabase&&listingSide&&ownListing&&!tx?.ar_payment_received){
-  try{
-   let depositRows=[];
-   const direct=await supabase.from("dv_accounting_trust_transactions")
-    .select("id,transaction_id,amount,direction,status,trust_account_type")
-    .eq("transaction_id",tx.id)
-    .eq("direction","DEPOSIT")
-    .eq("status","POSTED")
-    .eq("trust_account_type","REAL_ESTATE_TRUST");
-   if(direct.error)throw direct.error;
-   depositRows=(direct.data||[]).filter(row=>Number(row.amount||0)>0);
-   if(!depositRows.length&&tx.listing_id){
-    const linked=await supabase.from("dv_accounting_transactions")
-     .select("id")
-     .eq("listing_id",tx.listing_id)
-     .like("transaction_number","LST-%");
-    if(linked.error)throw linked.error;
-    const listingIds=(linked.data||[]).map(row=>row.id).filter(Boolean);
-    if(listingIds.length){
-     const history=await supabase.from("dv_accounting_trust_transactions")
-      .select("id,transaction_id,amount,direction,status,trust_account_type")
-      .in("transaction_id",listingIds)
-      .eq("direction","DEPOSIT")
-      .eq("status","POSTED")
-      .eq("trust_account_type","REAL_ESTATE_TRUST");
-     if(history.error)throw history.error;
-     depositRows=(history.data||[]).filter(row=>Number(row.amount||0)>0);
-    }
-   }
-   if(depositRows.length){
-    setCloseBusy(true);
-    const result=await supabase.rpc("dv_accounting_close_transaction",{p_transaction_id:tx.id});
-    if(result.error)throw result.error;
-    setCloseBusy(false);
-    setCloseTarget(null);
-    await load();
-    alert("Transaction closed. The existing Real Estate Trust deposit remains in trust and will be handled through Seller Settlement. No duplicate Commission A/R receipt was recorded.");
-    return;
-   }
-  }catch(error){
-   setCloseBusy(false);
-   alert("Could not verify the existing Real Estate Trust deposit. The regular close confirmation will remain available. "+(error?.message||String(error)));
+ // Seller/landlord-side closings are settled from Real Estate Trust. Their net
+ // client payout and subsequent commission transfer are handled in Seller
+ // Settlements, so closing must never ask for a separate Commission A/R receipt.
+ if(supabase&&listingSide){
+  setCloseBusy(true);
+  const result=await supabase.rpc("dv_accounting_close_transaction",{p_transaction_id:tx.id});
+  setCloseBusy(false);
+  if(result.error){
+   alert("Could not close the seller/landlord transaction. "+result.error.message);
+   return;
   }
+  setCloseTarget(null);
+  await load();
+  alert("Transaction closed. Complete the seller/landlord payout from Real Estate Trust in Seller Settlements, then transfer the commission to Commission Trust. No separate Commission A/R receipt was requested.");
+  return;
  }
  setCloseTarget(tx);
  setCloseForm({received:tx.ar_payment_received?"YES":"NO",date:tx.ar_payment_received_date||tx.close_date||today(),amount:tx.ar_payment_amount?String(tx.ar_payment_amount):String((Number(tx.gross_commission||0)+Number(tx.hst_amount||0))||tx.commission_receivable||0),bank_account_id:tx.ar_payment_bank_account_id||"",reference:tx.ar_payment_reference||"",method:tx.ar_payment_method||"EFT",cheque_number:tx.ar_payment_cheque_number||""});
