@@ -210,10 +210,15 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
  const load=useCallback(async(background=false)=>{
   if(!supabase){setLoading(false);return}
   if(!background){setLoading(true);setError("");}
-  const {data:company}=await supabase.from("dv_accounting_companies").select("id").limit(1).maybeSingle();
+  const [companyResult,agentResult,branchResult]=await Promise.all([
+   supabase.from("dv_accounting_companies").select("id").limit(1).maybeSingle(),
+   supabase.from("dv_accounting_agents").select("*"),
+   supabase.from("dv_accounting_branches").select("id,name,branch_code")
+  ]);
+  const company=companyResult.data;
   if(company?.id)setCompanyId(company.id);
-  const {data:agentRows,error:agentError}=await supabase.from("dv_accounting_agents").select("*");if(agentError)setError("Could not load agents: "+agentError.message);else setAgents((agentRows||[]).filter(a=>a.active!==false).sort((a,b)=>String(a.last_name||"").localeCompare(String(b.last_name||""))));
-  const {data:branchRows,error:branchError}=await supabase.from("dv_accounting_branches").select("id,name,branch_code");if(branchError)console.warn("Could not load listing branches:",branchError.message);else setBranches(branchRows||[]);
+  if(agentResult.error)setError("Could not load agents: "+agentResult.error.message);else setAgents((agentResult.data||[]).filter(a=>a.active!==false).sort((a,b)=>String(a.last_name||"").localeCompare(String(b.last_name||""))));
+  if(branchResult.error)console.warn("Could not load listing branches:",branchResult.error.message);else setBranches(branchResult.data||[]);
   if(company?.id){
    const {data:settings}=await supabase.from("dv_accounting_settings").select("key,value").eq("company_id",company.id).in("key",["TRADE_DOCUMENT_TYPES","TRADE_DOCUMENT_REQUIREMENTS_BY_SIDE","LISTING_DOCUMENT_REQUIREMENTS"]);
    const map=Object.fromEntries((settings||[]).map(x=>[x.key,x.value]));
