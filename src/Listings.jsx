@@ -167,6 +167,7 @@ function ListingExpensesPanel({listingId,listingStatus}){
 
 export default function Listings({user,agentId,adminMode=false,initialSubmissionId="",initialActiveTab="PROPERTY",onSubmissionOpened,canDeleteDocuments=false,canDeleteDraftListings=false,canReceiveDeposit=false}){
  const initialReviewOpened=useRef("");
+ const listDirectoryCache=useRef(null);
   const [rows,setRows]=useState([]),[listingPage,setListingPage]=useState(0),[listingHasNext,setListingHasNext]=useState(false),[listingSearch,setListingSearch]=useState(""),[debouncedListingSearch,setDebouncedListingSearch]=useState(""),[listingView,setListingView]=useState("ALL"),[listingBranchFilter,setListingBranchFilter]=useState("ALL"),[listingTypeFilter,setListingTypeFilter]=useState("ALL"),[listingSort,setListingSort]=useState("PRICE_DESC"),[docs,setDocs]=useState([]),[activeTab,setActiveTab]=useState(initialActiveTab),[selectedRequirementCode,setSelectedRequirementCode]=useState("LISTING_AGREEMENT"),[previewDocument,setPreviewDocument]=useState(null),[previewUrl,setPreviewUrl]=useState(""),[requirements,setRequirements]=useState(defaults),[companyId,setCompanyId]=useState(""),[agents,setAgents]=useState([]),[branches,setBranches]=useState([]),[assignedAgentId,setAssignedAgentId]=useState(""),[additionalAgentIds,setAdditionalAgentIds]=useState([]),[additionalAgentSearch,setAdditionalAgentSearch]=useState(""),[selected,setSelected]=useState(null),[form,setForm]=useState({...blank}),[newListing,setNewListing]=useState(false),[isEditing,setIsEditing]=useState(false),[uploadType,setUploadType]=useState(defaults[0].code),[fileBatch,setFileBatch]=useState([]),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(""),[message,setMessage]=useState(""), [submissionReason,setSubmissionReason]=useState(""),[missingRequiredDocuments,setMissingRequiredDocuments]=useState([]),[mlsNumber,setMlsNumber]=useState(""),[adminNotes,setAdminNotes]=useState(""),[autoSplit,setAutoSplit]=useState(false),[expandedListingRequirements,setExpandedListingRequirements]=useState({}),[splitPreview,setSplitPreview]=useState(null),[splitting,setSplitting]=useState(false),[changeRequests,setChangeRequests]=useState([]),[requestText,setRequestText]=useState(""),[renamingDocumentId,setRenamingDocumentId]=useState(null),[documentNameDraft,setDocumentNameDraft]=useState(""),[fileNameDrafts,setFileNameDrafts]=useState([]);
  useEffect(()=>{const timer=setTimeout(()=>setDebouncedListingSearch(listingSearch),300);return()=>clearTimeout(timer)},[listingSearch]);
  const [depositOpen,setDepositOpen]=useState(false),[depositBanks,setDepositBanks]=useState([]),[depositSaving,setDepositSaving]=useState(false),[depositError,setDepositError]=useState(""),[depositReceipt,setDepositReceipt]=useState(null),[depositEditMode,setDepositEditMode]=useState(false),[depositEditingId,setDepositEditingId]=useState(null),[depositAttachment,setDepositAttachment]=useState(null),[depositRemoveExistingAttachment,setDepositRemoveExistingAttachment]=useState(false),[depositForm,setDepositForm]=useState({amount:"",date:new Date().toISOString().slice(0,10),received_from:"",payment_type:"CHEQUE",reference_number:"",trust_bank_account_id:""});
@@ -245,13 +246,17 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
  const load=useCallback(async(background=false)=>{
   if(!supabase){setLoading(false);return}
   if(!background){setLoading(true);setError("");}
-   const [agentResult,branchResult]=await Promise.all([
-    supabase.from("dv_accounting_agents").select("*"),
-    supabase.from("dv_accounting_branches").select("id,name,branch_code")
-   ]);
-   if(agentResult.error)setError("Could not load agents: "+agentResult.error.message);else setAgents((agentResult.data||[]).filter(a=>a.active!==false).sort((a,b)=>String(a.last_name||"").localeCompare(String(b.last_name||""))));
-   if(branchResult.error)console.warn("Could not load listing branches:",branchResult.error.message);else setBranches(branchResult.data||[]);
-  let q=supabase.from("dv_accounting_listing_submissions").select("*").order("created_at",{ascending:false});if(isAdmin){const term=debouncedListingSearch.trim().replace(/[,%()]/g," ").replace(/\\/g," ").slice(0,80);if(term){const pattern="%"+term+"%";const matchingAgentIds=(agentResult.data||[]).filter(a=>[a.first_name,a.last_name,a.full_name,a.email,a.agent_number].filter(Boolean).join(" ").toLowerCase().includes(term.toLowerCase())).map(a=>a.id).filter(Boolean);const clauses=["property_address.ilike."+pattern,"city.ilike."+pattern,"postal_code.ilike."+pattern,"mls_number.ilike."+pattern,"status.ilike."+pattern];if(matchingAgentIds.length)clauses.push("agent_id.in.("+matchingAgentIds.join(",")+")");q=q.or(clauses.join(","));}}
+   let agentRows=listDirectoryCache.current?.agents||[];
+   if(!listDirectoryCache.current){
+    const [agentResult,branchResult]=await Promise.all([
+     supabase.from("dv_accounting_agents").select("*"),
+     supabase.from("dv_accounting_branches").select("id,name,branch_code")
+    ]);
+    if(agentResult.error)setError("Could not load agents: "+agentResult.error.message);else{agentRows=(agentResult.data||[]).filter(a=>a.active!==false).sort((a,b)=>String(a.last_name||"").localeCompare(String(b.last_name||"")));setAgents(agentRows)}
+    if(branchResult.error)console.warn("Could not load listing branches:",branchResult.error.message);else setBranches(branchResult.data||[]);
+    listDirectoryCache.current={agents:agentRows};
+   }
+  let q=supabase.from("dv_accounting_listing_submissions").select("*").order("created_at",{ascending:false});if(isAdmin){const term=debouncedListingSearch.trim().replace(/[,%()]/g," ").replace(/\\/g," ").slice(0,80);if(term){const pattern="%"+term+"%";const matchingAgentIds=agentRows.filter(a=>[a.first_name,a.last_name,a.full_name,a.email,a.agent_number].filter(Boolean).join(" ").toLowerCase().includes(term.toLowerCase())).map(a=>a.id).filter(Boolean);const clauses=["property_address.ilike."+pattern,"city.ilike."+pattern,"postal_code.ilike."+pattern,"mls_number.ilike."+pattern,"status.ilike."+pattern];if(matchingAgentIds.length)clauses.push("agent_id.in.("+matchingAgentIds.join(",")+")");q=q.or(clauses.join(","));}}
   if(!isAdmin)q=q.eq("agent_id",agentId);if(isAdmin)q=q.range(listingPage*50,listingPage*50+50);
   const {data,error:e}=await q;if(isAdmin)setListingHasNext((data||[]).length>50);
   if(e){setError("Could not load listing submissions: "+e.message);}else{
