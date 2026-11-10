@@ -32,7 +32,7 @@ begin
   if coalesce(cardinality(p_expense_ids),0)<2 then
     raise exception 'Select at least two invoices for a batch payment';
   end if;
-  select array_agg(distinct x order by x) into v_ids from unnest(p_expense_ids) x;
+  select array_agg(distinct id order by id) into v_ids from unnest(p_expense_ids) as input_ids(id);
   if cardinality(v_ids)<>cardinality(p_expense_ids) then
     raise exception 'The selected invoice list contains duplicates';
   end if;
