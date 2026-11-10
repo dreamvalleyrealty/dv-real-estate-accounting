@@ -2033,7 +2033,7 @@ function PermissionManager({profiles,user,permissions={}}){
    </details>)}
    {!filteredCatalog.length&&<div className="notice" style={{marginTop:12}}>No permissions match this search.</div>}
   </>}
- </section><option value="OWN">Own records</option></select></td></>}</tr>})}</tbody></table></div></div>)}</section>
+ </section>
 }
 
 function ListingDocumentSettings({companyId}){
