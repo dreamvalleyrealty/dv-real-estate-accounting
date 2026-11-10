@@ -251,7 +251,16 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
   let q=supabase.from("dv_accounting_listing_submissions").select("*").order("created_at",{ascending:false});
   if(!isAdmin)q=q.eq("agent_id",agentId);
   const {data,error:e}=await q;
-  if(e)setError("Could not load listing submissions: "+e.message);else{const listings=data||[];const ids=listings.map(x=>x.id).filter(Boolean);let transactionByListing={};if(ids.length){const{data:linkedTransactions,error:transactionError}=await supabase.from("dv_accounting_transactions").select("id,listing_id,transaction_number,sale_price,created_at").in("listing_id",ids).order("created_at",{ascending:false});if(!transactionError)for(const tx of linkedTransactions||[]){const current=transactionByListing[tx.listing_id],isTrade=!String(tx.transaction_number||"").startsWith("LST-"),currentIsTrade=current&&!String(current.transaction_number||"").startsWith("LST-");if(!current||(isTrade&&!currentIsTrade))transactionByListing[tx.listing_id]=tx}}setRows(listings.map(row=>({...row,sold_price:transactionByListing[row.id]?.sale_price??null,linked_transaction_number:transactionByListing[row.id]?.transaction_number||null})))}
+  if(e){setError("Could not load listing submissions: "+e.message);}else{
+   const listings=data||[];
+   setRows(listings);
+   setLoading(false);
+   const ids=listings.map(x=>x.id).filter(Boolean);
+   if(ids.length){
+    const{data:linkedTransactions,error:transactionError}=await supabase.from("dv_accounting_transactions").select("id,listing_id,transaction_number,sale_price,created_at").in("listing_id",ids).order("created_at",{ascending:false});
+    if(!transactionError){const transactionByListing={};for(const tx of linkedTransactions||[]){const current=transactionByListing[tx.listing_id],isTrade=!String(tx.transaction_number||"").startsWith("LST-"),currentIsTrade=current&&!String(current.transaction_number||"").startsWith("LST-");if(!current||(isTrade&&!currentIsTrade))transactionByListing[tx.listing_id]=tx}setRows(listings.map(row=>({...row,sold_price:transactionByListing[row.id]?.sale_price??null,linked_transaction_number:transactionByListing[row.id]?.transaction_number||null})))}
+   }
+  }
   setLoading(false);
  },[isAdmin,agentId]);
  useEffect(()=>{load()},[load]);useAutoRefresh(()=>load(true));
