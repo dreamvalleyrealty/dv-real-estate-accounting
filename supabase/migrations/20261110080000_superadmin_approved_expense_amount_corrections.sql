@@ -1,6 +1,20 @@
 -- Add a dedicated permission and a controlled amount-correction workflow for approved expenses.
 -- Corrections retain the original posting and payment history and post a balanced adjustment.
 
+-- Keep the reason-based expense audit table available in fresh environments as well.
+CREATE TABLE IF NOT EXISTS public.dv_accounting_expense_audit (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid REFERENCES public.dv_accounting_companies(id),
+  expense_id uuid REFERENCES public.dv_accounting_expenses(id),
+  action text NOT NULL,
+  reason text NOT NULL,
+  before_data jsonb,
+  after_data jsonb,
+  performed_by uuid,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.dv_accounting_expense_audit ENABLE ROW LEVEL SECURITY;
+
 INSERT INTO public.dv_accounting_permission_catalog(code,module,label,description,sort_order)
 VALUES (
   'expenses.approved.edit',
