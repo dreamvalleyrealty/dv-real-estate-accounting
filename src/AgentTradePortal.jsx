@@ -157,18 +157,19 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const submissionIds=rows.map(s=>s.id).filter(Boolean);
    let pendingDocsBySubmission={};
    let rejectedDocsBySubmission={};
-   if(submissionIds.length){
-     const pendingDocsResult=await supabase.from("dv_accounting_agent_trade_documents").select("submission_id,match_status,match_notes,document_type").in("submission_id",submissionIds);
-     if(!pendingDocsResult.error){
-       for(const d of pendingDocsResult.data||[]){
-         const reviewStatus=String(d.match_status||"PENDING").toUpperCase();
-         if(["PENDING",""].includes(reviewStatus))pendingDocsBySubmission[d.submission_id]=(pendingDocsBySubmission[d.submission_id]||0)+1;
-         if(["MISMATCH","REJECTED","NOT_APPROVED","NOT APPROVED"].includes(reviewStatus)||(["PENDING",""].includes(reviewStatus)&&String(d.match_notes||"").trim()))rejectedDocsBySubmission[d.submission_id]=(rejectedDocsBySubmission[d.submission_id]||0)+1;
-       }
+   let paidByTransaction={};
+   const [pendingDocsResult,paidResult]=await Promise.all([
+     submissionIds.length?supabase.from("dv_accounting_agent_trade_documents").select("submission_id,match_status,match_notes,document_type").in("submission_id",submissionIds):Promise.resolve({data:[],error:null}),
+     transactionIds.length?supabase.from("dv_accounting_transactions").select("id,status,commission_payroll_status").in("id",transactionIds):Promise.resolve({data:[],error:null})
+   ]);
+   if(!pendingDocsResult.error){
+     for(const d of pendingDocsResult.data||[]){
+       const reviewStatus=String(d.match_status||"PENDING").toUpperCase();
+       if(["PENDING",""].includes(reviewStatus))pendingDocsBySubmission[d.submission_id]=(pendingDocsBySubmission[d.submission_id]||0)+1;
+       if(["MISMATCH","REJECTED","NOT_APPROVED","NOT APPROVED"].includes(reviewStatus)||(["PENDING",""].includes(reviewStatus)&&String(d.match_notes||"").trim()))rejectedDocsBySubmission[d.submission_id]=(rejectedDocsBySubmission[d.submission_id]||0)+1;
      }
    }
-   let paidByTransaction={};
-   if(transactionIds.length){const paidResult=await supabase.from("dv_accounting_transactions").select("id,status,commission_payroll_status").in("id",transactionIds);if(!paidResult.error)paidByTransaction=Object.fromEntries((paidResult.data||[]).map(t=>[t.id,t]));}
+   if(!paidResult.error)paidByTransaction=Object.fromEntries((paidResult.data||[]).map(t=>[t.id,t]));
    setSubmissions(rows.map(s=>{const t=paidByTransaction[s.transaction_id];const paid=["CLOSED","PAID"].includes(String(t?.status||"").toUpperCase())&&String(t?.commission_payroll_status||"").toUpperCase()==="PAID";const pendingReviewCount=pendingDocsBySubmission[s.id]||0;const rejectedDocumentCount=rejectedDocsBySubmission[s.id]||0;return {...s,...(paid?{status:"PAID",_transactionPaid:true}:{}),_pendingReviewCount:pendingReviewCount,_rejectedDocumentCount:rejectedDocumentCount};}));
  },[adminMode,agentId]);
 
