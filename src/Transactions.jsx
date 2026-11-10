@@ -629,17 +629,21 @@ function PayOurBrokerageModal({transaction,onClose,onPosted,reviewOnly=false}){
    if(infoError)throw infoError;
    const split=Number(info?.[0]?.split_percent);
    if(!Number.isFinite(split)||split<0||split>100)throw new Error("A valid commission split is required.");
-   const {data:commissions,error:commissionError}=await supabase.from("dv_accounting_transaction_commissions").select("side,hst_rate").eq("transaction_id",transaction.id);
+   const {data:commissions,error:commissionError}=await supabase.from("dv_accounting_transaction_commissions").select("side,amount,rate,hst_rate,hst_amount").eq("transaction_id",transaction.id);
    if(commissionError)throw commissionError;
-   const listing=(commissions||[]).find(row=>String(row.side||"").toUpperCase()==="LISTING");
-   const hstRate=Number(listing?.hst_rate??13);
+   const listingSide=["SELLER","LANDLORD","LISTING"].includes(String(transaction.side||"").toUpperCase());
+   const ownSide=listingSide?"LISTING":"BUYER";
+   const ownCommission=(commissions||[]).find(row=>String(row.side||"").toUpperCase()===ownSide);
+   const hstRate=Number(ownCommission?.hst_rate??13);
    let gross=Number(transaction.commission_approved_amount||transaction.gross_commission||transaction.commission_receivable||0);
+   if(ownCommission){
+    const rowAmount=Number(ownCommission.amount||0);
+    const rateAmount=Number(transaction.sale_price||0)*Number(ownCommission.rate||0)/100;
+    if(rowAmount>0)gross=rowAmount;else if(rateAmount>0)gross=rateAmount;
+   }
    let adminFee=0,chequeFees=0;
    if(split<=0.0001){
-    const {data:settlement,error:settlementError}=await supabase.from("dv_accounting_seller_settlements").select("listing_commission_amount").eq("transaction_id",transaction.id).maybeSingle();
-    if(settlementError)throw settlementError;
-    gross=Number(settlement?.listing_commission_amount||0);
-    if(gross<=0)throw new Error("No listing-side commission was found in the seller settlement.");
+    if(gross<=0)throw new Error("No commission amount was found for Dream Valley's represented side. Check the transaction commission details and save the trade before transferring.");
    }else{
     const {data:commissionsList,error:commissionsListError}=await supabase.from("dv_accounting_commissions").select("id").eq("transaction_id",transaction.id);
     if(commissionsListError)throw commissionsListError;
