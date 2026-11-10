@@ -45,7 +45,7 @@ begin
   if not found then raise exception 'Operating bank account not found'; end if;
   if b.account_type<>'OPERATING' then raise exception 'Vendor payments must use an Operating account'; end if;
 
-  select count(*), min(company_id), min(vendor)
+  select count(*), (array_agg(company_id))[1], (array_agg(vendor))[1]
     into v_count, v_company, v_vendor
   from public.dv_accounting_expenses where id=any(v_ids);
   if v_count<>cardinality(v_ids) then raise exception 'One or more selected invoices could not be found'; end if;
