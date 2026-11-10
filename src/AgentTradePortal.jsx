@@ -147,7 +147,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    if(!supabase)return;
    setError("");
    const agentPromise=supabase.from("dv_accounting_agents").select("*");
-   const query=supabase.from("dv_accounting_agent_trade_submissions").select("*").order("created_at",{ascending:false});
+   const query=supabase.from("dv_accounting_agent_trade_submissions").select("id,agent_id,submitted_by,payload,listing_id,transaction_id,trade_number,status,review_notes,admin_notes,submitted_at,created_at,updated_at,representation_group_id,representation_side").order("created_at",{ascending:false});
    if(!adminMode&&(!agentId||String(agentId)==="undefined"||String(agentId)==="null")){setSubmissions([]);setError("Your agent profile could not be matched to your login. Please contact the brokerage administrator.");return;}
    const [submissionResult,agentResult]=await Promise.all([query,agentPromise]);
    if(agentResult.error){if(adminMode)setError("Could not load the agent list: "+agentResult.error.message);}else setAgents((agentResult.data||[]).slice().sort((a,b)=>String(a.last_name||"").localeCompare(String(b.last_name||""))));
