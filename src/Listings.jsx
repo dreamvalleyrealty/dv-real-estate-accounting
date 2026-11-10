@@ -248,7 +248,7 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
     setRequirements(defaults);
    }
   }
-  let q=supabase.from("dv_accounting_listing_submissions").select("*",{count:isAdmin?"exact":undefined}).order("created_at",{ascending:false});if(isAdmin){const term=listingSearch.trim().replace(/[,%()]/g," ").replace(/\\/g," ").slice(0,80);if(term){const pattern="%"+term+"%";q=q.or(["property_address.ilike."+pattern,"street_number.ilike."+pattern,"street_name.ilike."+pattern,"city.ilike."+pattern,"postal_code.ilike."+pattern,"mls_number.ilike."+pattern,"status.ilike."+pattern].join(","));}}
+  let q=supabase.from("dv_accounting_listing_submissions").select("*",{count:isAdmin?"exact":undefined}).order("created_at",{ascending:false});if(isAdmin){const term=listingSearch.trim().replace(/[,%()]/g," ").replace(/\\/g," ").slice(0,80);if(term){const pattern="%"+term+"%";q=q.or(["property_address.ilike."+pattern,"city.ilike."+pattern,"postal_code.ilike."+pattern,"mls_number.ilike."+pattern,"status.ilike."+pattern].join(","));}}
   if(!isAdmin)q=q.eq("agent_id",agentId);if(isAdmin)q=q.range(listingPage*50,listingPage*50+49);
   const {data,error:e,count}=await q;if(isAdmin)setListingTotal(count||0);
   if(e){setError("Could not load listing submissions: "+e.message);}else{
