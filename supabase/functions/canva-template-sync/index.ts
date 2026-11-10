@@ -86,7 +86,7 @@ Deno.serve(async (req: Request) => {
       pageCount++;
     } while (continuation && pageCount < 10);
 
-    const rows = await Promise.all(templates.map(async (item: any) => {
+    const rows = (await Promise.all(templates.map(async (item: any) => {
       let dataset: Record<string, unknown> = {};
       try {
         const datasetResponse = await fetch("https://api.canva.com/rest/v1/brand-templates/" + encodeURIComponent(item.id) + "/dataset", {
@@ -111,7 +111,7 @@ Deno.serve(async (req: Request) => {
         synced_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-    })).filter((item: any) => item.canva_template_id);
+    }))).filter((item: any) => item.canva_template_id);
 
     if (rows.length) {
       const { error: upsertError } = await admin.from("dv_accounting_canva_templates")
