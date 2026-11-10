@@ -94,7 +94,7 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
  const widgets=[{id:"birthdays",label:"Agent birthdays"},{id:"anniversaries",label:"Agent anniversaries"},{id:"licences",label:"Licences expiring"},{id:"balances",label:"Bank account balances"},{id:"closings",label:"Deals closing"},{id:"topAgents",label:"Top agents"}];
  const defaults={visible:widgets.map(w=>w.id),birthdays:{start:monthStart,end:monthEnd},anniversaries:{start:monthStart,end:monthEnd},licences:{start:monthStart,end:monthEnd},closings:{start:monthStart,end:monthEnd},topAgents:{start:monthStart,end:monthEnd},topMetric:"volume"};
  const[config,setConfig]=useState(defaults),[editConfig,setEditConfig]=useState(defaults),[configOpen,setConfigOpen]=useState(false),[saving,setSaving]=useState(false),[loaded,setLoaded]=useState(false);
- const dashboardAdmin=String(role||"").toUpperCase()==="SUPERADMIN"||!!permissions["dashboard.manage"]?.allowed||!!permissions["settings.roles.manage"]?.allowed;
+ const dashboardAdmin=String(role||"").toUpperCase()==="SUPERADMIN"||!!permissions["settings.roles.manage"]?.allowed;
  const userVisible=Array.isArray(config.userVisibility?.[user?.id])?config.userVisibility[user.id]:null;
  const visibleWidgets=userVisible?config.visible.filter(id=>userVisible.includes(id)):config.visible;
  const companyId=settings.rows.find(x=>x.key==="DASHBOARD_WIDGETS")?.company_id||null;
@@ -395,9 +395,9 @@ function Expenses({canApprove=false,permissions={},role="STAFF"}){
  const[detailInvoice,setDetailInvoice]=useState(null);
  const[detailInvoicePreviewUrl,setDetailInvoicePreviewUrl]=useState("");const[detailInvoiceDownloadUrl,setDetailInvoiceDownloadUrl]=useState("");const[detailInvoicePreviewLoading,setDetailInvoicePreviewLoading]=useState(false);const[detailInvoicePreviewError,setDetailInvoicePreviewError]=useState("");const invoicePreviewFrameRef=useRef(null);
  const[branchFilter,setBranchFilter]=useState("ALL"),[propertyExpenseSearch,setPropertyExpenseSearch]=useState(""),[propertySummaryOpen,setPropertySummaryOpen]=useState(false),[propertyReport,setPropertyReport]=useState(null),[propertyReportBusy,setPropertyReportBusy]=useState(false);
- const isSuperAdmin=String(role||"").toUpperCase()==="SUPERADMIN"; const canCreateExpense=isSuperAdmin||!!permissions["expenses.create"]?.allowed||!!permissions["expenses.invoice.create"]?.allowed||!!permissions["expenses.invoice.add"]?.allowed||!!permissions["expenses.manage"]?.allowed;
- const canDeleteInvoice=isSuperAdmin||!!permissions["expenses.invoice.delete"]?.allowed||!!permissions["expenses.delete"]?.allowed;
- const canManageRecurring=isSuperAdmin||!!permissions["expenses.recurring.manage"]?.allowed||!!permissions["expenses.invoice.edit"]?.allowed||canDeleteInvoice;
+ const isSuperAdmin=String(role||"").toUpperCase()==="SUPERADMIN"; const canCreateExpense=isSuperAdmin||!!permissions["expenses.create"]?.allowed||!!permissions["expenses.invoice.create"]?.allowed;
+ const canDeleteInvoice=isSuperAdmin||!!permissions["expenses.invoice.delete"]?.allowed;
+ const canManageRecurring=isSuperAdmin||!!permissions["expenses.recurring.manage"]?.allowed||!!permissions["expenses.invoice.edit"]?.allowed;
  const canDeleteInvoiceDocument=isSuperAdmin||!!permissions["documents.delete"]?.allowed&&String(permissions["documents.delete"]?.scope||permissions["documents.delete"]?.access_scope||"").toUpperCase()==="ALL";
  const[auditEditMode,setAuditEditMode]=useState(false),[voidTarget,setVoidTarget]=useState(null),[voidReason,setVoidReason]=useState(""),[voidSaving,setVoidSaving]=useState(false);
  const empty={expense_date:today(),vendor:"",invoice_number:"",due_date:"",branch_id:"",category:"",description:"",related_record_type:"NONE",related_listing_id:"",related_transaction_id:"",charge_to_client:false,payment_status:"UNPAID",bank_account_id:"",payment_source:"BANK",payment_employee_id:"",payment_payee_name:"",invoice_total:"",hst_rate:"13",amount:"",hst_amount:""};
@@ -2125,10 +2125,12 @@ function SettingsPage({user,permissions={},profileRole,onImpersonate}){
  const settingTabs=useMemo(()=>[["COMPANY","Company & Branches"],["EMAILTEMPLATES","Email Templates"],["BANKS","Bank Accounts"],["CHEQUES","Cheque Printing Setup"],["CATEGORIES","Chart of Accounts"],["PERIODS","Accounting Periods"],["PAYROLL","Payroll & CRA"],["DOCUMENTS","Trade & Listing Documents Requirements"],["TXDOCS","Transaction File Categories"],["AGENTDOCS","Agent Document Requirements"],["ROLES","Role & Permission"],["USERS","User Accounts"],["ACTIVELOGINS","Active Logins"],["AUDITLOG","Recent Audit Log"],["SMSNOTIFY","SMS Notifications"]].filter(([id])=>{
    if(id==="COMPANY"||id==="EMAILTEMPLATES"||id==="CATEGORIES"||id==="PAYROLL"||id==="PERIODS")return isSuperAdmin||!!permissions["settings.company.manage"]?.allowed;
    if(id==="BANKS"||id==="CHEQUES")return isSuperAdmin||!!permissions["settings.banking.manage"]?.allowed;
-   if(id==="DOCUMENTS"||id==="AGENTDOCS"||id==="TXDOCS")return isSuperAdmin;
+   if(id==="DOCUMENTS"||id==="AGENTDOCS"||id==="TXDOCS")return isSuperAdmin||!!permissions["settings.documents.manage"]?.allowed;
    if(id==="ROLES")return canSeeRoleControls;
    if(id==="USERS")return canSeeUsers;
-   if(id==="ACTIVELOGINS"||id==="AUDITLOG"||id==="SMSNOTIFY")return isSuperAdmin;
+   if(id==="ACTIVELOGINS")return isSuperAdmin||!!permissions["settings.security.manage"]?.allowed;
+   if(id==="AUDITLOG")return isSuperAdmin||!!permissions["settings.audit.view"]?.allowed;
+   if(id==="SMSNOTIFY")return isSuperAdmin||!!permissions["settings.notifications.manage"]?.allowed;
    return false;
  }),[isSuperAdmin,canSeeRoleControls,canSeeUsers,permissions]);
  useEffect(()=>{if(!settingTabs.some(([id])=>id===settingsSection))setSettingsSection(settingTabs[0]?.[0]||"USERS")},[settingTabs,settingsSection]);
