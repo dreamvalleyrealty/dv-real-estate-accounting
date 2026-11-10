@@ -262,7 +262,7 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
    }
   }
   setLoading(false);
- },[isAdmin,agentId,listingPage]);
+ },[isAdmin,agentId,listingPage,listingSearch]);
  useEffect(()=>{load()},[load]);useAutoRefresh(()=>load(true));
  useEffect(()=>{
   if(requirements.length&&!requirements.some(r=>r.code===uploadType))setUploadType(requirements[0].code);
