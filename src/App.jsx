@@ -1632,8 +1632,11 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,commissio
   const unappliedGeneralExpenses=charges.filter(ch=>ch.agent_id===agent?.id&&["GENERAL_EXPENSE","GENERAL_EXP","OTHER_FEE"].includes(String(ch.charge_type||"").toUpperCase())&&["OPEN","PARTIAL"].includes(String(ch.status||"").toUpperCase())&&!ch.applied_to_cheque_id&&true).reduce((sum,ch)=>sum+Math.max(0,Number(ch.amount||0))+(ch.hst_applicable?Number(ch.hst_amount||0):0),0);
   const amount=Number(issued?.net_amount??displayedIssuedNet),paymentMethod=String(issued?.payment_method||method||"").trim().toUpperCase(),methodLabel=paymentMethod==="EFT"?"PAID BY E.F.T.":"CHEQUE";
   const txAgent=transactionAgents.find(row=>row.transaction_id===commission?.transaction_id&&row.agent_id===commission?.agent_id);
-  const adminFee=Math.max(0,chargeSum(["ADMIN_FEE"])||Number(commission?._admin_fee||0)),leadFee=Math.max(0,Number(commission?._lead_fee||0)),dealFee=Math.max(0,gross-Number(issued?.agent_share??commission?.agent_share??txAgent?.agent_payable??0)),otherFee=chargeSum(["DESK_FEE","GENERAL_EXPENSE","GENERAL_EXP","OTHER_FEE"]);
-  const hstAmount=Number(issued?.agent_hst_amount??hst);
+  const adminFee=Math.max(0,chargeSum(["ADMIN_FEE"])||Number(commission?._admin_fee||0)),leadFee=Math.max(0,Number(commission?._lead_fee||0)),dealFee=Math.max(0,gross-Number(issued?.agent_share??commission?.agent_share??txAgent?.agent_payable??0)),otherFee=chargeSum(["DESK_FEE","GENERAL_EXPENSE","GENERAL_EXP","OTHER_FEE","ADD_ON_SERVICE","RECURRING_FEE"]);
+  const printedAgentShare=Number(issued?.agent_share??commission?.agent_share??txAgent?.agent_payable??0);
+  const printedHstBase=Math.max(0,printedAgentShare-adminFee-leadFee);
+  const hstRate=Number(issued?.agent_hst_rate||13);
+  const hstAmount=issued?.agent_hst_number?Math.round(printedHstBase*hstRate*100)/100:Number(issued?.agent_hst_amount??hst);
   const address=transaction?.property_address||"";
   const agentDisplayName=[agent?.first_name,agent?.last_name].filter(Boolean).join(" ").trim()||agent?.name||agent?.legal_name||"Agent";const payee=agent?.incorporated?(agent?.corporation_name||agent?.legal_name||agentDisplayName):((agent?.legal_name&&agent.legal_name!==agentDisplayName)?agent.legal_name:agentDisplayName);const payeeDisplay=agent?.incorporated&&payee&&String(payee).trim()!==String(agentDisplayName).trim()?String(payee)+" c/o "+String(agentDisplayName):payee;
   const payeeAddress=[agent?.address,agent?.city,agent?.province||"ON",agent?.postal_code].filter(Boolean).join(" ");
