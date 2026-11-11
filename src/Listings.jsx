@@ -247,16 +247,19 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
   if(!supabase){setLoading(false);return}
   if(!background){setLoading(true);setError("");}
    let agentRows=listDirectoryCache.current?.agents||[];
+   let directoryPromise=null;
    if(!listDirectoryCache.current){
-    const [agentResult,branchResult]=await Promise.all([
+    directoryPromise=Promise.all([
      supabase.from("dv_accounting_agents").select("id,first_name,last_name,name,email,agent_number,branch_id,active"),
      supabase.from("dv_accounting_branches").select("id,name,branch_code")
-    ]);
-    if(agentResult.error)setError("Could not load agents: "+agentResult.error.message);else{agentRows=(agentResult.data||[]).filter(a=>a.active!==false).sort((a,b)=>String(a.last_name||"").localeCompare(String(b.last_name||"")));setAgents(agentRows)}
-    if(branchResult.error)console.warn("Could not load listing branches:",branchResult.error.message);else setBranches(branchResult.data||[]);
-    listDirectoryCache.current={agents:agentRows};
+    ]).then(([agentResult,branchResult])=>{
+     if(agentResult.error)setError("Could not load agents: "+agentResult.error.message);else{agentRows=(agentResult.data||[]).filter(a=>a.active!==false).sort((a,b)=>String(a.last_name||"").localeCompare(String(b.last_name||"")));setAgents(agentRows)}
+     if(branchResult.error)console.warn("Could not load listing branches:",branchResult.error.message);else setBranches(branchResult.data||[]);
+     listDirectoryCache.current={agents:agentRows};
+     return agentRows;
+    }).catch(error=>{setError("Could not load listing directories: "+(error?.message||String(error)));return agentRows;});
    }
-  let q=supabase.from("dv_accounting_listing_submissions").select("id,company_id,agent_id,additional_agent_ids,property_address,unit_number,city,province,postal_code,mls_number,status,listing_type,property_type,property_classification,asking_price,listing_start_date,listing_expiry_date,notes,admin_notes,seller_name,seller_phone,seller_email,seller_mailing_address,additional_sellers,seller_details,created_at,updated_at").order("created_at",{ascending:false});if(isAdmin){const term=debouncedListingSearch.trim().replace(/[,%()]/g," ").replace(/\\/g," ").slice(0,80);if(term){const pattern="%"+term+"%";const matchingAgentIds=agentRows.filter(a=>[a.first_name,a.last_name,a.full_name,a.email,a.agent_number].filter(Boolean).join(" ").toLowerCase().includes(term.toLowerCase())).map(a=>a.id).filter(Boolean);const clauses=["property_address.ilike."+pattern,"city.ilike."+pattern,"postal_code.ilike."+pattern,"mls_number.ilike."+pattern,"status.ilike."+pattern];if(matchingAgentIds.length)clauses.push("agent_id.in.("+matchingAgentIds.join(",")+")");q=q.or(clauses.join(","));}}
+  let q=supabase.from("dv_accounting_listing_submissions").select("id,company_id,agent_id,additional_agent_ids,property_address,unit_number,city,province,postal_code,mls_number,status,listing_type,property_type,property_classification,asking_price,listing_start_date,listing_expiry_date,notes,admin_notes,seller_name,seller_phone,seller_email,seller_mailing_address,additional_sellers,seller_details,created_at,updated_at").order("created_at",{ascending:false});if(isAdmin){const term=debouncedListingSearch.trim().replace(/[,%()]/g," ").replace(/\\/g," ").slice(0,80);if(term){if(directoryPromise)agentRows=await directoryPromise;const pattern="%"+term+"%";const matchingAgentIds=agentRows.filter(a=>[a.first_name,a.last_name,a.full_name,a.email,a.agent_number].filter(Boolean).join(" ").toLowerCase().includes(term.toLowerCase())).map(a=>a.id).filter(Boolean);const clauses=["property_address.ilike."+pattern,"city.ilike."+pattern,"postal_code.ilike."+pattern,"mls_number.ilike."+pattern,"status.ilike."+pattern];if(matchingAgentIds.length)clauses.push("agent_id.in.("+matchingAgentIds.join(",")+")");q=q.or(clauses.join(","));}}
   if(!isAdmin)q=q.eq("agent_id",agentId);if(isAdmin)q=q.range(listingPage*50,listingPage*50+50);
   const {data,error:e}=await q;if(isAdmin)setListingHasNext((data||[]).length>50);
   if(e){setError("Could not load listing submissions: "+e.message);}else{
@@ -269,6 +272,7 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
     if(!transactionError){const transactionByListing={};for(const tx of linkedTransactions||[]){const current=transactionByListing[tx.listing_id],isTrade=!String(tx.transaction_number||"").startsWith("LST-"),currentIsTrade=current&&!String(current.transaction_number||"").startsWith("LST-");if(!current||(isTrade&&!currentIsTrade))transactionByListing[tx.listing_id]=tx}setRows(listings.map(row=>({...row,sold_price:transactionByListing[row.id]?.sale_price??null,linked_transaction_number:transactionByListing[row.id]?.transaction_number||null})))}
    }
   }
+  if(directoryPromise)directoryPromise.then(()=>{});
   setLoading(false);
  },[isAdmin,agentId,listingPage,debouncedListingSearch]);
  useEffect(()=>{load()},[load]);useAutoRefresh(()=>load(true));
