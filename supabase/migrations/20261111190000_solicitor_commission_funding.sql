@@ -222,3 +222,5 @@ begin
  return v;
 end;
 $function$;
+revoke all on function public.dv_accounting_process_seller_commission_transfer(uuid,text,date) from public,anon;
+grant execute on function public.dv_accounting_process_seller_commission_transfer(uuid,text,date) to authenticated;
