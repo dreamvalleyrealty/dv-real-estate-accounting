@@ -12,15 +12,34 @@ const postedStatus=s=>["READY_FOR_COMMISSION_PAYROLL","COMMISSION_PAYROLL_PROCES
 export default function CommissionTrustTransfer({transaction,onClose,onOpenSettlement}){
  const [settlement,setSettlement]=useState(null),[accounts,setAccounts]=useState([]),[payments,setPayments]=useState([]),[trustLiabilities,setTrustLiabilities]=useState([]),[trustTransactions,setTrustTransactions]=useState([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState("");
  const [form,setForm]=useState({real_estate_trust_account_id:"",commission_trust_account_id:"",commission_transfer_date:today(),commission_transfer_reference:""});
- const [receiptForm,setReceiptForm]=useState({amount:"",payment_date:today(),payment_method:"",payment_reference:"",remitter_name:""});\n const [sellerSolicitor,setSellerSolicitor]=useState(null);
+ const [receiptForm,setReceiptForm]=useState({amount:"",payment_date:today(),payment_method:"",payment_reference:"",remitter_name:""});
+ const [sellerSolicitor,setSellerSolicitor]=useState(null);
  const load=useCallback(async()=>{
   if(!supabase||!transaction?.id){setLoading(false);setError("Supabase is not connected or the transaction is missing.");return}
   setLoading(true);setError("");setMessage("");
-  const [s,a]=await Promise.all([
+  const [s,a,peopleResult]=await Promise.all([
    supabase.from("dv_accounting_seller_settlements").select("*").eq("transaction_id",transaction.id).maybeSingle(),
-   supabase.from("dv_accounting_bank_accounts").select("*").eq("company_id",transaction.company_id).order("name")
+   supabase.from("dv_accounting_bank_accounts").select("*").eq("company_id",transaction.company_id).order("name"),
+   supabase.from("dv_accounting_transaction_people").select("*").eq("transaction_id",transaction.id)
   ]);
-  if(s.error||a.error){setError([s.error,a.error].filter(Boolean).map(x=>x.message).join(" · "));setLoading(false);return}
+  if(s.error||a.error||peopleResult.error){setError([s.error,a.error,peopleResult.error].filter(Boolean).map(x=>x.message).join(" · "));setLoading(false);return}
+  const people=peopleResult.data||[];
+  const exactSellerSolicitor=people.find(p=>norm(p.person_type)==="SELLERSOLICITOR");
+  const genericSolicitors=people.filter(p=>["SOLICITOR","LAWYER"].includes(norm(p.person_type)));
+  const solicitor=exactSellerSolicitor||(genericSolicitors.length===1?genericSolicitors[0]:null);
+  if(solicitor){
+   let contact=null,firm=null;
+   const contactId=solicitor.contact_id||solicitor.existing_contact_id;
+   if(contactId){const result=await supabase.from("dv_accounting_contacts").select("*").eq("id",contactId).maybeSingle();if(!result.error)contact=result.data||null;}
+   const firmId=contact?.law_firm_id||solicitor.law_firm_id;
+   if(firmId){const result=await supabase.from("dv_accounting_law_firms").select("*").eq("id",firmId).maybeSingle();if(!result.error)firm=result.data||null;}
+   const pick=(...values)=>values.find(v=>String(v||"").trim())||"";
+   const personName=[pick(solicitor.first_name,contact?.first_name),pick(solicitor.last_name,contact?.last_name)].filter(Boolean).join(" ");
+   const firmName=pick(solicitor.company_name,solicitor.law_firm,contact?.company_name,firm?.firm_name);
+   const remitter=[personName,firmName].filter(Boolean).join(" — ");
+   setSellerSolicitor({name:personName,firm:firmName,email:pick(solicitor.email,contact?.email,firm?.billing_email),phone:pick(solicitor.phone,contact?.phone,firm?.phone),address:pick(solicitor.address,contact?.address,firm?.address)});
+   setReceiptForm(v=>({...v,remitter_name:v.remitter_name||remitter}));
+  }else{setSellerSolicitor(null)}
   const settlementRow=s.data||null;
   let paymentRows=[],liabilityRows=[],trustRows=[];
   if(settlementRow?.id){
@@ -131,8 +150,9 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
     <div className="tx-grid">
      <label>Amount received<input type="number" min="0.01" max={fundingShortfall.toFixed(2)} step="0.01" value={receiptForm.amount} onChange={e=>setReceiptForm(v=>({...v,amount:e.target.value}))}/><small className="muted">Maximum remaining shortfall: {money(fundingShortfall)}</small></label>
      <label>Deposit date<input type="date" value={receiptForm.payment_date} onChange={e=>setReceiptForm(v=>({...v,payment_date:e.target.value}))}/></label>
-     <label>Solicitor / remitter name<input value={receiptForm.remitter_name} onChange={e=>setReceiptForm(v=>({...v,remitter_name:e.target.value}))} placeholder="Seller’s solicitor / law firm"/></label>
-     <label>Bank deposit reference<input value={receiptForm.payment_reference} onChange={e=>setReceiptForm(v=>({...v,payment_reference:e.target.value}))} placeholder="Actual bank deposit reference"/></label>
+     <label>Seller’s solicitor / law firm<input value={receiptForm.remitter_name} onChange={e=>setReceiptForm(v=>({...v,remitter_name:e.target.value}))} placeholder="Pulled from the trade People tab"/>{sellerSolicitor&&<small className="muted" style={{display:"block",marginTop:4}}>{[sellerSolicitor.email,sellerSolicitor.phone,sellerSolicitor.address].filter(Boolean).join(" · ")}</small>}</label>
+     <label>Payment method<select value={receiptForm.payment_method} onChange={e=>setReceiptForm(v=>({...v,payment_method:e.target.value,payment_reference:""}))}><option value="">Select payment method</option><option value="CHEQUE">Cheque</option><option value="EFT">EFT</option></select></label>
+     <label>{receiptForm.payment_method==="CHEQUE"?"Cheque number":receiptForm.payment_method==="EFT"?"EFT / bank deposit reference":"Cheque number or EFT reference"}<input value={receiptForm.payment_reference} onChange={e=>setReceiptForm(v=>({...v,payment_reference:e.target.value}))} placeholder={receiptForm.payment_method==="CHEQUE"?"Enter cheque number":receiptForm.payment_method==="EFT"?"Enter EFT confirmation / bank reference":"Select cheque or EFT first"}/></label>
     </div>
     <div className="modalactions" style={{marginTop:14}}><button type="button" className="primary" disabled={busy||!receiptForm.amount||Number(receiptForm.amount)<=0||Number(receiptForm.amount)>fundingShortfall+0.005||!receiptForm.payment_reference.trim()||!receiptForm.remitter_name.trim()} onClick={receiveSolicitorFunding}><Save size={15}/>{busy?"Recording…":"Record Solicitor Deposit"}</button></div>
    </div>}
