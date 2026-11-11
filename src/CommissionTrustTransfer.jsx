@@ -10,8 +10,9 @@ const isCT=a=>norm(a?.account_type)==="COMMISSIONTRUST"||/COMMISSION\s*TRUST/i.t
 const postedStatus=s=>["READY_FOR_COMMISSION_PAYROLL","COMMISSION_PAYROLL_PROCESSED","PAYMENTS_COMPLETED"].includes(String(s||"").toUpperCase());
 
 export default function CommissionTrustTransfer({transaction,onClose,onOpenSettlement}){
- const [settlement,setSettlement]=useState(null),[accounts,setAccounts]=useState([]),[payments,setPayments]=useState([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState("");
+ const [settlement,setSettlement]=useState(null),[accounts,setAccounts]=useState([]),[payments,setPayments]=useState([]),[trustLiabilities,setTrustLiabilities]=useState([]),[trustTransactions,setTrustTransactions]=useState([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState("");
  const [form,setForm]=useState({real_estate_trust_account_id:"",commission_trust_account_id:"",commission_transfer_date:today(),commission_transfer_reference:""});
+ const [receiptForm,setReceiptForm]=useState({amount:"",payment_date:today(),payment_reference:"",remitter_name:""});
  const load=useCallback(async()=>{
   if(!supabase||!transaction?.id){setLoading(false);setError("Supabase is not connected or the transaction is missing.");return}
   setLoading(true);setError("");setMessage("");
@@ -21,13 +22,18 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
   ]);
   if(s.error||a.error){setError([s.error,a.error].filter(Boolean).map(x=>x.message).join(" · "));setLoading(false);return}
   const settlementRow=s.data||null;
-  let paymentRows=[];
+  let paymentRows=[],liabilityRows=[],trustRows=[];
   if(settlementRow?.id){
-   const p=await supabase.from("dv_accounting_seller_settlement_payments").select("*").eq("settlement_id",settlementRow.id);
-   if(p.error){setError("Could not load settlement payment history: "+p.error.message);setLoading(false);return}
-   paymentRows=p.data||[];
+   const [p,l,t]=await Promise.all([
+    supabase.from("dv_accounting_seller_settlement_payments").select("*").eq("settlement_id",settlementRow.id),
+    supabase.from("dv_accounting_trust_liabilities").select("*").eq("transaction_id",transaction.id),
+    supabase.from("dv_accounting_trust_transactions").select("*").eq("transaction_id",transaction.id).order("created_at",{ascending:true})
+   ]);
+   const failed=[p.error,l.error,t.error].filter(Boolean);
+   if(failed.length){setError("Could not load settlement funding history: "+failed.map(x=>x.message).join(" · "));setLoading(false);return}
+   paymentRows=p.data||[];liabilityRows=l.data||[];trustRows=t.data||[];
   }
-  setSettlement(settlementRow);setAccounts(a.data||[]);setPayments(paymentRows);
+  setSettlement(settlementRow);setAccounts(a.data||[]);setPayments(paymentRows);setTrustLiabilities(liabilityRows);setTrustTransactions(trustRows);
   if(s.data)setForm({real_estate_trust_account_id:s.data.real_estate_trust_account_id||"",commission_trust_account_id:s.data.commission_trust_account_id||"",commission_transfer_date:s.data.commission_transfer_date||today(),commission_transfer_reference:s.data.commission_transfer_reference||("Commission transfer - "+(transaction.transaction_number||"Trade"))});
   setLoading(false);
  },[transaction?.id,transaction?.company_id,transaction?.transaction_number]);
@@ -37,7 +43,13 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
  const amount=useMemo(()=>Math.round((Number(settlement?.listing_commission_amount||0)+Number(settlement?.cooperating_commission_amount||0)+Number(settlement?.commission_hst_amount||0))*100)/100,[settlement]);
  const paid=useMemo(()=>payments.filter(p=>p.settlement_id===settlement?.id&&String(p.status||"").toUpperCase()==="COMPLETED"&&!!p.trust_transaction_id&&(["SELLER","LANDLORD"].includes(String(p.payee_type||"").toUpperCase())||!!p.direction_storage_path)).reduce((sum,p)=>sum+Number(p.amount||0),0),[payments,settlement?.id,transaction?.id,transaction?.company_id]);
  const outstandingSeller=Math.max(0,Math.round((Number(settlement?.seller_proceeds_amount||0)-paid)*100)/100);
+ const realEstateFunding=Math.round(trustLiabilities.filter(x=>x.trust_account_type==="REAL_ESTATE_TRUST").reduce((sum,x)=>sum+(x.direction==="RECEIVABLE"?1:-1)*Number(x.amount||0),0)*100)/100;
+ const commissionTrustFunding=Math.round(trustLiabilities.filter(x=>x.trust_account_type==="COMMISSION_TRUST").reduce((sum,x)=>sum+(x.direction==="RECEIVABLE"?1:-1)*Number(x.amount||0),0)*100)/100;
+ const fundingShortfall=Math.max(0,Math.round((amount-realEstateFunding-commissionTrustFunding)*100)/100);
+ const solicitorReceipts=trustTransactions.filter(x=>x.trust_account_type==="COMMISSION_TRUST"&&x.direction==="DEPOSIT"&&x.status==="POSTED"&&String(x.description||"").startsWith("Solicitor direct commission funding received from "));
+
  const isPosted=postedStatus(settlement?.status);
+ useEffect(()=>{if(fundingShortfall>0.009&&(!receiptForm.amount||Number(receiptForm.amount)>fundingShortfall))setReceiptForm(v=>({...v,amount:fundingShortfall.toFixed(2)}))},[fundingShortfall]);
  const settlementReadyForTransfer=["SELLER_PROCEEDS_CALCULATED","SELLER_PAID"].includes(String(settlement?.status||"").toUpperCase());
  const source=realEstateAccounts.find(a=>a.id===form.real_estate_trust_account_id);
  const destination=commissionAccounts.find(a=>a.id===form.commission_trust_account_id);
@@ -51,11 +63,31 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
   setBusy(false);if(error){setError("Could not save transfer details: "+error.message);return}
   setSettlement(data);setMessage("Transfer details saved. No money has been moved yet.");
  }
+ async function receiveSolicitorFunding(){
+  if(!settlement?.id)return setError("Save the Seller / Landlord Settlement before recording solicitor funds.");
+  if(isPosted)return setError("This settlement has already been transferred to Commission Payroll.");
+  if(fundingShortfall<=0.009)return setError("There is no remaining commission funding shortfall.");
+  const amountToReceive=Number(receiptForm.amount||0);
+  if(amountToReceive<=0)return setError("Enter the solicitor deposit amount.");
+  if(amountToReceive>fundingShortfall+0.005)return setError("The deposit cannot exceed the remaining commission funding shortfall of "+money(fundingShortfall)+".");
+  if(!receiptForm.payment_date||!receiptForm.payment_reference.trim()||!receiptForm.remitter_name.trim())return setError("Enter the deposit date, bank reference and solicitor/remitter name.");
+  setBusy(true);setError("");setMessage("");
+  const {data,error}=await supabase.rpc("dv_accounting_receive_solicitor_commission_funding",{
+   p_settlement_id:settlement.id,p_amount:amountToReceive,p_payment_date:receiptForm.payment_date,
+   p_payment_reference:receiptForm.payment_reference.trim(),p_remitter_name:receiptForm.remitter_name.trim()
+  });
+  setBusy(false);
+  if(error){setError("Could not record solicitor commission deposit: "+error.message);return}
+  setMessage(data?.duplicate?"This solicitor deposit was already recorded. No duplicate receipt was created.":"Solicitor deposit recorded in Commission Trust and linked to this trade.");
+  setReceiptForm(v=>({...v,amount:"",payment_reference:"",remitter_name:""}));
+  await load();
+ }
  async function postTransfer(){
   if(!settlement?.id)return setError("A saved Seller / Landlord Settlement record is required before transfer.");
   if(isPosted)return setError("This settlement is already marked ready for Commission Payroll. Check its trust ledger history before attempting another transfer.");
   if(!settlementReadyForTransfer)return setError("Transfer blocked: save and calculate the Seller / Landlord Settlement first.");
   if(outstandingSeller>0.009)return setError("Transfer blocked: "+money(outstandingSeller)+" in seller/landlord proceeds is still outstanding. Complete and post the seller/landlord payment first.");
+  if(fundingShortfall>0.009)return setError("Transfer blocked: commission funding is short by "+money(fundingShortfall)+". Record the seller solicitor deposit into Commission Trust first.");
   if(!source||!destination||source.id===destination.id)return setError("Select two different valid trust accounts.");
   if(amount<=0)return setError("The saved commission amount must be greater than $0.00.");
   const ref=String(form.commission_transfer_reference||"").trim();
@@ -72,7 +104,7 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
  return <div className="tx-section" style={{padding:18,overflowY:"auto"}}>
   <div className="panel" style={{padding:16,marginBottom:16}}>
    <div style={{display:"flex",gap:12,alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap"}}>
-    <div><h3 style={{margin:"0 0 6px"}}>Commission Trust Transfer</h3><div style={{fontWeight:700}}>{transaction?.transaction_number||"Trade number pending"} · {address||"Property address unavailable"}</div><div className="muted" style={{marginTop:4}}>Move the brokerage commission from Real Estate Trust to Commission Trust. This action does not pay the seller/landlord and does not run Commission Payroll.</div></div>
+    <div><h3 style={{margin:"0 0 6px"}}>Commission Trust Transfer</h3><div style={{fontWeight:700}}>{transaction?.transaction_number||"Trade number pending"} · {address||"Property address unavailable"}</div><div className="muted" style={{marginTop:4}}>Fund the brokerage commission using the Real Estate Trust balance and, where needed, a direct deposit from the seller’s solicitor into Commission Trust. This does not pay the seller/landlord or run Commission Payroll.</div></div>
     <button type="button" className="secondary" onClick={load} disabled={loading||busy}><RefreshCw size={15}/> Refresh</button>
    </div>
   </div>
@@ -83,10 +115,30 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button type="button" className="primary" onClick={()=>{onClose?.();onOpenSettlement?.(transaction)}}>Open settlement setup</button><button type="button" className="secondary" onClick={onClose}>Close</button></div>
   </div>:<>
    <div className="tx-grid" style={{marginBottom:14}}>
-    <div className="panel" style={{padding:14}}><div className="muted">Commission transfer amount</div><div style={{fontSize:24,fontWeight:800,marginTop:4}}>{money(amount)}</div><div className="muted" style={{marginTop:4}}>Listing commission + cooperating commission + HST, from the saved settlement</div></div>
-    <div className="panel" style={{padding:14}}><div className="muted">Seller / landlord proceeds outstanding</div><div style={{fontSize:24,fontWeight:800,marginTop:4}}>{money(outstandingSeller)}</div><div className="muted" style={{marginTop:4}}>Must be $0.00 before the transfer can post</div></div>
-    <div className="panel" style={{padding:14}}><div className="muted">Settlement status</div><div style={{fontSize:18,fontWeight:800,marginTop:4}}>{settlement.status||"—"}</div><div style={{marginTop:6}}>{isPosted?<span className="notice"><ShieldCheck size={15}/> Transfer workflow already marked ready</span>:<span className="muted">Transfer has not been confirmed as posted</span>}</div></div>
+    <div className="panel" style={{padding:14}}><div className="muted">Total commission funding required</div><div style={{fontSize:24,fontWeight:800,marginTop:4}}>{money(amount)}</div><div className="muted" style={{marginTop:4}}>Listing + cooperating commission + HST</div></div>
+    <div className="panel" style={{padding:14}}><div className="muted">Real Estate Trust funds available</div><div style={{fontSize:24,fontWeight:800,marginTop:4}}>{money(realEstateFunding)}</div><div className="muted" style={{marginTop:4}}>Trade-linked posted trust liability</div></div>
+    <div className="panel" style={{padding:14}}><div className="muted">Direct solicitor funds in Commission Trust</div><div style={{fontSize:24,fontWeight:800,marginTop:4}}>{money(commissionTrustFunding)}</div><div className="muted" style={{marginTop:4}}>Posted Commission Trust deposits linked to this trade</div></div>
+    <div className="panel" style={{padding:14}}><div className="muted">Funding shortfall</div><div style={{fontSize:24,fontWeight:800,marginTop:4,color:fundingShortfall>0.009?"#b42318":"#067647"}}>{money(fundingShortfall)}</div><div className="muted" style={{marginTop:4}}>{fundingShortfall>0.009?"Seller solicitor deposit required":"Commission fully funded"}</div></div>
    </div>
+   <div className="tx-grid" style={{marginBottom:14}}>
+    <div className="panel" style={{padding:14}}><div className="muted">Seller / landlord proceeds outstanding</div><div style={{fontSize:24,fontWeight:800,marginTop:4}}>{money(outstandingSeller)}</div><div className="muted" style={{marginTop:4}}>Must be $0.00 before Commission Payroll</div></div>
+    <div className="panel" style={{padding:14}}><div className="muted">Settlement status</div><div style={{fontSize:18,fontWeight:800,marginTop:4}}>{settlement.status||"—"}</div><div style={{marginTop:6}}>{isPosted?<span className="notice"><ShieldCheck size={15}/> Commission funding posted</span>:<span className="muted">Commission transfer has not been confirmed as posted</span>}</div></div>
+   </div>
+   {fundingShortfall>0.009&&!isPosted&&<div className="panel" style={{padding:16,marginBottom:14,borderColor:"#d6b36a"}}>
+    <h3 style={{marginTop:0}}>Additional commission funds from seller’s solicitor</h3>
+    <p className="muted">Use this when the seller’s solicitor sends the commission shortfall directly to Dream Valley’s Commission Trust account. The receipt is recorded separately from the Real Estate Trust transfer and linked to this trade.</p>
+    <div className="tx-grid">
+     <label>Amount received<input type="number" min="0.01" max={fundingShortfall.toFixed(2)} step="0.01" value={receiptForm.amount} onChange={e=>setReceiptForm(v=>({...v,amount:e.target.value}))}/><small className="muted">Maximum remaining shortfall: {money(fundingShortfall)}</small></label>
+     <label>Deposit date<input type="date" value={receiptForm.payment_date} onChange={e=>setReceiptForm(v=>({...v,payment_date:e.target.value}))}/></label>
+     <label>Solicitor / remitter name<input value={receiptForm.remitter_name} onChange={e=>setReceiptForm(v=>({...v,remitter_name:e.target.value}))} placeholder="Seller’s solicitor / law firm"/></label>
+     <label>Bank deposit reference<input value={receiptForm.payment_reference} onChange={e=>setReceiptForm(v=>({...v,payment_reference:e.target.value}))} placeholder="Actual bank deposit reference"/></label>
+    </div>
+    <div className="modalactions" style={{marginTop:14}}><button type="button" className="primary" disabled={busy||!receiptForm.amount||Number(receiptForm.amount)<=0||Number(receiptForm.amount)>fundingShortfall+0.005||!receiptForm.payment_reference.trim()||!receiptForm.remitter_name.trim()} onClick={receiveSolicitorFunding}><Save size={15}/>{busy?"Recording…":"Record Solicitor Deposit"}</button></div>
+   </div>}
+   {solicitorReceipts.length>0&&<div className="panel" style={{padding:16,marginBottom:14}}>
+    <h3 style={{marginTop:0}}>Solicitor commission deposits recorded</h3>
+    <div className="tablewrap"><table><thead><tr><th>Deposit date</th><th>Remitter</th><th>Reference</th><th>Amount</th><th>Status</th></tr></thead><tbody>{solicitorReceipts.map(x=><tr key={x.id}><td>{x.ledger_date}</td><td>{String(x.description||"").replace(/^Solicitor direct commission funding received from /,"").replace(" - "+(settlement.matter||""),"")}</td><td>{x.reference||"—"}</td><td>{money(x.amount)}</td><td>{x.status}</td></tr>)}</tbody></table></div>
+   </div>}
    <div className="panel" style={{padding:16}}>
     <h3 style={{marginTop:0}}>Transfer details</h3>
     <div className="tx-grid">
@@ -95,11 +147,11 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
      <label>Transfer date<input type="date" required value={form.commission_transfer_date} onChange={e=>setForm(v=>({...v,commission_transfer_date:e.target.value}))}/></label>
      <label>Transfer reference<input required value={form.commission_transfer_reference} onChange={e=>setForm(v=>({...v,commission_transfer_reference:e.target.value}))} placeholder="Commission transfer reference"/></label>
     </div>
-    <div className="notice" style={{marginTop:14}}><AlertCircle size={16}/> Posting creates matching trust-ledger entries through the existing atomic database function. It will not send a bank payment, pay the seller, or issue commission payroll.</div>
+    <div className="notice" style={{marginTop:14}}><AlertCircle size={16}/> Posting transfers only the remaining amount from Real Estate Trust after direct solicitor deposits are counted. Both trust-ledger entries post atomically. It does not send a bank payment, pay the seller, or issue Commission Payroll.</div>
     <div className="modalactions" style={{marginTop:16}}>
      <button type="button" className="secondary" onClick={onClose}>Close</button>
      <button type="button" className="secondary" disabled={busy||isPosted} onClick={saveTransferDetails}><Save size={15}/>{busy?"Saving…":"Save Transfer Details"}</button>
-     <button type="button" className="primary" disabled={busy||isPosted||!settlementReadyForTransfer||outstandingSeller>0.009||amount<=0||!source||!destination||source.id===destination.id||!form.commission_transfer_reference.trim()||!form.commission_transfer_date} onClick={postTransfer}><ArrowLeftRight size={15}/>{busy?"Posting…":"Post Trust Transfer"}</button>
+     <button type="button" className="primary" disabled={busy||isPosted||!settlementReadyForTransfer||outstandingSeller>0.009||fundingShortfall>0.009||amount<=0||!source||!destination||source.id===destination.id||!form.commission_transfer_reference.trim()||!form.commission_transfer_date} onClick={postTransfer}><ArrowLeftRight size={15}/>{busy?"Posting…":"Post Trust Transfer"}</button>
     </div>
    </div>
   </>}
