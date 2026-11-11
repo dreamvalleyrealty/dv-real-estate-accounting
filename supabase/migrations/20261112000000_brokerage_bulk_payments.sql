@@ -38,6 +38,9 @@ drop policy if exists dv_brokerage_item_select on public.dv_accounting_brokerage
 create policy dv_brokerage_item_select on public.dv_accounting_brokerage_payment_items
  for select to authenticated using (public.dv_accounting_has_permission_all_scope('commission.view') or public.dv_accounting_has_permission_all_scope('commission.issue'));
 grant select on public.dv_accounting_brokerage_payment_batches,public.dv_accounting_brokerage_payment_items to authenticated;
+create index if not exists idx_dv_brokerage_payment_items_batch_id on public.dv_accounting_brokerage_payment_items(batch_id);
+create index if not exists idx_dv_brokerage_payment_items_transaction_id on public.dv_accounting_brokerage_payment_items(transaction_id);
+create index if not exists idx_dv_brokerage_payment_batches_company_date on public.dv_accounting_brokerage_payment_batches(company_id,payment_date desc);
 
 create or replace function public.dv_accounting_issue_brokerage_bulk_payment(
  p_commission_ids uuid[],p_operating_account_id uuid,p_payment_reference text,p_payment_date date
