@@ -159,6 +159,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    const submissionIds=rows.map(s=>s.id).filter(Boolean);
    // Render the submission queue immediately; ancillary document/payroll status is filled in below.
    setSubmissions(rows.map(s=>({...s,_pendingReviewCount:0,_rejectedDocumentCount:0})));
+   let pendingDocsBySubmission={};
    let rejectedDocsBySubmission={};
    let paidByTransaction={};
    const [pendingDocsResult,paidResult]=await Promise.all([
