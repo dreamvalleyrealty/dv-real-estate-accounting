@@ -1512,11 +1512,30 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
    const txMap=new Map((transactions||[]).map(x=>[x.id,x])),agentMap=new Map((agentRows||[]).map(x=>[x.id,x]));
    const paidIds=new Set((items||[]).map(x=>x.commission_id)),chequeMap=new Map();
    for(const ch of cheques||[])if(!chequeMap.has(ch.commission_id))chequeMap.set(ch.commission_id,ch);
+   const txIds=[...new Set((commissions||[]).map(x=>x.transaction_id).filter(Boolean))];
+   let liabilityRows=[];
+   if(txIds.length){
+    const {data:liabilities,error:le}=await supabase.from("dv_accounting_trust_liabilities")
+     .select("transaction_id,trust_account_type,direction,amount")
+     .eq("trust_account_type","COMMISSION_TRUST").in("transaction_id",txIds);
+    if(le)throw le;
+    liabilityRows=liabilities||[];
+   }
+   const remainingByTransaction=new Map();
+   liabilityRows.forEach(x=>{
+    const id=String(x.transaction_id||"");if(!id)return;
+    const delta=String(x.direction||"").toUpperCase()==="RECEIVABLE"?Number(x.amount||0):-Number(x.amount||0);
+    remainingByTransaction.set(id,Math.round(((remainingByTransaction.get(id)||0)+delta)*100)/100);
+   });
    const list=(commissions||[]).filter(c=>!paidIds.has(c.id)&&chequeMap.has(c.id)).map(c=>{
-    const tx=txMap.get(c.transaction_id),ch=chequeMap.get(c.id),brokerage=Number(c.brokerage_share||0),hst=Number(ch.brokerage_hst_amount||0);
+    const tx=txMap.get(c.transaction_id),ch=chequeMap.get(c.id),remaining=Number(remainingByTransaction.get(String(c.transaction_id))||0);
+    const hst=Math.round(Number(ch.brokerage_hst_amount||0)*100)/100;
+    const brokerage=Math.round((remaining-hst)*100)/100;
     const ag=agentMap.get(c.agent_id);
-    return {...c,transaction:tx,cheque:ch,agent_name:ag?.name||[ag?.first_name,ag?.last_name].filter(Boolean).join(" ")||"—",brokerage_amount:Math.round(brokerage*100)/100,brokerage_hst_amount:Math.round(hst*100)/100,total_amount:Math.round((brokerage+hst)*100)/100};
-   }).filter(x=>x.transaction&&["CLOSED","PAID"].includes(String(x.transaction.status||"").toUpperCase())&&x.total_amount>0)
+    return {...c,transaction:tx,cheque:ch,agent_name:ag?.name||[ag?.first_name,ag?.last_name].filter(Boolean).join(" ")||"—",
+     brokerage_amount:brokerage,brokerage_hst_amount:hst,total_amount:Math.round(remaining*100)/100};
+   }).filter(x=>x.transaction&&["CLOSED","PAID"].includes(String(x.transaction.status||"").toUpperCase())
+     &&x.total_amount>0.005&&x.brokerage_amount>=0&&x.brokerage_hst_amount<=x.total_amount)
      .sort((a,b)=>String(b.transaction.transaction_number||"").localeCompare(String(a.transaction.transaction_number||"")));
    setRows(list);setSelected(old=>old.filter(id=>list.some(x=>x.id===id)));
    const ops=(bankAccounts||[]).filter(x=>x.account_type==="OPERATING");
@@ -1552,7 +1571,7 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
  };
  if(!canIssue)return null;
  return <section className="panel tablewrap" style={{marginTop:14}}>
-  <div className="paneltitle"><div><h2>Pay Brokerage — Multiple Trades</h2><p className="panelhint">Combine brokerage share and its HST from selected, agent-paid trades into one transfer to General Operating.</p></div><div className="actions"><button type="button" className="secondary" onClick={()=>setOpen(x=>!x)}>{open?"Hide":"Open Bulk Payment"}</button></div></div>
+  <div className="paneltitle"><div><h2>Pay Brokerage — Multiple Trades</h2><p className="panelhint">Transfer each trade’s actual remaining Commission Trust balance, after agent payments and any previous brokerage transfers, into General Operating.</p></div><div className="actions"><button type="button" className="secondary" onClick={()=>setOpen(x=>!x)}>{open?"Hide":"Open Bulk Payment"}</button></div></div>
   {lastBatch&&<div className="notice" style={{marginBottom:12}}>Last payment posted: {lastBatch.trade_count} trades · {money(lastBatch.total_amount)} · Reference {lastBatch.payment_reference} <button type="button" className="textbutton" onClick={printReceipt}>Print statement</button></div>}
   {open&&<>
    <div className="actions" style={{justifyContent:"space-between",marginBottom:10}}><span className="muted">{rows.length} unpaid brokerage trade(s) available</span><button type="button" className="secondary" onClick={load} disabled={loading||saving}>Refresh list</button></div>
@@ -1562,12 +1581,12 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
     <label>Payment date<input type="date" value={paymentDate} onChange={e=>setPaymentDate(e.target.value)}/></label>
     <label>Payment reference<input value={paymentReference} onChange={e=>setPaymentReference(e.target.value)} placeholder="EFT confirmation / cheque number"/></label>
    </div>
-   <div className="tablewrap" style={{maxHeight:420,overflow:"auto"}}><table><thead><tr><th><input aria-label="Select all eligible trades" type="checkbox" checked={rows.length>0&&selected.length===rows.length} onChange={e=>setSelected(e.target.checked?rows.map(x=>x.id):[])}/></th><th>Trade #</th><th>Property</th><th>Agent</th><th>Brokerage share</th><th>Brokerage HST</th><th>Total</th></tr></thead><tbody>
+   <div className="tablewrap" style={{maxHeight:420,overflow:"auto"}}><table><thead><tr><th><input aria-label="Select all eligible trades" type="checkbox" checked={rows.length>0&&selected.length===rows.length} onChange={e=>setSelected(e.target.checked?rows.map(x=>x.id):[])}/></th><th>Trade #</th><th>Property</th><th>Agent</th><th>Brokerage amount (before HST)</th><th>Brokerage HST</th><th>Total</th></tr></thead><tbody>
     {rows.map(x=><tr key={x.id}><td><input type="checkbox" checked={selected.includes(x.id)} onChange={e=>toggle(x.id,e.target.checked)}/></td><td>{x.transaction.transaction_number||"—"}</td><td>{x.transaction.property_address||"—"}</td><td>{x.agent_name}</td><td>{money(x.brokerage_amount)}</td><td>{money(x.brokerage_hst_amount)}</td><td><strong>{money(x.total_amount)}</strong></td></tr>)}
     {!rows.length&&<tr><td colSpan="7"><div className="empty small"><p>{loading?"Loading eligible trades…":"No unpaid brokerage payments are currently eligible."}</p></div></td></tr>}
    </tbody></table></div>
    <div className="actions" style={{justifyContent:"space-between",marginTop:12}}><span><strong>{selected.length}</strong> selected · <strong>{money(total)}</strong> combined payment</span><button type="button" className="primary" disabled={saving||loading||!selected.length||!operatingAccountId||!paymentReference.trim()} onClick={issue}>{saving?"Posting payment…":"Post Combined Brokerage Payment"}</button></div>
-   <p className="muted" style={{marginTop:10}}>The system checks each trade's remaining Commission Trust liability and available bank balance before committing. If any selected trade fails validation, the entire batch is rolled back.</p>
+   <p className="muted" style={{marginTop:10}}>The system calculates each trade from its remaining Commission Trust ledger balance after previous agent and brokerage disbursements, then checks the available bank balance before committing. If any selected trade fails validation, the entire batch is rolled back.</p>
   </>}
  </section>;
 }
