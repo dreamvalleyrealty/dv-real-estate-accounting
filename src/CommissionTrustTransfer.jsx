@@ -158,7 +158,7 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
    </div>}
    {solicitorReceipts.length>0&&<div className="panel" style={{padding:16,marginBottom:14}}>
     <h3 style={{marginTop:0}}>Solicitor commission deposits recorded</h3>
-    <div className="tablewrap"><table><thead><tr><th>Deposit date</th><th>Remitter</th><th>Method</th><th>Reference</th><th>Amount</th><th>Status</th></tr></thead><tbody>{solicitorReceipts.map(x=><tr key={x.id}><td>{x.ledger_date}</td><td>{String(x.description||"").replace(/^Solicitor direct commission funding received from /,"").replace(" - "+(settlement.matter||""),"")}</td><td>{String(x.reference||"").split(":")[0]||"—"}</td><td>{String(x.reference||"").replace(/^[^:]+:\\s*/,"")||"—"}</td><td>{money(x.amount)}</td><td>{x.status}</td></tr>)}</tbody></table></div>
+    <div className="tablewrap"><table><thead><tr><th>Deposit date</th><th>Remitter</th><th>Method</th><th>Reference</th><th>Amount</th><th>Status</th></tr></thead><tbody>{solicitorReceipts.map(x=><tr key={x.id}><td>{x.ledger_date}</td><td>{String(x.description||"").replace(/^Solicitor direct commission funding received from /,"").replace(" - "+(settlement.matter||""),"")}</td><td>{String(x.reference||"").split(":")[0]||"—"}</td><td>{String(x.reference||"").replace(/^[^:]+:\s*/,"")||"—"}</td><td>{money(x.amount)}</td><td>{x.status}</td></tr>)}</tbody></table></div>
    </div>}
    <div className="panel" style={{padding:16}}>
     <h3 style={{marginTop:0}}>Transfer details</h3>
