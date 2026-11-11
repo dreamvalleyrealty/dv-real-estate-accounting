@@ -45,6 +45,7 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
  const outstandingSeller=Math.max(0,Math.round((Number(settlement?.seller_proceeds_amount||0)-paid)*100)/100);
  const realEstateFunding=Math.round(trustLiabilities.filter(x=>x.trust_account_type==="REAL_ESTATE_TRUST").reduce((sum,x)=>sum+(x.direction==="RECEIVABLE"?1:-1)*Number(x.amount||0),0)*100)/100;
  const commissionTrustFunding=Math.round(trustLiabilities.filter(x=>x.trust_account_type==="COMMISSION_TRUST").reduce((sum,x)=>sum+(x.direction==="RECEIVABLE"?1:-1)*Number(x.amount||0),0)*100)/100;
+ const realEstateTransferRequired=Math.max(0,Math.round((amount-commissionTrustFunding)*100)/100);
  const fundingShortfall=Math.max(0,Math.round((amount-realEstateFunding-commissionTrustFunding)*100)/100);
  const solicitorReceipts=trustTransactions.filter(x=>x.trust_account_type==="COMMISSION_TRUST"&&x.direction==="DEPOSIT"&&x.status==="POSTED"&&String(x.description||"").startsWith("Solicitor direct commission funding received from "));
 
