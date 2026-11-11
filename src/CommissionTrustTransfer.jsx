@@ -12,7 +12,7 @@ const postedStatus=s=>["READY_FOR_COMMISSION_PAYROLL","COMMISSION_PAYROLL_PROCES
 export default function CommissionTrustTransfer({transaction,onClose,onOpenSettlement}){
  const [settlement,setSettlement]=useState(null),[accounts,setAccounts]=useState([]),[payments,setPayments]=useState([]),[trustLiabilities,setTrustLiabilities]=useState([]),[trustTransactions,setTrustTransactions]=useState([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState("");
  const [form,setForm]=useState({real_estate_trust_account_id:"",commission_trust_account_id:"",commission_transfer_date:today(),commission_transfer_reference:""});
- const [receiptForm,setReceiptForm]=useState({amount:"",payment_date:today(),payment_reference:"",remitter_name:""});
+ const [receiptForm,setReceiptForm]=useState({amount:"",payment_date:today(),payment_method:"",payment_reference:"",remitter_name:""});\n const [sellerSolicitor,setSellerSolicitor]=useState(null);
  const load=useCallback(async()=>{
   if(!supabase||!transaction?.id){setLoading(false);setError("Supabase is not connected or the transaction is missing.");return}
   setLoading(true);setError("");setMessage("");
@@ -71,16 +71,16 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
   const amountToReceive=Number(receiptForm.amount||0);
   if(amountToReceive<=0)return setError("Enter the solicitor deposit amount.");
   if(amountToReceive>fundingShortfall+0.005)return setError("The deposit cannot exceed the remaining commission funding shortfall of "+money(fundingShortfall)+".");
-  if(!receiptForm.payment_date||!receiptForm.payment_reference.trim()||!receiptForm.remitter_name.trim())return setError("Enter the deposit date, bank reference and solicitor/remitter name.");
+  if(!receiptForm.payment_date||!receiptForm.payment_method||!receiptForm.payment_reference.trim()||!receiptForm.remitter_name.trim())return setError("Enter the deposit date, payment method, cheque number or EFT reference, and solicitor/remitter.");
   setBusy(true);setError("");setMessage("");
   const {data,error}=await supabase.rpc("dv_accounting_receive_solicitor_commission_funding",{
    p_settlement_id:settlement.id,p_amount:amountToReceive,p_payment_date:receiptForm.payment_date,
-   p_payment_reference:receiptForm.payment_reference.trim(),p_remitter_name:receiptForm.remitter_name.trim()
+   p_payment_reference:receiptForm.payment_method+": "+receiptForm.payment_reference.trim(),p_remitter_name:receiptForm.remitter_name.trim()
   });
   setBusy(false);
   if(error){setError("Could not record solicitor commission deposit: "+error.message);return}
   setMessage(data?.duplicate?"This solicitor deposit was already recorded. No duplicate receipt was created.":"Solicitor deposit recorded in Commission Trust and linked to this trade.");
-  setReceiptForm(v=>({...v,amount:"",payment_reference:"",remitter_name:""}));
+  setReceiptForm(v=>({...v,amount:"",payment_reference:""}));
   await load();
  }
  async function postTransfer(){
@@ -138,7 +138,7 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
    </div>}
    {solicitorReceipts.length>0&&<div className="panel" style={{padding:16,marginBottom:14}}>
     <h3 style={{marginTop:0}}>Solicitor commission deposits recorded</h3>
-    <div className="tablewrap"><table><thead><tr><th>Deposit date</th><th>Remitter</th><th>Reference</th><th>Amount</th><th>Status</th></tr></thead><tbody>{solicitorReceipts.map(x=><tr key={x.id}><td>{x.ledger_date}</td><td>{String(x.description||"").replace(/^Solicitor direct commission funding received from /,"").replace(" - "+(settlement.matter||""),"")}</td><td>{x.reference||"—"}</td><td>{money(x.amount)}</td><td>{x.status}</td></tr>)}</tbody></table></div>
+    <div className="tablewrap"><table><thead><tr><th>Deposit date</th><th>Remitter</th><th>Method</th><th>Reference</th><th>Amount</th><th>Status</th></tr></thead><tbody>{solicitorReceipts.map(x=><tr key={x.id}><td>{x.ledger_date}</td><td>{String(x.description||"").replace(/^Solicitor direct commission funding received from /,"").replace(" - "+(settlement.matter||""),"")}</td><td>{String(x.reference||"").split(":")[0]||"—"}</td><td>{String(x.reference||"").replace(/^[^:]+:\\s*/,"")||"—"}</td><td>{money(x.amount)}</td><td>{x.status}</td></tr>)}</tbody></table></div>
    </div>}
    <div className="panel" style={{padding:16}}>
     <h3 style={{marginTop:0}}>Transfer details</h3>
