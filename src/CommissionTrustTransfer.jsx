@@ -92,7 +92,7 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
   if(amount<=0)return setError("The saved commission amount must be greater than $0.00.");
   const ref=String(form.commission_transfer_reference||"").trim();
   if(!ref||!form.commission_transfer_date)return setError("Enter and save a transfer date and reference first.");
-  if(!window.confirm("Post "+money(amount)+" from Real Estate Trust to Commission Trust for "+(transaction.transaction_number||"this trade")+"? Both trust ledger entries must post together. This does not pay the seller or landlord."))return;
+  if(!window.confirm("Complete commission funding of "+money(amount)+" for "+(transaction.transaction_number||"this trade")+"? The system will transfer "+money(realEstateTransferRequired)+" from Real Estate Trust and count "+money(commissionTrustFunding)+" already received directly into Commission Trust. This does not pay the seller or landlord."))return;
   setBusy(true);setError("");setMessage("");
   const {data,error}=await supabase.rpc("dv_accounting_process_seller_commission_transfer",{p_settlement_id:settlement.id,p_transfer_reference:ref,p_transfer_date:form.commission_transfer_date});
   setBusy(false);
@@ -147,7 +147,7 @@ export default function CommissionTrustTransfer({transaction,onClose,onOpenSettl
      <label>Transfer date<input type="date" required value={form.commission_transfer_date} onChange={e=>setForm(v=>({...v,commission_transfer_date:e.target.value}))}/></label>
      <label>Transfer reference<input required value={form.commission_transfer_reference} onChange={e=>setForm(v=>({...v,commission_transfer_reference:e.target.value}))} placeholder="Commission transfer reference"/></label>
     </div>
-    <div className="notice" style={{marginTop:14}}><AlertCircle size={16}/> Posting transfers only the remaining amount from Real Estate Trust after direct solicitor deposits are counted. Both trust-ledger entries post atomically. It does not send a bank payment, pay the seller, or issue Commission Payroll.</div>
+    <div className="notice" style={{marginTop:14}}><AlertCircle size={16}/> Expected Real Estate Trust transfer: {money(realEstateTransferRequired)}. The system counts solicitor deposits already received in Commission Trust and posts only the remaining transfer. It does not send a bank payment, pay the seller, or issue Commission Payroll.</div>
     <div className="modalactions" style={{marginTop:16}}>
      <button type="button" className="secondary" onClick={onClose}>Close</button>
      <button type="button" className="secondary" disabled={busy||isPosted} onClick={saveTransferDetails}><Save size={15}/>{busy?"Saving…":"Save Transfer Details"}</button>
