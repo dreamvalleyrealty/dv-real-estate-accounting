@@ -1493,7 +1493,7 @@ function PaidCommissionCorrections({commissions=[],transactions=[],agents=[],can
 
 function BrokerageBulkPayment({canIssue=false,onIssued}) {
  const [open,setOpen]=useState(false),[loading,setLoading]=useState(false),[saving,setSaving]=useState(false),[error,setError]=useState("");
- const [rows,setRows]=useState([]),[agents,setAgents]=useState([]),[operatingAccounts,setOperatingAccounts]=useState([]);
+ const [rows,setRows]=useState([]),[operatingAccounts,setOperatingAccounts]=useState([]);
  const [selected,setSelected]=useState([]),[paymentReference,setPaymentReference]=useState(""),[paymentDate,setPaymentDate]=useState(today());
  const [operatingAccountId,setOperatingAccountId]=useState(""),[lastBatch,setLastBatch]=useState(null);
  const load=async()=>{
@@ -1521,11 +1521,10 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
    setRows(list);setSelected(old=>old.filter(id=>list.some(x=>x.id===id)));
    const ops=(bankAccounts||[]).filter(x=>x.account_type==="OPERATING");
    setOperatingAccounts(ops);setOperatingAccountId(old=>ops.some(x=>x.id===old)?old:(ops[0]?.id||""));
-   setAgents(agentRows||[]);
   }catch(e){setError(e?.message||"Could not load brokerage payment trades.");}
   finally{setLoading(false);}
  };
- useEffect(()=>{if(canIssue)load()},[canIssue]);
+ useEffect(()=>{if(canIssue&&open)load()},[canIssue,open]);
  const chosen=rows.filter(x=>selected.includes(x.id));
  const total=chosen.reduce((sum,x)=>sum+x.total_amount,0);
  const toggle=(id,checked)=>setSelected(old=>checked?[...old,id]:old.filter(x=>x!==id));
