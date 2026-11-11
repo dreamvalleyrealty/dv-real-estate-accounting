@@ -249,14 +249,14 @@ export default function Listings({user,agentId,adminMode=false,initialSubmission
    let agentRows=listDirectoryCache.current?.agents||[];
    if(!listDirectoryCache.current){
     const [agentResult,branchResult]=await Promise.all([
-     supabase.from("dv_accounting_agents").select("*"),
+     supabase.from("dv_accounting_agents").select("id,first_name,last_name,full_name,email,agent_number,branch_id,active"),
      supabase.from("dv_accounting_branches").select("id,name,branch_code")
     ]);
     if(agentResult.error)setError("Could not load agents: "+agentResult.error.message);else{agentRows=(agentResult.data||[]).filter(a=>a.active!==false).sort((a,b)=>String(a.last_name||"").localeCompare(String(b.last_name||"")));setAgents(agentRows)}
     if(branchResult.error)console.warn("Could not load listing branches:",branchResult.error.message);else setBranches(branchResult.data||[]);
     listDirectoryCache.current={agents:agentRows};
    }
-  let q=supabase.from("dv_accounting_listing_submissions").select("*").order("created_at",{ascending:false});if(isAdmin){const term=debouncedListingSearch.trim().replace(/[,%()]/g," ").replace(/\\/g," ").slice(0,80);if(term){const pattern="%"+term+"%";const matchingAgentIds=agentRows.filter(a=>[a.first_name,a.last_name,a.full_name,a.email,a.agent_number].filter(Boolean).join(" ").toLowerCase().includes(term.toLowerCase())).map(a=>a.id).filter(Boolean);const clauses=["property_address.ilike."+pattern,"city.ilike."+pattern,"postal_code.ilike."+pattern,"mls_number.ilike."+pattern,"status.ilike."+pattern];if(matchingAgentIds.length)clauses.push("agent_id.in.("+matchingAgentIds.join(",")+")");q=q.or(clauses.join(","));}}
+  let q=supabase.from("dv_accounting_listing_submissions").select("id,agent_id,additional_agent_ids,property_address,street_number,street_name,unit_number,city,province,postal_code,listing_number,mls_number,status,listing_type,property_type,property_classification,asking_price,list_price,listing_start_date,listing_expiry_date,notes,admin_notes,created_at,updated_at").order("created_at",{ascending:false});if(isAdmin){const term=debouncedListingSearch.trim().replace(/[,%()]/g," ").replace(/\\/g," ").slice(0,80);if(term){const pattern="%"+term+"%";const matchingAgentIds=agentRows.filter(a=>[a.first_name,a.last_name,a.full_name,a.email,a.agent_number].filter(Boolean).join(" ").toLowerCase().includes(term.toLowerCase())).map(a=>a.id).filter(Boolean);const clauses=["property_address.ilike."+pattern,"city.ilike."+pattern,"postal_code.ilike."+pattern,"mls_number.ilike."+pattern,"status.ilike."+pattern];if(matchingAgentIds.length)clauses.push("agent_id.in.("+matchingAgentIds.join(",")+")");q=q.or(clauses.join(","));}}
   if(!isAdmin)q=q.eq("agent_id",agentId);if(isAdmin)q=q.range(listingPage*50,listingPage*50+50);
   const {data,error:e}=await q;if(isAdmin)setListingHasNext((data||[]).length>50);
   if(e){setError("Could not load listing submissions: "+e.message);}else{
