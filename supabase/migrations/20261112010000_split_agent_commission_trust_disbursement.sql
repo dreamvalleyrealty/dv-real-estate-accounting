@@ -8,8 +8,11 @@ DECLARE
     agent_share:=ROUND(COALESCE(p_gross_commission,0)*split_pct/100,2);
   ELSE
     agent_share:=GREATEST(
-      ROUND(COALESCE(p_gross_commission,0)*split_pct/100,2),
-      GREATEST(ROUND(COALESCE(p_gross_commission,0)-500,2),0)
+      LEAST(
+        ROUND(COALESCE(p_gross_commission,0)*split_pct/100,2),
+        GREATEST(ROUND(COALESCE(p_gross_commission,0)-500,2),0)
+      ),
+      0
     );
   END IF;$replacement$;
 BEGIN
