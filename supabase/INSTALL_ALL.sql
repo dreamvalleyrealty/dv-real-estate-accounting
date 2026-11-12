@@ -5993,3 +5993,34 @@ drop trigger if exists aaa_dv_autolink_mls_listing_submission on public.dv_accou
 create trigger aaa_dv_autolink_mls_listing_submission
 before insert or update of payload, listing_id, transaction_id on public.dv_accounting_agent_trade_submissions
 for each row execute function public.dv_accounting_autolink_mls_listing();
+
+
+-- ============================================================
+-- 0070: protect trade submissions linked to accounting records
+-- ============================================================
+create or replace function public.dv_accounting_protect_trade_submission_delete()
+returns trigger language plpgsql security invoker set search_path = '' as $function$
+begin
+  if old.transaction_id is not null
+     or exists (select 1 from public.dv_accounting_agent_trade_documents d where d.submission_id = old.id)
+     or upper(coalesce(old.status, 'DRAFT')) <> 'DRAFT' then
+    raise exception 'This trade submission cannot be deleted because it is linked to an accounting transaction, contains trade documents, or has entered review. Return or correct the trade instead.';
+  end if;
+  return old;
+end;
+$function$;
+drop trigger if exists trg_dv_protect_trade_submission_delete on public.dv_accounting_agent_trade_submissions;
+create trigger trg_dv_protect_trade_submission_delete before delete on public.dv_accounting_agent_trade_submissions for each row execute function public.dv_accounting_protect_trade_submission_delete();
+
+create or replace function public.dv_accounting_protect_trade_transaction_link()
+returns trigger language plpgsql security invoker set search_path = '' as $function$
+begin
+  if old.transaction_id is not null and new.transaction_id is null
+     and exists (select 1 from public.dv_accounting_transactions t where t.id = old.transaction_id) then
+    raise exception 'The linked accounting transaction cannot be detached from this trade submission.';
+  end if;
+  return new;
+end;
+$function$;
+drop trigger if exists trg_dv_protect_trade_transaction_link on public.dv_accounting_agent_trade_submissions;
+create trigger trg_dv_protect_trade_transaction_link before update of transaction_id on public.dv_accounting_agent_trade_submissions for each row execute function public.dv_accounting_protect_trade_transaction_link();
