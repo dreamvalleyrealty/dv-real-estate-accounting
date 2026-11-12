@@ -376,14 +376,30 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
     else{const{error}=await supabase.from("dv_accounting_contacts").insert([agentContact]);if(error)throw error}
    }
   }
+  const processedLawyers=new Set();
   for(const prefix of ["buyer_lawyer","seller_lawyer"]){
-   const firm=clean(payload[prefix+"_firm"]);if(!firm)continue;
-   const incoming={firm_name:firm,address:clean(payload[prefix+"_address"])||null,unit:clean(payload[prefix+"_unit"])||null,city:clean(payload[prefix+"_city"])||null,province:clean(payload[prefix+"_province"])||"ON",postal_code:clean(payload[prefix+"_postal_code"])||null,phone:clean(payload[prefix+"_phone"])||null,fax:clean(payload[prefix+"_fax"])||null,billing_email:clean(payload[prefix+"_email"])||null};
-   const{data:old,error:findError}=await supabase.from("dv_accounting_law_firms").select("*").ilike("firm_name",firm).limit(1).maybeSingle();if(findError)throw findError;
-   const row=mergeExisting(old,incoming);
-   if(old?.id){const{error}=await supabase.from("dv_accounting_law_firms").update(row).eq("id",old.id);if(error)throw error}else{const{error}=await supabase.from("dv_accounting_law_firms").insert([row]);if(error)throw error}
    const lawyerName=clean(payload[prefix+"_name"]);
-   if(lawyerName){const parts=splitName(lawyerName),type=prefix==="buyer_lawyer"?"BUYER_SOLICITOR":"SELLER_SOLICITOR";const{data:c,error:ce}=await supabase.from("dv_accounting_contacts").select("*").eq("contact_type",type).ilike("company_name",firm).ilike("first_name",parts.first_name).ilike("last_name",parts.last_name).limit(1).maybeSingle();if(ce)throw ce;const cp=mergeExisting(c,{...parts,company_name:firm,email:incoming.billing_email,phone:incoming.phone,fax:incoming.fax,address:incoming.address,unit:incoming.unit,city:incoming.city,province:incoming.province,postal_code:incoming.postal_code,contact_type:type});if(c?.id){const{error}=await supabase.from("dv_accounting_contacts").update(cp).eq("id",c.id);if(error)throw error}else{const{error}=await supabase.from("dv_accounting_contacts").insert([cp]);if(error)throw error}}
+   const firm=clean(payload[prefix+"_firm"]);
+   if(!lawyerName&&!firm)continue;
+   let firmRecord=null;
+   if(firm){
+    const incoming={firm_name:firm,address:clean(payload[prefix+"_address"])||null,unit:clean(payload[prefix+"_unit"])||null,city:clean(payload[prefix+"_city"])||null,province:clean(payload[prefix+"_province"])||"ON",postal_code:clean(payload[prefix+"_postal_code"])||null,phone:clean(payload[prefix+"_phone"])||null,fax:clean(payload[prefix+"_fax"])||null,billing_email:clean(payload[prefix+"_email"])||null};
+    const{data:old,error:findError}=await supabase.from("dv_accounting_law_firms").select("*").ilike("firm_name",firm).limit(1).maybeSingle();if(findError)throw findError;
+    const row=mergeExisting(old,incoming);
+    if(old?.id){const{data,error}=await supabase.from("dv_accounting_law_firms").update(row).eq("id",old.id).select("*").single();if(error)throw error;firmRecord=data}
+    else{const{data,error}=await supabase.from("dv_accounting_law_firms").insert([row]).select("*").single();if(error)throw error;firmRecord=data}
+   }
+   if(lawyerName){
+    const normalized=lawyerName.toLocaleLowerCase().replace(/\\s+/g," ").trim();
+    if(processedLawyers.has(normalized))continue;
+    processedLawyers.add(normalized);
+    const{data:allLawyers,error:lawyerFindError}=await supabase.from("dv_accounting_contacts").select("*").eq("contact_type","LAWYER");if(lawyerFindError)throw lawyerFindError;
+    const existing=(allLawyers||[]).find(c=>contactName(c).toLocaleLowerCase().replace(/\\s+/g," ").trim()===normalized);
+    const parts=splitName(lawyerName);
+    const contactRow={...(existing||{}),...parts,contact_type:"LAWYER",company_name:firm||existing?.company_name||null,law_firm_id:firmRecord?.id||existing?.law_firm_id||null,email:clean(payload[prefix+"_email"])||existing?.email||null,phone:clean(payload[prefix+"_phone"])||existing?.phone||null,fax:clean(payload[prefix+"_fax"])||existing?.fax||null,address:clean(payload[prefix+"_address"])||existing?.address||null,unit:clean(payload[prefix+"_unit"])||existing?.unit||null,city:clean(payload[prefix+"_city"])||existing?.city||null,province:clean(payload[prefix+"_province"])||existing?.province||"ON",postal_code:clean(payload[prefix+"_postal_code"])||existing?.postal_code||null};
+    if(existing?.id){const{error}=await supabase.from("dv_accounting_contacts").update(contactRow).eq("id",existing.id);if(error)throw error}
+    else{const{error}=await supabase.from("dv_accounting_contacts").insert([contactRow]);if(error)throw error}
+   }
   }
   for(const pair of [["BUYER",payload.buyers||[]],["SELLER",payload.sellers||[]]])for(const p of pair[1]){const first_name=clean(p.first_name),last_name=clean(p.last_name);if(!first_name&&!last_name)continue;const cp={first_name,last_name,company_name:p.company_name||null,email:p.email||null,phone:p.phone||null,fax:p.fax||null,address:p.address||null,unit:p.unit||null,city:p.city||null,province:p.province||"ON",postal_code:p.postal_code||null,contact_type:pair[0]};const{data:c,error:ce}=await supabase.from("dv_accounting_contacts").select("id").eq("contact_type",pair[0]).ilike("first_name",first_name).ilike("last_name",last_name).limit(1).maybeSingle();if(ce)throw ce;if(c?.id){const{error}=await supabase.from("dv_accounting_contacts").update(cp).eq("id",c.id);if(error)throw error}else{const{error}=await supabase.from("dv_accounting_contacts").insert([cp]);if(error)throw error}}
  }
