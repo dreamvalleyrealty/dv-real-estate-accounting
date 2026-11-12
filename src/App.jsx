@@ -1636,7 +1636,7 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,commissio
   const printedAgentShare=Number(issued?.agent_share??commission?.agent_share??txAgent?.agent_payable??0);
   const printedHstBase=Math.max(0,printedAgentShare-adminFee-leadFee);
   const hstRate=Number(issued?.agent_hst_rate||13);
-  const hstAmount=issued?.agent_hst_number?Math.round(printedHstBase*hstRate*100)/100:Number(issued?.agent_hst_amount??hst);
+  const hstAmount=issued?.agent_hst_number?Math.round(printedHstBase*hstRate)/100:Number(issued?.agent_hst_amount??hst);
   const address=transaction?.property_address||"";
   const agentDisplayName=[agent?.first_name,agent?.last_name].filter(Boolean).join(" ").trim()||agent?.name||agent?.legal_name||"Agent";const payee=agent?.incorporated?(agent?.corporation_name||agent?.legal_name||agentDisplayName):((agent?.legal_name&&agent.legal_name!==agentDisplayName)?agent.legal_name:agentDisplayName);const payeeDisplay=agent?.incorporated&&payee&&String(payee).trim()!==String(agentDisplayName).trim()?String(payee)+" c/o "+String(agentDisplayName):payee;
   const payeeAddress=[agent?.address,agent?.city,agent?.province||"ON",agent?.postal_code].filter(Boolean).join(" ");
