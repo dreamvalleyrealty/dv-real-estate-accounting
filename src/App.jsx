@@ -88,7 +88,7 @@ function PdfTool(){
 }
 
 function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
- const agents=useRows("dv_accounting_agents"),transactions=useRows("dv_accounting_transactions"),transactionAgents=useRows("dv_accounting_transaction_agents"),commissions=useRows("dv_accounting_commissions"),transactionCommissions=useRows("dv_accounting_transaction_commissions"),transactionAgentInfo=useRows("dv_accounting_transaction_agent_info"),generalIncomeRows=useRows("dv_accounting_agent_charge_payments"),generalChargeRows=useRows("dv_accounting_commission_charges"),listingSubmissions=useRows("dv_accounting_listing_submissions"),legacyListings=useRows("dv_accounting_listings"),banks=useRows("dv_accounting_bank_accounts"),bankTx=useRows("dv_accounting_bank_transactions"),expenses=useRows("dv_accounting_expenses"),settings=useRows("dv_accounting_settings");
+ const agents=useRows("dv_accounting_agents"),transactions=useRows("dv_accounting_transactions"),transactionAgents=useRows("dv_accounting_transaction_agents"),commissions=useRows("dv_accounting_commissions"),transactionCommissions=useRows("dv_accounting_transaction_commissions"),transactionAgentInfo=useRows("dv_accounting_transaction_agent_info"),generalIncomeRows=useRows("dv_accounting_agent_charge_payments"),generalChargeRows=useRows("dv_accounting_commission_charges"),listingSubmissions=useRows("dv_accounting_listing_submissions"),legacyListings=useRows("dv_accounting_listings"),banks=useRows("dv_accounting_bank_accounts"),bankTx=useRows("dv_accounting_bank_transactions"),trustTransactions=useRows("dv_accounting_trust_transactions"),expenses=useRows("dv_accounting_expenses"),settings=useRows("dv_accounting_settings");
  const now=new Date(),iso=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");return y+"-"+m+"-"+day},monthStart=iso(new Date(now.getFullYear(),now.getMonth(),1)),monthEnd=iso(new Date(now.getFullYear(),now.getMonth()+1,0)),prevStart=iso(new Date(now.getFullYear(),now.getMonth()-1,1)),prevEnd=iso(new Date(now.getFullYear(),now.getMonth(),0));
  const [incomeRange,setIncomeRange]=useState({start:iso(new Date(now.getFullYear(),0,1)),end:iso(now)});
  const widgets=[{id:"birthdays",label:"Agent birthdays"},{id:"anniversaries",label:"Agent anniversaries"},{id:"licences",label:"Licences expiring"},{id:"balances",label:"Bank account balances"},{id:"closings",label:"Deals closing"},{id:"topAgents",label:"Top agents"}];
@@ -203,14 +203,53 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
  const tradeIncomeInRange=(start,end)=>[...incomeByTransaction.values()].reduce((sum,x)=>sum+(inRange(x.date,start,end)?x.share:0),0);
  const generalIncomeInRange=(start,end)=>[...generalIncomeById.values()].reduce((sum,x)=>sum+(inRange(x.date,start,end)?x.amount:0),0);
  const expectedInRange=(start,end)=>Math.round((tradeIncomeInRange(start,end)+generalIncomeInRange(start,end))*100)/100;
- const receivedInRange=(start,end)=>Math.round(([...incomeByTransaction.entries()].reduce((sum,[,x])=>{
-  const t=x.transaction,received=t.ar_payment_received===true||String(t.ar_payment_received||"").toUpperCase()==="YES";
-  const d=String(t.ar_payment_received_date||"").slice(0,10);
-  if(!received||!inRange(d,start,end))return sum;
-  const gross=Number(t.commission_approved_amount||t.gross_commission||t.commission_receivable||0);
+ // Own brokerage transfers are recorded as Commission Trust disbursements with
+ // OUR-BROKERAGE references. Their amounts include Ontario HST, so convert to
+ // pre-HST brokerage income and cap the amount at the saved office share.
+ const ownBrokerageTransfersByTransaction=new Map();
+ trustTransactions.rows.forEach(row=>{
+  if(String(row.trust_account_type||"").toUpperCase()!=="COMMISSION_TRUST")return;
+  if(String(row.direction||"").toUpperCase()!=="DISBURSEMENT")return;
+  if(String(row.status||"").toUpperCase()!=="POSTED")return;
+  if(!String(row.reference||"").startsWith("OUR-BROKERAGE:"))return;
+  if(!/general operating/i.test(String(row.description||"")))return;
+  const key=String(row.transaction_id||""),income=incomeByTransaction.get(key);
+  if(!key||!income)return;
+  const total=Math.max(0,Number(row.amount||0));
+  if(!Number.isFinite(total)||total<=0)return;
+  const date=String(row.ledger_date||row.created_at||"").slice(0,10);
+  if(!date)return;
+  const base=Math.round((total/1.13)*100)/100;
+  const list=ownBrokerageTransfersByTransaction.get(key)||[];
+  list.push({amount:base,date});
+  ownBrokerageTransfersByTransaction.set(key,list);
+ });
+ const receivedInRange=(start,end)=>Math.round(([...incomeByTransaction.entries()].reduce((sum,[key,x])=>{
+  const t=x.transaction;
+  const received=t.ar_payment_received===true||String(t.ar_payment_received||"").toUpperCase()==="YES";
   const paid=Number(t.ar_payment_amount||0);
-  const ratio=gross>0&&paid>0?Math.min(1,paid/gross):1;
-  return sum+Math.round(x.share*ratio*100)/100;
+  const gross=Number(t.commission_approved_amount||t.gross_commission||t.commission_receivable||0);
+  const arDate=String(t.ar_payment_received_date||"").slice(0,10);
+  // The AR receipt is the first evidence of the commission receipt. Do not count
+  // the later transfer to Operating again when this flag/amount is already recorded.
+  if((received||paid>0)&&arDate){
+   if(!inRange(arDate,start,end))return sum;
+   const ratio=gross>0&&paid>0?Math.min(1,paid/gross):1;
+   return sum+Math.round(x.share*ratio*100)/100;
+  }
+  // If AR was never marked received, recognize the brokerage share when it is
+  // actually transferred from Commission Trust to General Operating.
+  const transfers=ownBrokerageTransfersByTransaction.get(key)||[];
+  const paidShare=Math.min(x.share,transfers.reduce((total,item)=>total+item.amount,0));
+  if(paidShare<=0)return sum;
+  let remaining=paidShare,receivedInRangeAmount=0;
+  for(const item of [...transfers].sort((a,b)=>a.date.localeCompare(b.date))){
+   const applied=Math.min(remaining,item.amount);
+   if(inRange(item.date,start,end))receivedInRangeAmount+=applied;
+   remaining-=applied;
+   if(remaining<=0)break;
+  }
+  return sum+Math.round(receivedInRangeAmount*100)/100;
  },0)+generalIncomeInRange(start,end))*100)/100;
  const startOfMonth=new Date(now.getFullYear(),now.getMonth(),1),endOfMonth=new Date(now.getFullYear(),now.getMonth()+1,0),lastStart=new Date(now.getFullYear(),now.getMonth()-1,1),lastEnd=new Date(now.getFullYear(),now.getMonth(),0),nextStart=new Date(now.getFullYear(),now.getMonth()+1,1),nextEnd=new Date(now.getFullYear(),now.getMonth()+2,0),yearStart=iso(new Date(now.getFullYear(),0,1));
  const selectedExpected=expectedInRange(incomeRange.start,incomeRange.end),selectedReceived=receivedInRange(incomeRange.start,incomeRange.end);
@@ -225,7 +264,7 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
    {incomeCard("Next Month",expectedInRange(iso(nextStart),iso(nextEnd)),"Expected trade and general income for "+nextStart.toLocaleDateString("en-CA",{month:"long"}))}
   </div>
   <div className="grid4" style={{marginTop:12}}>
-   {incomeCard("Income Received",selectedReceived,"Recorded commission receipts, before HST")}
+   {incomeCard("Income Received",selectedReceived,"Commission receipts and brokerage transfers, before HST")}
    {incomeCard("Expected Income",selectedOutstanding,"Unreceived brokerage share for selected dates")}
    {incomeCard("Total Net to Office",selectedExpected,"After agent net payable, before HST")}
    {incomeCard("Still to Receive",selectedOutstanding,"Estimated outstanding brokerage share")}
@@ -242,7 +281,7 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
     <label>From<input type="date" value={incomeRange.start} onChange={e=>setIncomeRange(v=>({...v,start:e.target.value}))}/></label>
     <label>To<input type="date" value={incomeRange.end} onChange={e=>setIncomeRange(v=>({...v,end:e.target.value}))}/></label>
    </div>
-   <div className="notice" style={{marginTop:12}}>Trade income uses the saved brokerage share before HST. Separately recorded paid agent charges are included as general income, with HST removed. Trade and general-income entries are deduplicated by their record IDs.</div>
+   <div className="notice" style={{marginTop:12}}>Trade income uses the saved brokerage share before HST. Posted own-brokerage transfers from Commission Trust to General Operating count as received when no AR receipt is recorded. HST is excluded, and a transfer is not counted again when its AR receipt is already recorded. Separately recorded paid agent charges are included as general income, with HST removed.</div>
   </div>
  </section>;
 })()}
