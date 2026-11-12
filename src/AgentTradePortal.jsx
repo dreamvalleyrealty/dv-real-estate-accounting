@@ -214,7 +214,8 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  const contactEmail=c=>c.email||c.email_address||"";
  const contactAddress=c=>[c.address,c.address_line_1,c.unit&&("Unit "+c.unit),c.city,c.province,c.postal_code].filter(Boolean).join(", ");
  const brokerageContacts=contactDirectory.filter(c=>/BROKERAGE|BROKER|OFFICE/.test(contactType(c))||!!(c.brokerage_name&&!c.first_name&&!c.last_name));
- const lawyerContacts=contactDirectory.filter(c=>/LAWYER|SOLICITOR/.test(contactType(c)));
+ const normalizeDirectoryName=value=>String(value||"").normalize("NFKC").replace(/[\\u200B-\\u200D\\uFEFF]/g,"").toLocaleLowerCase().replace(/[^a-z0-9]/g,"");
+ const lawyerContacts=[...contactDirectory.filter(c=>/LAWYER|SOLICITOR/.test(contactType(c))).reduce((map,c)=>{const name=normalizeDirectoryName(contactName(c));if(!name)return map;const score=x=>[contactCompany(x),x.law_firm_id,x.email,x.phone,x.address,x.city,x.postal_code].filter(Boolean).length;const current=map.get(name);if(!current||score(c)>score(current))map.set(name,c);return map},new Map()).values()];
  const brokerageNames=[...new Set([...brokerageDirectory.map(b=>b.brokerage_name||b.company_name||b.name),...brokerageContacts.map(contactCompany)].filter(Boolean))];
  const lawyerNames=[...new Set([...lawFirmDirectory.map(f=>f.firm_name),...lawyerContacts.map(contactCompany)].filter(Boolean))];
  async function autoSaveParty(p,type){const first_name=String(p?.first_name||"").trim(),last_name=String(p?.last_name||"").trim();if(!first_name||!last_name||!supabase)return;const full=(first_name+" "+last_name).trim().toLowerCase();if(contactDirectory.some(c=>contactName(c).toLowerCase()===full&&String(c.contact_type||"").toUpperCase()===type))return;const{data,error:e}=await supabase.from("dv_accounting_contacts").insert([{first_name,last_name,contact_type:type,company_name:null,email:null,phone:null}]).select().single();if(!e&&data)setContactDirectory(old=>old.some(c=>c.id===data.id)?old:[...old,data]);}
@@ -390,11 +391,11 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
     else{const{data,error}=await supabase.from("dv_accounting_law_firms").insert([row]).select("*").single();if(error)throw error;firmRecord=data}
    }
    if(lawyerName){
-    const normalized=lawyerName.toLocaleLowerCase().replace(/\\s+/g," ").trim();
+    const normalized=normalizeDirectoryName(lawyerName);
     if(processedLawyers.has(normalized))continue;
     processedLawyers.add(normalized);
     const{data:allLawyers,error:lawyerFindError}=await supabase.from("dv_accounting_contacts").select("*").eq("contact_type","LAWYER");if(lawyerFindError)throw lawyerFindError;
-    const existing=(allLawyers||[]).find(c=>contactName(c).toLocaleLowerCase().replace(/\\s+/g," ").trim()===normalized);
+    const existing=(allLawyers||[]).find(c=>normalizeDirectoryName(contactName(c))===normalized);
     const parts=splitName(lawyerName);
     const contactRow={...(existing||{}),...parts,contact_type:"LAWYER",company_name:firm||existing?.company_name||null,law_firm_id:firmRecord?.id||existing?.law_firm_id||null,email:clean(payload[prefix+"_email"])||existing?.email||null,phone:clean(payload[prefix+"_phone"])||existing?.phone||null,fax:clean(payload[prefix+"_fax"])||existing?.fax||null,address:clean(payload[prefix+"_address"])||existing?.address||null,unit:clean(payload[prefix+"_unit"])||existing?.unit||null,city:clean(payload[prefix+"_city"])||existing?.city||null,province:clean(payload[prefix+"_province"])||existing?.province||"ON",postal_code:clean(payload[prefix+"_postal_code"])||existing?.postal_code||null};
     if(existing?.id){const{error}=await supabase.from("dv_accounting_contacts").update(contactRow).eq("id",existing.id);if(error)throw error}
