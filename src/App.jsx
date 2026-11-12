@@ -232,7 +232,7 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
   const arDate=String(t.ar_payment_received_date||"").slice(0,10);
   // The AR receipt is the first evidence of the commission receipt. Do not count
   // the later transfer to Operating again when this flag/amount is already recorded.
-  if(received||paid>0){
+  if((received||paid>0)&&arDate){
    if(!inRange(arDate,start,end))return sum;
    const ratio=gross>0&&paid>0?Math.min(1,paid/gross):1;
    return sum+Math.round(x.share*ratio*100)/100;
