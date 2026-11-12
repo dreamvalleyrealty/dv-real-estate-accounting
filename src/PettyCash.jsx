@@ -42,9 +42,9 @@ export default function PettyCash({user,role="STAFF",permissions={}}){
   finally{setLoading(false)}
  },[user?.id]);
  useEffect(()=>{load()},[load]);
- useEffect(()=>{if(visibleFunds.length===1)setExpense(x=>({...x,fund_id:x.fund_id||visibleFunds[0].id}))},[visibleFunds]);
 
  const visibleFunds=useMemo(()=>canViewAll?funds:funds.filter(f=>f.custodian_user_id===user?.id),[funds,canViewAll,user?.id]);
+ useEffect(()=>{if(visibleFunds.length===1)setExpense(x=>({...x,fund_id:x.fund_id||visibleFunds[0].id}))},[visibleFunds]);
  const activeFund=visibleFunds.find(f=>f.id===selectedFund)||visibleFunds[0]||null;
  const branchName=id=>branches.find(b=>b.id===id)?.name||"Branch";
  const profileName=id=>{const p=profiles.find(x=>x.user_id===id);return p?.display_name||p?.email||"Unassigned"};
