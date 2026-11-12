@@ -265,8 +265,8 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
   return sum+Math.round(transferred*100)/100;
  },0)+generalIncomeInRange(start,end))*100)/100;
  const startOfMonth=new Date(now.getFullYear(),now.getMonth(),1),endOfMonth=new Date(now.getFullYear(),now.getMonth()+1,0),lastStart=new Date(now.getFullYear(),now.getMonth()-1,1),lastEnd=new Date(now.getFullYear(),now.getMonth(),0),nextStart=new Date(now.getFullYear(),now.getMonth()+1,1),nextEnd=new Date(now.getFullYear(),now.getMonth()+2,0),yearStart=iso(new Date(now.getFullYear(),0,1));
- const selectedExpected=expectedInRange(incomeRange.start,incomeRange.end),selectedReceived=receivedInRange(incomeRange.start,incomeRange.end);
- const selectedOutstanding=Math.max(0,selectedExpected-selectedReceived);
+ const selectedExpected=expectedInRange(incomeRange.start,incomeRange.end),selectedReceived=receivedInRange(incomeRange.start,incomeRange.end),selectedReceivedForTrades=receivedAgainstTradesInRange(incomeRange.start,incomeRange.end);
+ const selectedOutstanding=Math.max(0,selectedExpected-selectedReceivedForTrades);
  const incomeCard=(title,value,sub)=><div className="card" style={{minWidth:0}}><div className="muted">{title}</div><div className="metric" style={{fontSize:24}}>{money(value)}</div><div className="sub">{sub}</div></div>;
  return <section className="panel" style={{marginBottom:18,borderTop:"3px solid var(--gold, #9e8556)"}}>
   <div className="paneltitle"><div><h2>Brokerage Income</h2><p className="panelhint">Trade Record brokerage share plus separately recorded general income, excluding HST. Each entry is counted once.</p></div><span className="pill">Super Admin</span></div>
