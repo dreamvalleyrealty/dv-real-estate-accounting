@@ -251,9 +251,22 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
   }
   return sum+Math.round(receivedInRangeAmount*100)/100;
  },0)+generalIncomeInRange(start,end))*100)/100;
+ const receivedAgainstTradesInRange=(start,end)=>Math.round(([...incomeByTransaction.entries()].reduce((sum,[key,x])=>{
+  if(!inRange(x.date,start,end))return sum;
+  const t=x.transaction,received=t.ar_payment_received===true||String(t.ar_payment_received||"").toUpperCase()==="YES";
+  const paid=Number(t.ar_payment_amount||0);
+  const gross=Number(t.commission_approved_amount||t.gross_commission||t.commission_receivable||0);
+  if(received||paid>0){
+   const ratio=gross>0&&paid>0?Math.min(1,paid/gross):1;
+   return sum+Math.round(x.share*ratio*100)/100;
+  }
+  const transfers=ownBrokerageTransfersByTransaction.get(key)||[];
+  const transferred=Math.min(x.share,transfers.reduce((total,item)=>total+item.amount,0));
+  return sum+Math.round(transferred*100)/100;
+ },0)+generalIncomeInRange(start,end))*100)/100;
  const startOfMonth=new Date(now.getFullYear(),now.getMonth(),1),endOfMonth=new Date(now.getFullYear(),now.getMonth()+1,0),lastStart=new Date(now.getFullYear(),now.getMonth()-1,1),lastEnd=new Date(now.getFullYear(),now.getMonth(),0),nextStart=new Date(now.getFullYear(),now.getMonth()+1,1),nextEnd=new Date(now.getFullYear(),now.getMonth()+2,0),yearStart=iso(new Date(now.getFullYear(),0,1));
- const selectedExpected=expectedInRange(incomeRange.start,incomeRange.end),selectedReceived=receivedInRange(incomeRange.start,incomeRange.end);
- const selectedOutstanding=Math.max(0,selectedExpected-selectedReceived);
+ const selectedExpected=expectedInRange(incomeRange.start,incomeRange.end),selectedReceived=receivedInRange(incomeRange.start,incomeRange.end),selectedReceivedForTrades=receivedAgainstTradesInRange(incomeRange.start,incomeRange.end);
+ const selectedOutstanding=Math.max(0,selectedExpected-selectedReceivedForTrades);
  const incomeCard=(title,value,sub)=><div className="card" style={{minWidth:0}}><div className="muted">{title}</div><div className="metric" style={{fontSize:24}}>{money(value)}</div><div className="sub">{sub}</div></div>;
  return <section className="panel" style={{marginBottom:18,borderTop:"3px solid var(--gold, #9e8556)"}}>
   <div className="paneltitle"><div><h2>Brokerage Income</h2><p className="panelhint">Trade Record brokerage share plus separately recorded general income, excluding HST. Each entry is counted once.</p></div><span className="pill">Super Admin</span></div>
@@ -264,8 +277,8 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
    {incomeCard("Next Month",expectedInRange(iso(nextStart),iso(nextEnd)),"Expected trade and general income for "+nextStart.toLocaleDateString("en-CA",{month:"long"}))}
   </div>
   <div className="grid4" style={{marginTop:12}}>
-   {incomeCard("Income Received",selectedReceived,"Commission receipts and brokerage transfers, before HST")}
-   {incomeCard("Expected Income",selectedOutstanding,"Unreceived brokerage share for selected dates")}
+   {incomeCard("Cash Received",selectedReceived,"Money received during the selected dates, before HST")}
+   {incomeCard("Received on Selected Trades",selectedReceivedForTrades,"Collections for trades dated in this period, regardless of payment date")}
    {incomeCard("Total Net to Office",selectedExpected,"After agent net payable, before HST")}
    {incomeCard("Still to Receive",selectedOutstanding,"Estimated outstanding brokerage share")}
   </div>
@@ -281,7 +294,7 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
     <label>From<input type="date" value={incomeRange.start} onChange={e=>setIncomeRange(v=>({...v,start:e.target.value}))}/></label>
     <label>To<input type="date" value={incomeRange.end} onChange={e=>setIncomeRange(v=>({...v,end:e.target.value}))}/></label>
    </div>
-   <div className="notice" style={{marginTop:12}}>Trade income uses the saved brokerage share before HST. Posted own-brokerage transfers from Commission Trust to General Operating count as received when no AR receipt is recorded. HST is excluded, and a transfer is not counted again when its AR receipt is already recorded. Separately recorded paid agent charges are included as general income, with HST removed.</div>
+   <div className="notice" style={{marginTop:12}}>Trade income and Total Net to Office are grouped by the transaction date. Cash Received is grouped by the actual receipt or General Operating transfer date. Received on Selected Trades and Still to Receive follow the transactions in the selected period and include payments made later, so a November payment for an October trade clears that October trade without moving the cash receipt into October. Brokerage transfers exclude HST and are not counted twice when an AR receipt is recorded.</div>
   </div>
  </section>;
 })()}
