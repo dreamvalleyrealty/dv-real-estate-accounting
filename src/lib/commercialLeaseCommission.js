@@ -255,6 +255,36 @@ export function calculateCommercialLeaseCommission(input = {}) {
       });
     }
   }
+  // HST added to commission must be rounded on the combined taxable
+  // commission for each rate, not independently for every lease year.
+  // Allocate the rounded group total back to the individual lines so their
+  // displayed amounts still add up exactly to the transaction total.
+  const addedHstGroups = new Map();
+  lines.forEach((line, index) => {
+    const row = input.commissionSchedule.find(r =>
+      Number(r.startPeriod) <= line.leaseYear && Number(r.endPeriod) >= line.leaseYear
+    );
+    if (row?.hstTreatment !== "ADDED") return;
+    const rate = Number(row.hstRatePercent);
+    const key = String(rate);
+    const group = addedHstGroups.get(key) || { rate, indices: [], taxableBase: 0, allocatedHst: 0 };
+    group.indices.push(index);
+    group.taxableBase = roundMoney(group.taxableBase + Number(line.commissionBeforeHst || 0));
+    addedHstGroups.set(key, group);
+  });
+  for (const group of addedHstGroups.values()) {
+    let cumulativeBase = 0;
+    let previouslyAllocatedHst = 0;
+    for (const index of group.indices) {
+      const line = lines[index];
+      cumulativeBase = roundMoney(cumulativeBase + Number(line.commissionBeforeHst || 0));
+      const cumulativeHst = roundMoney(cumulativeBase * group.rate / 100);
+      line.hst = roundMoney(cumulativeHst - previouslyAllocatedHst);
+      line.totalCommission = roundMoney(line.commissionBeforeHst + line.hst);
+      previouslyAllocatedHst = cumulativeHst;
+    }
+  }
+
   const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.commissionBeforeHst, 0));
   const hst = roundMoney(lines.reduce((sum, line) => sum + line.hst, 0));
   const total = roundMoney(lines.reduce((sum, line) => sum + line.totalCommission, 0));
