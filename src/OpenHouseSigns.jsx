@@ -40,6 +40,10 @@ const distanceKm = (a, b) => {
 };
 const prettyDate = value => value ? new Date(value + "T12:00:00").toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" }) : "Date not set";
 const errorText = error => error?.message || String(error || "Something went wrong.");
+// Supabase relationship fields can be returned as either an object or an array.
+// Normalize collection responses before using array methods so a shape change
+// cannot crash the entire Back Office application.
+const asArray = value => Array.isArray(value) ? value : value == null ? [] : [value];
 
 export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMode = false, activePage = "openhouses" }) {
   const mapElement = useRef(null);
@@ -95,17 +99,24 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
   const activeEvent = useMemo(() => events.find(event => event.id === activeEventId) || null, [events, activeEventId]);
   const propertyPoint = useMemo(() => activeEvent?.property_lat != null && activeEvent?.property_lng != null
     ? { lat: Number(activeEvent.property_lat), lng: Number(activeEvent.property_lng) } : null, [activeEvent]);
+  const safeLocations = asArray(locations);
+  const safeEvents = asArray(events);
+  const safeAgents = asArray(agents);
+  const safeEventSigns = asArray(eventSigns);
+  const safeInventoryRows = asArray(inventoryRows);
+  const safeInventoryTransfers = asArray(inventoryTransfers);
+  const safeSuggestions = asArray(suggestions);
   const nearbyLocations = useMemo(() => {
     if (!propertyPoint) return [];
-    return locations.filter(location => location.active && distanceKm(propertyPoint, { lat: Number(location.latitude), lng: Number(location.longitude) }) <= 5)
+    return safeLocations.filter(location => location.active && distanceKm(propertyPoint, { lat: Number(location.latitude), lng: Number(location.longitude) }) <= 5)
       .sort((a, b) => distanceKm(propertyPoint, { lat: Number(a.latitude), lng: Number(a.longitude) }) - distanceKm(propertyPoint, { lat: Number(b.latitude), lng: Number(b.longitude) }));
-  }, [locations, propertyPoint]);
-  const currentInventoryAgentId = agentId || agents.find(agent => String(agent.email || "").toLowerCase() === String(user?.email || "").toLowerCase())?.id || "";
-  const inventoryAgent = agents.find(agent => agent.id === inventoryAgentId);
+  }, [safeLocations, propertyPoint]);
+  const currentInventoryAgentId = agentId || safeAgents.find(agent => String(agent.email || "").toLowerCase() === String(user?.email || "").toLowerCase())?.id || "";
+  const inventoryAgent = safeAgents.find(agent => agent.id === inventoryAgentId);
   const filteredEvents = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return events.filter(event => !needle || String(event.property_address || "").toLowerCase().includes(needle) || String(event.agent_name || "").toLowerCase().includes(needle));
-  }, [events, query]);
+    return safeEvents.filter(event => !needle || String(event.property_address || "").toLowerCase().includes(needle) || String(event.agent_name || "").toLowerCase().includes(needle));
+  }, [safeEvents, query]);
   const groupedEvents = useMemo(() => {
     const groups = new Map();
     filteredEvents.forEach(event => {
@@ -129,12 +140,12 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     if (eventResult.error) throw eventResult.error;
     if (locationResult.error) throw locationResult.error;
     if (agentResult.error) throw agentResult.error;
-    const agentRows = agentResult.data || [];
+    const agentRows = asArray(agentResult.data);
     setAgents(agentRows);
     const agentMap = new Map(agentRows.map(agent => [agent.id, agent.name || [agent.first_name, agent.last_name].filter(Boolean).join(" ") || agent.email || "Agent"]));
-    const rows = (eventResult.data || []).map(event => ({ ...event, agent_name: agentMap.get(event.agent_id) || (event.created_by === user?.id ? agentName || "You" : "Agent") }));
+    const rows = asArray(eventResult.data).map(event => ({ ...event, agent_name: agentMap.get(event.agent_id) || (event.created_by === user?.id ? agentName || "You" : "Agent") }));
     setEvents(rows);
-    setLocations(locationResult.data || []);
+    setLocations(asArray(locationResult.data));
     if (!activeEventId && rows.length) setActiveEventId(rows[0].id);
   }, [activeEventId, agentName, user?.id]);
 
@@ -183,7 +194,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       .then(({ data, error: fetchError }) => {
         if (cancelled) return;
         if (fetchError) setError(errorText(fetchError));
-        else setEventSigns((data || []).filter(row => row.location));
+        else setEventSigns(asArray(data).filter(row => row?.location));
       });
     return () => { cancelled = true; };
   }, [activeEventId]);
@@ -370,12 +381,12 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       if (!adminMode && currentInventoryAgentId) request = request.eq("agent_id", currentInventoryAgentId);
       const { data, error: inventoryError } = await request;
       if (inventoryError) throw inventoryError;
-      const rows = data || [];
+      const rows = asArray(data);
       setInventoryRows(rows);
       if (adminMode) {
         const { data: transfers, error: transferError } = await supabase.from("dv_open_house_sign_transfers").select("*,from_agent:dv_accounting_agents!from_agent_id(name,first_name,last_name,email),to_agent:dv_accounting_agents!to_agent_id(name,first_name,last_name,email)").eq("company_id", companyId).order("created_at", { ascending: false }).limit(20);
         if (transferError) throw transferError;
-        setInventoryTransfers(transfers || []);
+        setInventoryTransfers(asArray(transfers));
       }
       const selectedAgentForInventory = adminMode ? inventoryAgentId : currentInventoryAgentId;
       const own = rows.find(row => row.agent_id === selectedAgentForInventory);
@@ -448,7 +459,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     if (!MAPS_KEY || !geocoderRef.current) { setError("Google Maps must be configured before saving an open house."); return; }
     setSaving(true);
     try {
-      const dates = dateRows.filter(row => row.event_date);
+      const dates = asArray(dateRows).filter(row => row?.event_date);
       if (dates.length !== 1) throw new Error("Save one date when editing an existing open house.");
       const row = dates[0];
       if (editingEventId) {
@@ -526,17 +537,17 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
 
   async function attachLocation(location) {
     if (!activeEvent || !supabase) return;
-    if (eventSigns.some(item => item.sign_location_id === location.id)) { setMessage("That location is already on this open house plan."); return; }
+    if (safeEventSigns.some(item => item.sign_location_id === location.id)) { setMessage("That location is already on this open house plan."); return; }
     setSaving(true); setError("");
     try {
-      const related = events.filter(event => event.company_id === activeEvent.company_id &&
+      const related = safeEvents.filter(event => event.company_id === activeEvent.company_id &&
         String(event.property_address || "").trim().toLowerCase() === String(activeEvent.property_address || "").trim().toLowerCase() &&
         (event.agent_id || null) === (activeEvent.agent_id || null));
       const targets = related.length ? related : [activeEvent];
       const { data: existingRows, error: existingError } = await supabase.from("dv_open_house_event_signs").select("event_id").in("event_id", targets.map(event => event.id)).eq("sign_location_id", location.id);
       if (existingError) throw existingError;
-      const alreadyAdded = new Set((existingRows || []).map(row => row.event_id));
-      const rows = targets.filter(event => !alreadyAdded.has(event.id)).map(event => ({ company_id: companyId, event_id: event.id, sign_location_id: location.id, sequence: event.id === activeEvent.id ? eventSigns.length + 1 : 999, status: "PLANNED" }));
+      const alreadyAdded = new Set(asArray(existingRows).map(row => row.event_id));
+      const rows = asArray(targets).filter(event => !alreadyAdded.has(event.id)).map(event => ({ company_id: companyId, event_id: event.id, sign_location_id: location.id, sequence: event.id === activeEvent.id ? eventSigns.length + 1 : 999, status: "PLANNED" }));
       if (!rows.length) { setMessage("This sign location is already included in all dates for this property."); return; }
       const { data, error: insertError } = await supabase.from("dv_open_house_event_signs").insert(rows).select("*,location:dv_open_house_sign_locations(*)");
       if (insertError) throw insertError;
@@ -587,7 +598,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
         return { id: place.id || name + ":" + point.lat + ":" + point.lng, name, address: place.formattedAddress || name, ...point, distance: distanceKm(propertyPoint, point) };
       }).filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lng) && item.distance > .08 && item.distance <= 5)
         .filter(item => { if (seen.has(item.id)) return false; seen.add(item.id); return true; })
-        .filter(item => !locations.some(saved => distanceKm(item, { lat: Number(saved.latitude), lng: Number(saved.longitude) }) < .06))
+        .filter(item => !safeLocations.some(saved => distanceKm(item, { lat: Number(saved.latitude), lng: Number(saved.longitude) }) < .06))
         .slice(0, 10);
       setSuggestions(options);
       if (!options.length) setMessage("No new nearby suggestions. Check your saved sign locations or add a pin manually.");
@@ -608,13 +619,13 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
       }).select("*").single();
       if (insertError) throw insertError;
       setLocations(prev => [location, ...prev]);
-      setSuggestions(prev => prev.filter(x => x.id !== item.id));
+      setSuggestions(prev => asArray(prev).filter(x => x.id !== item.id));
       await attachLocation(location);
     } catch (e) { setError(errorText(e)); setSaving(false); }
   }
 
   function consecutiveEventIds(event) {
-    const sameProperty = events.filter(candidate =>
+    const sameProperty = safeEvents.filter(candidate =>
       candidate.company_id === event.company_id &&
       String(candidate.property_address || "").trim().toLowerCase() === String(event.property_address || "").trim().toLowerCase() &&
       (candidate.agent_id || null) === (event.agent_id || null)
@@ -662,7 +673,7 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     if (!window.confirm("Remove this sign from the open house plan? The saved location will remain in the shared location library.")) return;
     const { error: deleteError } = await supabase.from("dv_open_house_event_signs").delete().eq("id", item.id);
     if (deleteError) setError(errorText(deleteError));
-    else setEventSigns(prev => prev.filter(row => row.id !== item.id));
+    else setEventSigns(prev => asArray(prev).filter(row => row.id !== item.id));
   }
 
   async function uploadPhoto(item, file) {
@@ -761,8 +772,8 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     {showInventory && <section className="oh-inventory-panel">
       <div className="oh-section-head"><div><h3>Agent sign inventory</h3><p>Each agent owns their own signs. Transfers move ownership and update both agents’ totals. Lost and damaged signs are excluded from available stock.</p></div><button type="button" className="oh-secondary" onClick={loadSignInventory} disabled={inventoryLoading}><RefreshCw size={14}/> Refresh</button></div>
       {inventoryLoading ? <div className="oh-empty-list">Loading sign inventory…</div> : <>
-        {adminMode && <div className="oh-inventory-agent-list">{agents.map(agent => {
-          const row = inventoryRows.find(item => item.agent_id === agent.id);
+        {adminMode && <div className="oh-inventory-agent-list">{safeAgents.map(agent => {
+          const row = safeInventoryRows.find(item => item.agent_id === agent.id);
           const name = agent.name || [agent.first_name, agent.last_name].filter(Boolean).join(" ") || agent.email || "Agent";
           return <button type="button" key={agent.id} className={"oh-inventory-agent " + (inventoryAgentId === agent.id ? "selected" : "")} onClick={() => {
             setInventoryAgentId(agent.id);
@@ -784,13 +795,13 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
           <form className="oh-inventory-form oh-transfer-form" onSubmit={transferAgentSigns}>
             <div className="oh-inventory-form-title"><strong>Transfer signs to another agent</strong><span>Ownership moves from the selected agent to the recipient.</span></div>
             <div className="oh-inventory-fields">
-              <label>Recipient<select required value={transferForm.to_agent_id} onChange={e => setTransferForm(v => ({...v,to_agent_id:e.target.value}))}><option value="">Select agent</option>{agents.filter(agent => agent.id !== inventoryAgentId).map(agent => <option key={agent.id} value={agent.id}>{agent.name || [agent.first_name,agent.last_name].filter(Boolean).join(" ") || agent.email}</option>)}</select></label>
+              <label>Recipient<select required value={transferForm.to_agent_id} onChange={e => setTransferForm(v => ({...v,to_agent_id:e.target.value}))}><option value="">Select agent</option>{safeAgents.filter(agent => agent.id !== inventoryAgentId).map(agent => <option key={agent.id} value={agent.id}>{agent.name || [agent.first_name,agent.last_name].filter(Boolean).join(" ") || agent.email}</option>)}</select></label>
               <label>Number of signs<input type="number" min="1" step="1" required value={transferForm.quantity} onChange={e => setTransferForm(v => ({...v,quantity:e.target.value}))}/></label>
               <label>Transfer note<input value={transferForm.notes} onChange={e => setTransferForm(v => ({...v,notes:e.target.value}))} placeholder="Optional"/></label>
             </div>
             <div className="oh-card-actions"><button type="submit" className="oh-primary" disabled={saving}>{saving ? "Transferring…" : "Record transfer"}</button></div>
           </form>
-          <div className="oh-transfer-history"><strong>Recent transfers</strong>{inventoryTransfers.length ? inventoryTransfers.map(item => <div key={item.id}><span>{item.from_agent?.name || [item.from_agent?.first_name,item.from_agent?.last_name].filter(Boolean).join(" ") || "Agent"} → {item.to_agent?.name || [item.to_agent?.first_name,item.to_agent?.last_name].filter(Boolean).join(" ") || "Agent"}</span><b>{item.quantity} signs</b><small>{new Date(item.created_at).toLocaleDateString("en-CA")}{item.notes ? " · "+item.notes : ""}</small></div>) : <p>No transfers recorded yet.</p>}</div>
+          <div className="oh-transfer-history"><strong>Recent transfers</strong>{safeInventoryTransfers.length ? safeInventoryTransfers.map(item => <div key={item.id}><span>{item.from_agent?.name || [item.from_agent?.first_name,item.from_agent?.last_name].filter(Boolean).join(" ") || "Agent"} → {item.to_agent?.name || [item.to_agent?.first_name,item.to_agent?.last_name].filter(Boolean).join(" ") || "Agent"}</span><b>{item.quantity} signs</b><small>{new Date(item.created_at).toLocaleDateString("en-CA")}{item.notes ? " · "+item.notes : ""}</small></div>) : <p>No transfers recorded yet.</p>}</div>
         </>}
       </>}
     </section>}
@@ -833,11 +844,11 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
           </div>
           <div className="oh-map-actions"><span><i className="oh-legend-property"/> Property</span><span><i className="oh-legend-planned"/> Planned sign</span><span><i className="oh-legend-installed"/> Installed sign</span><button className="oh-secondary" onClick={drawRoute} disabled={!eventSigns.length || routeBusy}><Route size={15}/>{routeBusy ? "Drawing…" : "Show route on map"}</button></div>
           {pendingPoint && <div className="oh-pending-card"><div className="oh-pending-head"><div><strong>New sign location</strong><small>{pendingPoint.address}</small></div><button className="oh-icon-btn" onClick={() => setPendingPoint(null)}><X size={16}/></button></div><div className="oh-form-grid"><label>Sign label<input value={pointForm.label} onChange={e => setPointForm(p => ({ ...p, label: e.target.value }))}/></label><label>Direction / traffic flow<input value={pointForm.direction} onChange={e => setPointForm(p => ({ ...p, direction: e.target.value }))} placeholder="e.g. Facing westbound traffic"/></label><label className="full">Notes<textarea value={pointForm.notes} onChange={e => setPointForm(p => ({ ...p, notes: e.target.value }))} placeholder="Landmark, safe placement note, side of street…"/></label></div><div className="oh-card-actions"><button className="oh-secondary" onClick={() => setPendingPoint(null)}>Cancel</button><button className="oh-primary" onClick={savePendingPoint} disabled={saving}><Plus size={15}/> Save location & add to plan</button></div></div>}
-          {selectedTab === "plan" && <div className="oh-sign-list"><div className="oh-section-head"><div><h3>Directional sign checklist</h3><p>Update each sign as you install it and collect it after the open house.</p></div><span>{eventSigns.filter(item => item.status === "INSTALLED").length} / {eventSigns.length} installed</span></div>
+          {selectedTab === "plan" && <div className="oh-sign-list"><div className="oh-section-head"><div><h3>Directional sign checklist</h3><p>Update each sign as you install it and collect it after the open house.</p></div><span>{safeEventSigns.filter(item => item.status === "INSTALLED").length} / {eventSigns.length} installed</span></div>
             {eventSigns.length ? eventSigns.map((item, index) => <div className="oh-sign-card" key={item.id}><div className="oh-number">{index + 1}</div><div className="oh-sign-details"><strong>{item.location.label || "Directional sign"}</strong><span>{item.location.address}</span>{item.location.direction && <small>{item.location.direction}</small>}{item.location.notes && <small>{item.location.notes}</small>}<div className="oh-sign-status"><span className={"oh-status " + item.status.toLowerCase()}>{statusLabel(item.status)}</span>{(item.photo_path || item.location.photo_path) && <button type="button" className="oh-view-photo" onClick={() => photoPreview?.signId === item.id ? setPhotoPreview(null) : openPhoto(item.photo_path || item.location.photo_path, item.location.label || "Directional sign", item.id)}><Camera size={14}/> {photoPreview?.signId === item.id ? "Hide photo" : "View uploaded photo"}</button>}</div>{photoPreview?.signId === item.id && <div className="oh-inline-photo">{photoPreview.loading ? <span>Loading uploaded photo…</span> : photoPreview.error ? <span className="oh-inline-photo-error">Photo could not be displayed: {photoPreview.error}</span> : <img src={photoPreview.url} alt={photoPreview.label} onError={() => setPhotoPreview(current => current?.signId === item.id ? { ...current, url: "", error: "The image could not be loaded. Please try again or upload the photo again." } : current)}/>}</div>}</div><div className="oh-sign-tools"><label className="oh-photo-btn" title="Take a photo or choose one from your phone"><Camera size={15}/><span>{item.photo_path || item.location.photo_path ? "Change photo" : "Add photo"}</span><input type="file" accept="image/*" capture="environment" aria-label="Take a photo or choose a sign photo" onChange={e => { const file = e.target.files?.[0]; if (file) uploadPhoto(item, file); e.target.value = ""; }} disabled={photoBusyId === item.id}/></label>{photoBusyId === item.id && <LoaderCircle className="oh-spin"/>}{item.status === "PLANNED" ? <button className="oh-small-primary" onClick={() => updateSignStatus(item, "INSTALLED")}>Installed</button> : item.status === "INSTALLED" ? <><button className="oh-small-success" onClick={() => updateSignStatus(item, "COLLECTED")}>Collected</button><button className="oh-small-muted" onClick={() => updateSignStatus(item, "LOST")}>Lost</button><button className="oh-small-muted" onClick={() => updateSignStatus(item, "DAMAGED")}>Damaged</button></> : (item.status === "LOST" || item.status === "DAMAGED") ? null : <button className="oh-small-muted" onClick={() => updateSignStatus(item, "PLANNED")}>Reset</button>}<button type="button" className="oh-remove-sign" title="Remove this sign from the current open house plan" onClick={() => removeSign(item)}><Trash2 size={15}/><span>Remove</span></button></div></div>) : <div className="oh-empty-list">No signs added yet. Tap the map, or reuse a saved location from the Saved nearby tab.</div>}
           </div>}
           {selectedTab === "saved" && <div className="oh-sign-list"><div className="oh-section-head"><div><h3>Saved locations near this property</h3><p>Locations within 5 km of the open house. These stay in the shared brokerage library.</p></div><span>{nearbyLocations.length} saved</span></div>{nearbyLocations.length ? nearbyLocations.map(location => <div className="oh-library-row" key={location.id}><div className="oh-library-pin"><MapPin size={17}/></div><div className="oh-library-copy"><strong>{location.label}</strong><span>{location.address}</span><small>{distanceKm(propertyPoint, { lat: Number(location.latitude), lng: Number(location.longitude) }).toFixed(1)} km from property{location.direction ? " · " + location.direction : ""}</small></div><button className="oh-small-primary" disabled={saving || eventSigns.some(item => item.sign_location_id === location.id)} onClick={() => attachLocation(location)}>{eventSigns.some(item => item.sign_location_id === location.id) ? "Added" : "Add to plan"}</button></div>) : <div className="oh-empty-list">No saved locations within 5 km yet. Add pins to build your shared sign library.</div>}</div>}
-          {selectedTab === "suggestions" && <div className="oh-sign-list"><div className="oh-section-head"><div><h3>Google Maps suggestions</h3><p>Review each suggestion before adding it. Google results may be nearby places rather than safe sign locations.</p></div><button className="oh-secondary" onClick={suggestIntersections} disabled={suggesting || !mapReady}><RefreshCw size={14}/> Refresh suggestions</button></div>{suggestions.length ? suggestions.map(item => <div className="oh-library-row" key={item.id}><div className="oh-library-pin"><MapPin size={17}/></div><div className="oh-library-copy"><strong>{item.name}</strong><span>{item.address}</span><small>{item.distance.toFixed(1)} km away · Check local sign rules and visibility before placing</small></div><button className="oh-small-primary" onClick={() => addSuggestion(item)} disabled={saving}>Add</button></div>) : <div className="oh-empty-list">No suggestions yet. Select “Suggest locations” to ask Google Maps for nearby intersections.</div>}</div>}
+          {selectedTab === "suggestions" && <div className="oh-sign-list"><div className="oh-section-head"><div><h3>Google Maps suggestions</h3><p>Review each suggestion before adding it. Google results may be nearby places rather than safe sign locations.</p></div><button className="oh-secondary" onClick={suggestIntersections} disabled={suggesting || !mapReady}><RefreshCw size={14}/> Refresh suggestions</button></div>{suggestions.length ? safeSuggestions.map(item => <div className="oh-library-row" key={item.id}><div className="oh-library-pin"><MapPin size={17}/></div><div className="oh-library-copy"><strong>{item.name}</strong><span>{item.address}</span><small>{item.distance.toFixed(1)} km away · Check local sign rules and visibility before placing</small></div><button className="oh-small-primary" onClick={() => addSuggestion(item)} disabled={saving}>Add</button></div>) : <div className="oh-empty-list">No suggestions yet. Select “Suggest locations” to ask Google Maps for nearby intersections.</div>}</div>}
         </> : <div className="oh-no-event"><MapPinned size={42}/><h2>Plan your first open house</h2><p>Enter a property address to map the route and save directional sign locations for future use.</p><button className="oh-primary" onClick={() => setShowNewEvent(true)}><Plus size={16}/> Create open house</button></div>}
       </section>
     </div>}
