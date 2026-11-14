@@ -1556,17 +1556,20 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
   if(!supabase||!canIssue)return;
   setLoading(true);setError("");
   try{
-   const [{data:commissions,error:ce},{data:transactions,error:te},{data:cheques,error:che},{data:items,error:ie},{data:bankAccounts,error:be},{data:agentRows,error:ae}]=await Promise.all([
+   const [{data:commissions,error:ce},{data:transactions,error:te},{data:cheques,error:che},{data:items,error:ie},{data:batches,error:bae},{data:bankAccounts,error:be},{data:agentRows,error:ae}]=await Promise.all([
     supabase.from("dv_accounting_commissions").select("id,transaction_id,agent_id,gross_commission,brokerage_share,agent_share,status").eq("status","PAID"),
     supabase.from("dv_accounting_transactions").select("id,company_id,transaction_number,property_address,status").limit(5000),
     supabase.from("dv_accounting_commission_cheques").select("id,commission_id,brokerage_hst_amount,status,issued_at,created_at").eq("status","ISSUED").order("issued_at",{ascending:false}),
-    supabase.from("dv_accounting_brokerage_payment_items").select("commission_id"),
+    supabase.from("dv_accounting_brokerage_payment_items").select("commission_id,batch_id"),
+    supabase.from("dv_accounting_brokerage_payment_batches").select("id,status"),
     supabase.from("dv_accounting_bank_accounts").select("id,company_id,name,account_type,active").eq("active",true),
     supabase.from("dv_accounting_agents").select("id,name,first_name,last_name")
    ]);
-   const failure=ce||te||che||ie||be||ae;if(failure)throw failure;
+   const failure=ce||te||che||ie||bae||be||ae;if(failure)throw failure;
    const txMap=new Map((transactions||[]).map(x=>[x.id,x])),agentMap=new Map((agentRows||[]).map(x=>[x.id,x]));
-   const paidIds=new Set((items||[]).map(x=>String(x.commission_id))),chequeMap=new Map();
+   const batchStatusMap=new Map((batches||[]).map(x=>[String(x.id),String(x.status||"").toUpperCase()]));
+   // Keep voided batches for audit, but allow their trades to be paid again.
+   const paidIds=new Set((items||[]).filter(x=>batchStatusMap.get(String(x.batch_id))!=="VOIDED").map(x=>String(x.commission_id))),chequeMap=new Map();
    for(const ch of cheques||[])if(!chequeMap.has(ch.commission_id))chequeMap.set(ch.commission_id,ch);
    const txIds=[...new Set((commissions||[]).map(x=>x.transaction_id).filter(Boolean))];
    let liabilityRows=[];
