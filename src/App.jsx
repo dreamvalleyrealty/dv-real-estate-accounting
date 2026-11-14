@@ -1605,6 +1605,23 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
   finally{setLoading(false);}
  };
  useEffect(()=>{if(canIssue&&open)load()},[canIssue,open]);
+ const toggle=(id,checked)=>setSelected(old=>checked?[...new Set([...old,id])]:old.filter(x=>x!==id));
+ const total=Math.round(rows.filter(x=>selected.includes(x.id)).reduce((sum,x)=>sum+Number(x.total_amount||0),0)*100)/100;
+ const issue=async()=>{
+  if(!supabase||!selected.length||!operatingAccountId||!paymentReference.trim())return;
+  setSaving(true);setError("");
+  try{
+   const {data,error:rpcError}=await supabase.rpc("dv_accounting_issue_brokerage_bulk_payment",{
+    p_commission_ids:selected,p_operating_account_id:operatingAccountId,
+    p_payment_reference:paymentReference.trim(),p_payment_date:paymentDate
+   });
+   if(rpcError)throw rpcError;
+   if(!data?.ok)throw new Error(data?.message||"The brokerage payment was not posted.");
+   setLastBatch(data);setSelected([]);setPaymentReference("");
+   await load();if(onIssued)onIssued(data);
+  }catch(e){setError(e?.message||"Could not post the combined brokerage payment.");}
+  finally{setSaving(false);}
+ };
  const printReceipt=()=>{
   if(!lastBatch)return;
   const win=window.open("","_blank","width=1000,height=800");if(!win){setError("Please allow pop-ups to print the brokerage payment statement.");return;}
