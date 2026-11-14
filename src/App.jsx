@@ -1547,7 +1547,6 @@ function PaidCommissionCorrections({commissions=[],transactions=[],agents=[],can
 }
 
 
-
 function BrokerageBulkPayment({canIssue=false,onIssued}) {
  const [open,setOpen]=useState(false),[loading,setLoading]=useState(false),[saving,setSaving]=useState(false),[error,setError]=useState("");
  const [rows,setRows]=useState([]),[operatingAccounts,setOperatingAccounts]=useState([]);
@@ -1567,7 +1566,7 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
    ]);
    const failure=ce||te||che||ie||be||ae;if(failure)throw failure;
    const txMap=new Map((transactions||[]).map(x=>[x.id,x])),agentMap=new Map((agentRows||[]).map(x=>[x.id,x]));
-   const paidIds=new Set((items||[]).map(x=>x.commission_id)),chequeMap=new Map();
+   const paidIds=new Set((items||[]).map(x=>String(x.commission_id))),chequeMap=new Map();
    for(const ch of cheques||[])if(!chequeMap.has(ch.commission_id))chequeMap.set(ch.commission_id,ch);
    const txIds=[...new Set((commissions||[]).map(x=>x.transaction_id).filter(Boolean))];
    let liabilityRows=[];
@@ -1584,7 +1583,7 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
     const delta=String(x.direction||"").toUpperCase()==="RECEIVABLE"?Number(x.amount||0):-Number(x.amount||0);
     remainingByTransaction.set(id,Math.round(((remainingByTransaction.get(id)||0)+delta)*100)/100);
    });
-   const list=(commissions||[]).filter(c=>!paidIds.has(c.id)&&chequeMap.has(c.id)).map(c=>{
+   const list=(commissions||[]).filter(c=>!paidIds.has(String(c.id))&&chequeMap.has(c.id)).map(c=>{
     const tx=txMap.get(c.transaction_id),ch=chequeMap.get(c.id),remaining=Number(remainingByTransaction.get(String(c.transaction_id))||0);
     const hst=Math.round(Number(ch.brokerage_hst_amount||0)*100)/100;
     const brokerage=Math.round(Number(c.brokerage_share||0)*100)/100;
@@ -1593,7 +1592,8 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
     return {...c,transaction:tx,cheque:ch,agent_name:ag?.name||[ag?.first_name,ag?.last_name].filter(Boolean).join(" ")||"—",
      brokerage_amount:brokerage,brokerage_hst_amount:hst,total_amount:expectedTotal,remaining_trust_balance:Math.round(remaining*100)/100};
    }).filter(x=>x.transaction&&["CLOSED","PAID"].includes(String(x.transaction.status||"").toUpperCase())
-     &&x.total_amount>0.005&&x.brokerage_amount>=0&&x.brokerage_hst_amount<=x.total_amount&&x.remaining_trust_balance+0.005>=x.total_amount)
+     &&x.total_amount>0.005&&x.brokerage_amount>=0&&x.brokerage_hst_amount<=x.total_amount
+     &&x.remaining_trust_balance+0.005>=x.total_amount)
      .sort((a,b)=>String(b.transaction.transaction_number||"").localeCompare(String(a.transaction.transaction_number||"")));
    setRows(list);setSelected(old=>old.filter(id=>list.some(x=>x.id===id)));
    const ops=(bankAccounts||[]).filter(x=>x.account_type==="OPERATING");
@@ -1602,22 +1602,6 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
   finally{setLoading(false);}
  };
  useEffect(()=>{if(canIssue&&open)load()},[canIssue,open]);
- const chosen=rows.filter(x=>selected.includes(x.id));
- const total=chosen.reduce((sum,x)=>sum+x.total_amount,0);
- const toggle=(id,checked)=>setSelected(old=>checked?[...old,id]:old.filter(x=>x!==id));
- const issue=async()=>{
-  if(!selected.length||!operatingAccountId||!paymentReference.trim()||!paymentDate){setError("Select trades, an Operating account, payment date and reference.");return;}
-  if(!window.confirm("Post one combined brokerage payment for "+selected.length+" trades totaling "+money(total)+"? This will create Commission Trust disbursements and one Operating account deposit. This action cannot be undone from this screen."))return;
-  setSaving(true);setError("");
-  try{
-   const {data,error:e}=await supabase.rpc("dv_accounting_issue_brokerage_bulk_payment",{
-    p_commission_ids:selected,p_operating_account_id:operatingAccountId,p_payment_reference:paymentReference.trim(),p_payment_date:paymentDate
-   });
-   if(e)throw e;
-   if(!data?.ok)throw new Error("The database did not confirm the brokerage payment.");
-   setLastBatch(data);setSelected([]);await load();await onIssued?.();
-  }catch(e){setError(e?.message||"Could not post the brokerage bulk payment.");}
-  finally{setSaving(false);}
  };
  const printReceipt=()=>{
   if(!lastBatch)return;
