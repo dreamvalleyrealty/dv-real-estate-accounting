@@ -1560,7 +1560,7 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
    const [{data:commissions,error:ce},{data:transactions,error:te},{data:cheques,error:che},{data:items,error:ie},{data:bankAccounts,error:be},{data:agentRows,error:ae}]=await Promise.all([
     supabase.from("dv_accounting_commissions").select("id,transaction_id,agent_id,gross_commission,brokerage_share,agent_share,status").eq("status","PAID"),
     supabase.from("dv_accounting_transactions").select("id,company_id,transaction_number,property_address,status").limit(5000),
-    supabase.from("dv_accounting_commission_cheques").select("id,commission_id,brokerage_hst_amount,status,issued_at,created_at").eq("status","ISSUED").order("issued_at",{ascending:false}),
+    supabase.from("dv_accounting_commission_cheques").select("id,commission_id,brokerage_hst_amount,agent_share,status,issued_at,created_at").eq("status","ISSUED").order("issued_at",{ascending:false}),
     supabase.from("dv_accounting_brokerage_payment_items").select("commission_id"),
     supabase.from("dv_accounting_bank_accounts").select("id,company_id,name,account_type,active").eq("active",true),
     supabase.from("dv_accounting_agents").select("id,name,first_name,last_name")
@@ -1587,7 +1587,8 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
    const list=(commissions||[]).filter(c=>!paidIds.has(String(c.id))&&chequeMap.has(c.id)).map(c=>{
     const tx=txMap.get(c.transaction_id),ch=chequeMap.get(c.id),remaining=Number(remainingByTransaction.get(String(c.transaction_id))||0);
     const hst=Math.round(Number(ch.brokerage_hst_amount||0)*100)/100;
-    const brokerage=Math.round(Number(c.brokerage_share||0)*100)/100;
+    const recordedAgentShare=Math.round(Number(ch.agent_share??c.agent_share??0)*100)/100;
+    const brokerage=Math.round(Math.max(0,Number(c.gross_commission||0)-recordedAgentShare)*100)/100;
     const expectedTotal=Math.round((brokerage+hst)*100)/100;
     const ag=agentMap.get(c.agent_id);
     return {...c,transaction:tx,cheque:ch,agent_name:ag?.name||[ag?.first_name,ag?.last_name].filter(Boolean).join(" ")||"—",
