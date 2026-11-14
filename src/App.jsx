@@ -1548,6 +1548,7 @@ function PaidCommissionCorrections({commissions=[],transactions=[],agents=[],can
 
 
 function BrokerageBulkPayment({canIssue=false,onIssued}) {
+function BrokerageBulkPayment({canIssue=false,onIssued}) {
  const [open,setOpen]=useState(false),[loading,setLoading]=useState(false),[saving,setSaving]=useState(false),[error,setError]=useState("");
  const [rows,setRows]=useState([]),[operatingAccounts,setOperatingAccounts]=useState([]);
  const [selected,setSelected]=useState([]),[paymentReference,setPaymentReference]=useState(""),[paymentDate,setPaymentDate]=useState(today());
@@ -1602,7 +1603,7 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
   finally{setLoading(false);}
  };
  useEffect(()=>{if(canIssue&&open)load()},[canIssue,open]);
- };
+ const chosen=rows.filter(x=>selected.includes(x.id));
  const printReceipt=()=>{
   if(!lastBatch)return;
   const win=window.open("","_blank","width=1000,height=800");if(!win){setError("Please allow pop-ups to print the brokerage payment statement.");return;}
