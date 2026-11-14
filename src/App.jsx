@@ -1605,7 +1605,6 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
   finally{setLoading(false);}
  };
  useEffect(()=>{if(canIssue&&open)load()},[canIssue,open]);
- };
  const printReceipt=()=>{
   if(!lastBatch)return;
   const win=window.open("","_blank","width=1000,height=800");if(!win){setError("Please allow pop-ups to print the brokerage payment statement.");return;}
