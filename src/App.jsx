@@ -1633,7 +1633,6 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
    <p className="muted" style={{marginTop:10}}>The system calculates each trade from its remaining Commission Trust ledger balance after previous agent and brokerage disbursements, then checks the available bank balance before committing. If any selected trade fails validation, the entire batch is rolled back.</p>
   </>}
  </section>;
-}
 
 function CommissionPaymentDialog({commission,transaction,agent,cheques,commissionHistory=[],transactions=[],commissions=[],trustTransactions=[],sellerSettlement=null,charges=[],chargePayments=[],transactionAgents=[],existingCheque=null,canAuthorizePaperwork=false,onClose,onIssued}){
  const[method,setMethod]=useState(existingCheque?.payment_method||""),[reference,setReference]=useState(existingCheque?.payment_reference||existingCheque?.cheque_number||""),[payDate,setPayDate]=useState(existingCheque?.cheque_date||today()),[deductAgentCharges,setDeductAgentCharges]=useState(true),[busy,setBusy]=useState(false),[issued,setIssued]=useState(existingCheque),[editingIssued,setEditingIssued]=useState(false),[error,setError]=useState("");
