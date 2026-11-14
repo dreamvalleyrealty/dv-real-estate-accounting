@@ -1548,7 +1548,6 @@ function PaidCommissionCorrections({commissions=[],transactions=[],agents=[],can
 
 
 function BrokerageBulkPayment({canIssue=false,onIssued}) {
-function BrokerageBulkPayment({canIssue=false,onIssued}) {
  const [open,setOpen]=useState(false),[loading,setLoading]=useState(false),[saving,setSaving]=useState(false),[error,setError]=useState("");
  const [rows,setRows]=useState([]),[operatingAccounts,setOperatingAccounts]=useState([]);
  const [selected,setSelected]=useState([]),[paymentReference,setPaymentReference]=useState(""),[paymentDate,setPaymentDate]=useState(today());
@@ -1605,17 +1604,33 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
  };
  useEffect(()=>{if(canIssue&&open)load()},[canIssue,open]);
  const chosen=rows.filter(x=>selected.includes(x.id));
+ const total=chosen.reduce((sum,x)=>sum+x.total_amount,0);
+ const toggle=(id,checked)=>setSelected(old=>checked?[...old,id]:old.filter(x=>x!==id));
+ const issue=async()=>{
+  if(!selected.length||!operatingAccountId||!paymentReference.trim()||!paymentDate){setError("Select trades, an Operating account, payment date and reference.");return;}
+  if(!window.confirm("Post one combined brokerage payment for "+selected.length+" trades totaling "+money(total)+"? This will create Commission Trust disbursements and one Operating account deposit. This action cannot be undone from this screen."))return;
+  setSaving(true);setError("");
+  try{
+   const {data,error:e}=await supabase.rpc("dv_accounting_issue_brokerage_bulk_payment",{
+    p_commission_ids:selected,p_operating_account_id:operatingAccountId,p_payment_reference:paymentReference.trim(),p_payment_date:paymentDate
+   });
+   if(e)throw e;
+   if(!data?.ok)throw new Error("The database did not confirm the brokerage payment.");
+   setLastBatch(data);setSelected([]);await load();await onIssued?.();
+  }catch(e){setError(e?.message||"Could not post the brokerage bulk payment.");}
+  finally{setSaving(false);}
+ };
  const printReceipt=()=>{
   if(!lastBatch)return;
   const win=window.open("","_blank","width=1000,height=800");if(!win){setError("Please allow pop-ups to print the brokerage payment statement.");return;}
   const safe=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  const lines=(lastBatch.items||[]).map(x=>"<tr><td>"+safe(x.transaction_number)+"</td><td class='num'>"+money(x.brokerage_amount)+"</td><td class='num'>"+money(x.brokerage_hst_amount)+"</td><td class='num'>"+money(x.total_amount)+"</td></tr>").join("");
-  win.document.write("<!doctype html><html><head><title>Brokerage Bulk Payment</title><style>body{font:13px Arial;padding:28px;color:#17233c}h1{font-size:22px}table{border-collapse:collapse;width:100%;margin-top:24px}th,td{border-bottom:1px solid #ddd;padding:9px;text-align:left}.num{text-align:right}.total{text-align:right;font-size:18px;font-weight:bold;margin-top:20px}@media print{button{display:none}}</style></head><body><h1>Dream Valley Realty Inc.</h1><h2>Brokerage Payment Statement</h2><p>Reference: "+safe(lastBatch.payment_reference)+"<br>Date: "+safe(lastBatch.payment_date)+"<br>Trades: "+safe(lastBatch.trade_count)+"</p><table><thead><tr><th>Trade #</th><th class='num'>Brokerage Share</th><th class='num'>Brokerage HST</th><th class='num'>Total</th></tr></thead><tbody>"+lines+"</tbody></table><p class='total'>Total paid: "+money(lastBatch.total_amount)+"</p><button onclick='window.print()'>Print / Save PDF</button></body></html>");
+  const receiptLines=(lastBatch.items||[]).map(x=>"<tr><td>"+safe(x.transaction_number)+"</td><td class='num'>"+money(x.brokerage_amount)+"</td><td class='num'>"+money(x.brokerage_hst_amount)+"</td><td class='num'>"+money(x.total_amount)+"</td></tr>").join("");
+  win.document.write("<!doctype html><html><head><title>Brokerage Bulk Payment</title><style>body{font:13px Arial;padding:28px;color:#17233c}h1{font-size:22px}table{border-collapse:collapse;width:100%;margin-top:24px}th,td{border-bottom:1px solid #ddd;padding:9px;text-align:left}.num{text-align:right}.total{text-align:right;font-size:18px;font-weight:bold;margin-top:20px}@media print{button{display:none}}</style></head><body><h1>Dream Valley Realty Inc.</h1><h2>Brokerage Payment Statement</h2><p>Reference: "+safe(lastBatch.payment_reference)+"<br>Date: "+safe(lastBatch.payment_date)+"<br>Trades: "+safe(lastBatch.trade_count)+"</p><table><thead><tr><th>Trade #</th><th class='num'>Brokerage Share</th><th class='num'>Brokerage HST</th><th class='num'>Total</th></tr></thead><tbody>"+receiptLines+"</tbody></table><p class='total'>Total paid: "+money(lastBatch.total_amount)+"</p><button onclick='window.print()'>Print / Save PDF</button></body></html>");
   win.document.close();win.focus();
  };
  if(!canIssue)return null;
  return <section className="panel tablewrap" style={{marginTop:14}}>
-  <div className="paneltitle"><div><h2>Pay Brokerage — Multiple Trades</h2><p className="panelhint">Transfer each trade’s actual remaining Commission Trust balance, after agent payments and any previous brokerage transfers, into General Operating.</p></div><div className="actions"><button type="button" className="secondary" onClick={()=>setOpen(x=>!x)}>{open?"Hide":"Open Bulk Payment"}</button></div></div>
+  <div className="paneltitle"><div><h2>Pay Brokerage — Multiple Trades</h2><p className="panelhint">Transfer each trade’s recorded brokerage entitlement, plus brokerage HST, from its remaining Commission Trust balance into General Operating.</p></div><div className="actions"><button type="button" className="secondary" onClick={()=>setOpen(x=>!x)}>{open?"Hide":"Open Bulk Payment"}</button></div></div>
   {lastBatch&&<div className="notice" style={{marginBottom:12}}>Last payment posted: {lastBatch.trade_count} trades · {money(lastBatch.total_amount)} · Reference {lastBatch.payment_reference} <button type="button" className="textbutton" onClick={printReceipt}>Print statement</button></div>}
   {open&&<>
    <div className="actions" style={{justifyContent:"space-between",marginBottom:10}}><span className="muted">{rows.length} unpaid brokerage trade(s) available</span><button type="button" className="secondary" onClick={load} disabled={loading||saving}>Refresh list</button></div>
@@ -1630,10 +1645,10 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
     {!rows.length&&<tr><td colSpan="7"><div className="empty small"><p>{loading?"Loading eligible trades…":"No unpaid brokerage payments are currently eligible."}</p></div></td></tr>}
    </tbody></table></div>
    <div className="actions" style={{justifyContent:"space-between",marginTop:12}}><span><strong>{selected.length}</strong> selected · <strong>{money(total)}</strong> combined payment</span><button type="button" className="primary" disabled={saving||loading||!selected.length||!operatingAccountId||!paymentReference.trim()} onClick={issue}>{saving?"Posting payment…":"Post Combined Brokerage Payment"}</button></div>
-   <p className="muted" style={{marginTop:10}}>The system calculates each trade from its remaining Commission Trust ledger balance after previous agent and brokerage disbursements, then checks the available bank balance before committing. If any selected trade fails validation, the entire batch is rolled back.</p>
+   <p className="muted" style={{marginTop:10}}>The system verifies the selected brokerage entitlement against the remaining Commission Trust liability and bank balance before posting. If any selected trade fails validation, the entire batch is rolled back.</p>
   </>}
  </section>;
-
+}
 function CommissionPaymentDialog({commission,transaction,agent,cheques,commissionHistory=[],transactions=[],commissions=[],trustTransactions=[],sellerSettlement=null,charges=[],chargePayments=[],transactionAgents=[],existingCheque=null,canAuthorizePaperwork=false,onClose,onIssued}){
  const[method,setMethod]=useState(existingCheque?.payment_method||""),[reference,setReference]=useState(existingCheque?.payment_reference||existingCheque?.cheque_number||""),[payDate,setPayDate]=useState(existingCheque?.cheque_date||today()),[deductAgentCharges,setDeductAgentCharges]=useState(true),[busy,setBusy]=useState(false),[issued,setIssued]=useState(existingCheque),[editingIssued,setEditingIssued]=useState(false),[error,setError]=useState("");
  const [paperworkReview,setPaperworkReview]=useState({loading:false,submission:null,documents:[],missing:[],error:""}),[paperworkOverride,setPaperworkOverride]=useState(false),[paperworkOverrideReason,setPaperworkOverrideReason]=useState("");
