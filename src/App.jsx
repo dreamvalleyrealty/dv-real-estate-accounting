@@ -1587,12 +1587,13 @@ function BrokerageBulkPayment({canIssue=false,onIssued}) {
    const list=(commissions||[]).filter(c=>!paidIds.has(c.id)&&chequeMap.has(c.id)).map(c=>{
     const tx=txMap.get(c.transaction_id),ch=chequeMap.get(c.id),remaining=Number(remainingByTransaction.get(String(c.transaction_id))||0);
     const hst=Math.round(Number(ch.brokerage_hst_amount||0)*100)/100;
-    const brokerage=Math.round((remaining-hst)*100)/100;
+    const brokerage=Math.round(Number(c.brokerage_share||0)*100)/100;
+    const expectedTotal=Math.round((brokerage+hst)*100)/100;
     const ag=agentMap.get(c.agent_id);
     return {...c,transaction:tx,cheque:ch,agent_name:ag?.name||[ag?.first_name,ag?.last_name].filter(Boolean).join(" ")||"—",
-     brokerage_amount:brokerage,brokerage_hst_amount:hst,total_amount:Math.round(remaining*100)/100};
+     brokerage_amount:brokerage,brokerage_hst_amount:hst,total_amount:expectedTotal,remaining_trust_balance:Math.round(remaining*100)/100};
    }).filter(x=>x.transaction&&["CLOSED","PAID"].includes(String(x.transaction.status||"").toUpperCase())
-     &&x.total_amount>0.005&&x.brokerage_amount>=0&&x.brokerage_hst_amount<=x.total_amount)
+     &&x.total_amount>0.005&&x.brokerage_amount>=0&&x.brokerage_hst_amount<=x.total_amount&&x.remaining_trust_balance+0.005>=x.total_amount)
      .sort((a,b)=>String(b.transaction.transaction_number||"").localeCompare(String(a.transaction.transaction_number||"")));
    setRows(list);setSelected(old=>old.filter(id=>list.some(x=>x.id===id)));
    const ops=(bankAccounts||[]).filter(x=>x.account_type==="OPERATING");
