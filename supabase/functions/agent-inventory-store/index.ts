@@ -119,11 +119,20 @@ Deno.serve(async (req: Request) => {
     if (action !== "create_order") return json({ error: "Unknown action." }, 400);
     const lines = Array.isArray(body.items) ? body.items : [];
     if (!lines.length || lines.length > 30) return json({ error: "Your cart is empty or too large." }, 400);
+    const mergedQuantities = new Map<string, number>();
+    for (const line of lines) {
+      const itemId = String(line.item_id || "");
+      const quantity = Number(line.quantity);
+      if (!itemId || !Number.isInteger(quantity) || quantity <= 0) return json({ error: "Invalid order item or quantity." }, 400);
+      mergedQuantities.set(itemId, (mergedQuantities.get(itemId) || 0) + quantity);
+    }
+    const orderLines = Array.from(mergedQuantities, ([item_id, quantity]) => ({ item_id, quantity }));
+    if (orderLines.some(line => line.quantity > 100)) return json({ error: "Each product is limited to 100 units per order." }, 400);
     const method = body.payment_method === "INTERAC" ? "INTERAC" : "SQUARE";
     const branchId = body.branch_id || agent.branch_id || null;
     let subtotal = 0, hst = 0;
     const snapshots = [];
-    for (const line of lines) {
+    for (const line of orderLines) {
       const quantity = Number(line.quantity);
       if (!Number.isInteger(quantity) || quantity <= 0 || quantity > 100) return json({ error: "Order quantities must be whole numbers between 1 and 100." }, 400);
       const { data: item, error } = await db.from("dv_accounting_inventory_items").select("id,item_code,item_name,item_type,description,sale_price,pricing_tiers,tax_rate,is_active,stock_quantity,image_url").eq("id", line.item_id).single();
