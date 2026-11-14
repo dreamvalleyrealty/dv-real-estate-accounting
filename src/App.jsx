@@ -1847,12 +1847,12 @@ function Agents({user,mode="agents",permissions={},setActive,role}){
     termination_initiated_by:departureForm.termination_initiated_by,termination_notice_date:departureForm.notice_date,
     reco_transfer_status:departureForm.departure_type==="TRANSFERRED"?departureForm.reco_transfer_status:"NOT_REQUIRED",
     termination_notice_path:noticePath,departure_notes:departureForm.notes.trim()||null};
-   const{error:updateError}=await supabase.from("dv_accounting_agents").update(patch).eq("id",profileAgent.id);
-   if(updateError)throw updateError;
    if(profileAgent.user_id){
-    const{error:profileError}=await supabase.from("dv_accounting_user_profiles").update({active:false}).eq("user_id",profileAgent.user_id);
-    if(profileError)throw new Error("Agent record was updated, but login profile deactivation failed: "+profileError.message);
+    const{error:profileError}=await supabase.rpc("dv_accounting_set_user_active",{p_user_id:profileAgent.user_id,p_active:false});
+    if(profileError)throw new Error("Could not deactivate the agent login. The agent record has not yet been updated: "+profileError.message);
    }
+   const{error:updateError}=await supabase.from("dv_accounting_agents").update(patch).eq("id",profileAgent.id);
+   if(updateError)throw new Error("Login profile was deactivated, but the agent record update failed: "+updateError.message);
    const updated={...profileAgent,...patch};setProfileAgent(updated);a.setRows(rows=>rows.map(x=>x.id===updated.id?updated:x));await a.load();
    setAgentDepartureShow(false);setDepartureNoticeFile(null);
   }catch(err){setDepartureError(err?.message||"Could not save the agent departure.");}
