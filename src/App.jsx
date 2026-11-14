@@ -1828,6 +1828,8 @@ function Agents({user,mode="agents",permissions={},setActive,role}){
  async function submitAgentDeparture(e){
   e.preventDefault();if(!profileAgent||!supabase||!canDo("agents.edit"))return;
   if(!departureForm.effective_date||!departureForm.notice_date){setDepartureError("Enter both the effective date and the date written notice was received.");return}
+  const effective=new Date(departureForm.effective_date+"T00:00:00"),todayDate=new Date(today()+"T00:00:00"),earliest=new Date(todayDate);earliest.setDate(earliest.getDate()-30);
+  if(effective>todayDate||effective<earliest){setDepartureError("The effective date must be today or within the previous 30 days. Check RECO's current date limits before submitting the registration change.");return}
   if(departureForm.departure_type==="TRANSFERRED"&&!departureForm.new_brokerage_name.trim()){setDepartureError("Enter the name of the new brokerage.");return}
   if(!departureNoticeFile&&!profileAgent.termination_notice_path){setDepartureError("Upload the agent's written resignation / termination notice.");return}
   if(!window.confirm("Record this agent's departure, deactivate their Dream Valley access, and retain their financial history? This does not submit the transfer to RECO."))return;
