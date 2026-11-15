@@ -127,14 +127,13 @@ Deno.serve(async (req: Request) => {
       mergedQuantities.set(itemId, (mergedQuantities.get(itemId) || 0) + quantity);
     }
     const orderLines = Array.from(mergedQuantities, ([item_id, quantity]) => ({ item_id, quantity }));
-    if (orderLines.some(line => line.quantity > 100)) return json({ error: "Each product is limited to 100 units per order." }, 400);
     const method = body.payment_method === "INTERAC" ? "INTERAC" : "SQUARE";
     const branchId = body.branch_id || agent.branch_id || null;
     let subtotal = 0, hst = 0;
     const snapshots = [];
     for (const line of orderLines) {
       const quantity = Number(line.quantity);
-      if (!Number.isInteger(quantity) || quantity <= 0 || quantity > 100) return json({ error: "Order quantities must be whole numbers between 1 and 100." }, 400);
+      if (!Number.isInteger(quantity) || quantity <= 0) return json({ error: "Order quantities must be positive whole numbers." }, 400);
       const { data: item, error } = await db.from("dv_accounting_inventory_items").select("id,item_code,item_name,item_type,description,sale_price,pricing_tiers,tax_rate,is_active,stock_quantity,image_url").eq("id", line.item_id).single();
       if (error || !item || !item.is_active || !["SELLABLE","SERVICE","GIFT"].includes(item.item_type)) return json({ error: "A selected product is no longer available." }, 400);
       if (item.item_type !== "SERVICE") {
@@ -147,9 +146,10 @@ Deno.serve(async (req: Request) => {
       }
       const configuredTiers = Array.isArray(item.pricing_tiers) ? item.pricing_tiers : [];
       const tiers = configuredTiers.map((tier: any) => ({ min_quantity: Number(tier.min_quantity), unit_price: Number(tier.unit_price) })).sort((a: any, b: any) => a.min_quantity - b.min_quantity);
-      if (tiers.some((tier: any) => !Number.isInteger(tier.min_quantity) || tier.min_quantity < 1 || !Number.isFinite(tier.unit_price) || tier.unit_price < 0) || new Set(tiers.map((tier: any) => tier.min_quantity)).size !== tiers.length || (tiers.length > 0 && tiers[0].min_quantity !== 1)) return json({ error: item.item_name + " has invalid pricing tiers. Please contact the office." }, 409);
-      const qualifyingTier = tiers.filter((tier: any) => tier.min_quantity <= quantity).at(-1);
-      const price = Number(qualifyingTier?.unit_price ?? item.sale_price ?? 0), rate = Number(item.tax_rate || 0);
+      if (tiers.some((tier: any) => !Number.isInteger(tier.min_quantity) || tier.min_quantity < 1 || !Number.isFinite(tier.unit_price) || tier.unit_price < 0) || new Set(tiers.map((tier: any) => tier.min_quantity)).size !== tiers.length) return json({ error: item.item_name + " has invalid pricing tiers. Please contact the office." }, 409);
+      const selectedTier = tiers.find((tier: any) => tier.min_quantity === quantity);
+      if (tiers.length > 0 && !selectedTier) return json({ error: item.item_name + " can only be ordered in these quantities: " + tiers.map((tier: any) => tier.min_quantity).join(", ") + "." }, 400);
+      const price = Number(selectedTier?.unit_price ?? item.sale_price ?? 0), rate = Number(item.tax_rate || 0);
       const lineSubtotal = money(price * quantity), lineTax = money(lineSubtotal * rate / 100);
       subtotal += lineSubtotal; hst += lineTax;
       snapshots.push({ item_id: item.id, item_name: item.item_name, item_code: item.item_code, quantity, unit_price: price, tax_rate: rate, subtotal: lineSubtotal, hst_amount: lineTax, total_amount: money(lineSubtotal + lineTax) });
