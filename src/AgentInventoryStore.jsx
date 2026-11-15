@@ -4,7 +4,8 @@ import { ShoppingCart, Package, ClipboardList, RefreshCw, Plus, Minus, CreditCar
 
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
 const dateNow=()=>new Date().toISOString().slice(0,10);
-const itemTiers=item=>Array.isArray(item?.pricing_tiers)?item.pricing_tiers.filter(t=>Number.isInteger(Number(t.min_quantity))&&Number(t.min_quantity)>0&&Number.isFinite(Number(t.unit_price))).slice().sort((a,b)=>Number(a.min_quantity)-Number(b.min_quantity)):[];\nconst tierPrice=(item,quantity)=>{const tiers=itemTiers(item);const match=tiers.find(t=>Number(t.min_quantity)===Number(quantity));return Number(match?.unit_price??item?.sale_price??0)};
+const itemTiers=item=>Array.isArray(item?.pricing_tiers)?item.pricing_tiers.filter(t=>Number.isInteger(Number(t.min_quantity))&&Number(t.min_quantity)>0&&Number.isFinite(Number(t.unit_price))).slice().sort((a,b)=>Number(a.min_quantity)-Number(b.min_quantity)):[];
+const tierPrice=(item,quantity)=>{const tiers=itemTiers(item);const match=tiers.find(t=>Number(t.min_quantity)===Number(quantity));return Number(match?.unit_price??item?.sale_price??0)};
 const tierLabel=(item,quantity)=>{const match=itemTiers(item).find(t=>Number(t.min_quantity)===Number(quantity));return match?`Fixed order: ${match.min_quantity} units`:"Standard price"};
 const navy="#0f2141",gold="#9e8556";
 
