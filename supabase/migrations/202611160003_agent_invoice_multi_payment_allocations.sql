@@ -243,7 +243,7 @@ begin
   end if;
   v_result:=public.dv_record_agent_invoice_multi_payment(
     v_submission.agent_id,
-    v_submission.allocations,
+    (select jsonb_agg(jsonb_build_object('invoice_id',value->>'invoice_id','amount',value->>'amount','card_fee_amount',0,'card_fee_tax',0)) from jsonb_array_elements(v_submission.allocations)),
     'E-transfer',
     current_date,
     v_submission.reference_number,
