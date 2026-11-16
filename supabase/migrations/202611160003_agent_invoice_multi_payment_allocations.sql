@@ -133,3 +133,55 @@ $$;
 
 revoke all on function public.dv_record_agent_invoice_multi_payment(uuid,jsonb,text,date,text,text,text) from public, anon, authenticated;
 grant execute on function public.dv_record_agent_invoice_multi_payment(uuid,jsonb,text,date,text,text,text) to service_role;
+
+
+alter table public.dv_agent_invoice_refunds
+  add column if not exists invoice_id uuid references public.dv_agent_invoices(id) on delete restrict,
+  add column if not exists allocations jsonb not null default '[]'::jsonb;
+
+create table if not exists public.dv_agent_invoice_refund_allocations (
+  id uuid primary key default gen_random_uuid(),
+  refund_id uuid not null references public.dv_agent_invoice_refunds(id) on delete restrict,
+  payment_id uuid not null references public.dv_agent_invoice_payments(id) on delete restrict,
+  invoice_id uuid not null references public.dv_agent_invoices(id) on delete restrict,
+  amount numeric(14,2) not null check (amount > 0),
+  allocation_order integer not null,
+  created_at timestamptz not null default now(),
+  unique(refund_id,invoice_id)
+);
+create index if not exists idx_dv_invoice_refund_allocations_invoice
+  on public.dv_agent_invoice_refund_allocations(invoice_id);
+alter table public.dv_agent_invoice_refund_allocations enable row level security;
+revoke all on public.dv_agent_invoice_refund_allocations from anon, authenticated;
+
+create or replace function public.dv_agent_invoice_refresh_balance()
+returns trigger language plpgsql security definer set search_path=public as $$
+declare
+  v_invoice_id uuid;
+  v_total numeric(14,2);
+  v_paid numeric(14,2);
+  v_refunded numeric(14,2);
+  v_due date;
+begin
+  v_invoice_id:=case when tg_table_name='dv_agent_invoice_refunds' then coalesce(new.invoice_id,old.invoice_id) else coalesce(new.invoice_id,old.invoice_id) end;
+  select total_amount,due_date into v_total,v_due from public.dv_agent_invoices where id=v_invoice_id for update;
+  if not found then if tg_op='DELETE' then return old; else return new; end if; end if;
+  select coalesce(sum(amount),0) into v_paid from public.dv_agent_invoice_payments where invoice_id=v_invoice_id;
+  select coalesce(sum(ra.amount),0) into v_refunded
+    from public.dv_agent_invoice_refund_allocations ra
+    join public.dv_agent_invoice_refunds r on r.id=ra.refund_id
+    where ra.invoice_id=v_invoice_id and r.status='COMPLETED';
+  v_paid:=greatest(v_paid-v_refunded,0);
+  update public.dv_agent_invoices
+    set paid_amount=v_paid,balance_amount=greatest(v_total-v_paid,0),
+      status=case when v_paid>=v_total then 'Paid' when v_paid>0 then 'Partially Paid' when due_date is not null and due_date<current_date then 'Overdue' else 'Open' end,
+      updated_at=now()
+    where id=v_invoice_id;
+  if tg_op='DELETE' then return old; else return new; end if;
+end;
+$$;
+
+drop trigger if exists trg_dv_agent_invoice_refund_balance on public.dv_agent_invoice_refunds;
+create trigger trg_dv_agent_invoice_refund_balance
+  after update of status on public.dv_agent_invoice_refunds
+  for each row execute function public.dv_agent_invoice_refresh_balance();
