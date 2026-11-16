@@ -74,6 +74,7 @@ export default function PaperworkValidation({ user, agentId, adminMode = false, 
   }, [adminMode, agentId]);
 
   function resetValidation() { setFiles([]); setReports({ pre: null, post: null }); setConfirmations({}); setError(""); setMessage(""); }
+  useEffect(() => { if (!isActive) resetValidation(); }, [isActive]);
   function chooseTrade(id) { setTradeId(id); resetValidation(); }
 
   function addFiles(list) {
