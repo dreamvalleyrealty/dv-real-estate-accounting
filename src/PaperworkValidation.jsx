@@ -246,6 +246,7 @@ export default function PaperworkValidation({ isActive = true }) {
         setAiAudit({ loading: false, audit: null, error: aiError?.message || "AI review could not be completed." });
       }
     } catch (e) {
+      setAiAudit({ loading: false, audit: null, error: "" });
       setError(e?.message || "Paperwork validation failed.");
     } finally {
       setBusy(false);
