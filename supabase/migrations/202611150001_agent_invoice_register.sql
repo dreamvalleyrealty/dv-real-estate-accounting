@@ -28,8 +28,9 @@ declare v_next integer;
 begin
  insert into public.dv_agent_invoice_daily_sequences(invoice_day,last_number) values(p_day,1)
  on conflict(invoice_day) do update set last_number=public.dv_agent_invoice_daily_sequences.last_number+1
+ where public.dv_agent_invoice_daily_sequences.last_number<99
  returning last_number into v_next;
- if v_next>99 then raise exception 'Daily invoice number limit reached'; end if;
+ if v_next is null then raise exception 'Daily invoice number limit reached'; end if;
  return to_char(p_day,'YYYYMMDD')||lpad(v_next::text,2,'0');
 end; $$;
 create or replace function public.dv_agent_invoice_before_insert()
