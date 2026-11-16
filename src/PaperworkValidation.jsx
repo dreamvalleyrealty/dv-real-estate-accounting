@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { AlertCircle, FileCheck2, FileText, RefreshCw, Trash2, Upload } from "lucide-react";
 import { supabase } from "./lib/supabase";
 
-const TYPES = [["FORM","Form / Agreement"],["SCHEDULE","Schedule / Attachment"],["DISCLOSURE","Disclosure"],["ID","Identity Document"],["OTHER","Other"]];
 const isPdf = file => /pdf/i.test(file?.type || "") || /\\.pdf$/i.test(file?.name || "");
 const idFor = () => typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random();
 const hasValue = value => value !== undefined && value !== null && String(value).trim() !== "" && String(value).trim() !== "Off";
@@ -20,6 +19,7 @@ export default function PaperworkValidation({ isActive = true }) {
   const [libraryError, setLibraryError] = useState("");
   const [reports, setReports] = useState({ pre: null, post: null });
   const [signatureChecks, setSignatureChecks] = useState({});
+  const [showPostReview, setShowPostReview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -44,6 +44,7 @@ export default function PaperworkValidation({ isActive = true }) {
     setAnalyses({});
     setReports({ pre: null, post: null });
     setSignatureChecks({});
+    setShowPostReview(false);
     setError("");
     setMessage("");
   }
@@ -56,6 +57,7 @@ export default function PaperworkValidation({ isActive = true }) {
     setAnalyses({});
     setReports({ pre: null, post: null });
     setSignatureChecks({});
+    setShowPostReview(false);
     setError("");
     setMessage("");
   }
@@ -188,14 +190,16 @@ export default function PaperworkValidation({ isActive = true }) {
               warnings.push(result(code,fileName + " — " + location + ": visually check " + rule.label,"The reference library expects this item" + (rule.condition ? " when " + rule.condition : "") + ". The uploaded PDF does not expose a matching fillable field, so confirm it on the original form."));
             }
           });
-        } else if (libraryForms.length) {
-          warnings.push(result(item.id + "_reference",fileName + ": reference form not selected","Select the matching official form from the Document Library to apply its completion checklist."));
+        } else {
+          warnings.push(result(item.id + "_reference",fileName + ": official reference form not selected","No matching published reference form was selected. The system cannot confirm that all form-specific requirements have been checked."));
         }
       });
 
-      const report = { errors, warnings, passed, checkedDocuments: files.length, totalPages: Object.values(next).reduce((sum,pages) => sum + pages.length,0), canProceed: errors.length === 0 };
+      const status = errors.length ? "MISSING" : warnings.length ? "MANUAL_REVIEW" : "COMPLETE";
+      const report = { errors, warnings, passed, status, checkedDocuments: files.length, totalPages: Object.values(next).reduce((sum,pages) => sum + pages.length,0), canProceed: status === "COMPLETE" };
       setReports({ pre: report, post: null });
-      setMessage(errors.length ? "The form check found " + errors.length + " blocking issue(s)." : "The initial form check is complete. Review warnings and visually inspect all required sections.");
+      setShowPostReview(false);
+      setMessage(errors.length ? "Some required items are missing. Correct them and run the check again." : warnings.length ? "The automated check is finished. Please complete the manual reviews listed below." : "The automated checks passed.");
     } catch (e) {
       setError(e?.message || "Paperwork validation failed.");
     } finally {
@@ -228,7 +232,8 @@ export default function PaperworkValidation({ isActive = true }) {
         if (!reference) warnings.push(result(item.id + "_no_reference_post",item.file.name + ": no reference form selected","This post-signature review uses a page-by-page checklist because no library signature rules were selected."));
       }
     });
-    const report = { errors, warnings, passed, canProceed: errors.length === 0 };
+    const status = errors.length ? "MISSING" : warnings.length ? "MANUAL_REVIEW" : "COMPLETE";
+    const report = { errors, warnings, passed, status, canProceed: status === "COMPLETE" };
     setReports(current => ({ ...current, post: report }));
     setMessage(errors.length ? "Post-signature review is incomplete. Check the pages or signature fields listed below." : "You confirmed the required signature review for the uploaded forms.");
   }
@@ -238,82 +243,99 @@ export default function PaperworkValidation({ isActive = true }) {
     setAnalyses({});
     setReports({ pre: null, post: null });
     setSignatureChecks({});
+    setShowPostReview(false);
   }
 
   const resultSection = (heading,report) => report && (
-    <section style={{ border: "1px solid #d0d5dd", borderRadius: 8, padding: 14, marginBottom: 14 }}>
+    <section style={{ border: "1px solid #d0d5dd", borderRadius: 8, padding: 16, margin: "14px 0" }}>
       <h3 style={{ marginTop: 0 }}>{heading}</h3>
-      <strong style={{ color: report.canProceed ? "#167344" : "#b42318" }}>{report.canProceed ? "No blocking issues detected" : report.errors.length + " item(s) need attention"}</strong>
-      {report.checkedDocuments !== undefined && <div className="muted">Checked {report.checkedDocuments} document(s) across {report.totalPages} page(s).</div>}
-      {[[ "Errors",report.errors,"#b42318" ],[ "Warnings",report.warnings,"#946200" ],[ "Passed",report.passed,"#167344" ]].map(([label,items,color]) => items.length > 0 && (
-        <div key={label} style={{ marginTop: 10 }}><strong style={{ color }}>{label}</strong>{items.map(item => <div key={item.code} style={{ marginTop: 7, fontSize: 13 }}><b>{item.title}:</b> {item.detail}</div>)}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <strong style={{ color: report.status === "COMPLETE" ? "#167344" : report.status === "MISSING" ? "#b42318" : "#946200" }}>
+          {report.status === "COMPLETE" ? "Complete" : report.status === "MISSING" ? "Missing information" : "Manual review required"}
+        </strong>
+        {report.checkedDocuments !== undefined && <span className="muted">· {report.checkedDocuments} document(s), {report.totalPages} page(s)</span>}
+      </div>
+      {[[ "Missing information",report.errors,"#b42318" ],[ "Please review",report.warnings,"#946200" ],[ "Completed checks",report.passed,"#167344" ]].map(([label,items,color]) => items.length > 0 && (
+        <div key={label} style={{ marginTop: 12 }}><strong style={{ color }}>{label}</strong>{items.map(item => <div key={item.code} style={{ marginTop: 8, padding: "8px 10px", background: "#f8f9fb", borderRadius: 6, fontSize: 13 }}><b>{item.title}</b><div className="muted">{item.detail}</div></div>)}</div>
       ))}
     </section>
   );
 
-  return <div className="panel" style={{ maxWidth: 1180, margin: "0 auto" }}>
+  return <div className="panel" style={{ maxWidth: 980, margin: "0 auto" }}>
     <div className="paneltitle">
       <div><h2><FileCheck2 size={22} style={{ verticalAlign: "middle", marginRight: 8 }}/>Paperwork Validation</h2>
-        <p className="muted">Check that forms are completed before signing, then review signatures after signing. No trade selection is required.</p></div>
-      <button className="secondary" type="button" onClick={resetValidation}><RefreshCw size={15}/> Clear check</button>
+        <p className="muted">Check paperwork before signing. Review signatures after the documents are signed.</p></div>
+      <button className="secondary" type="button" onClick={resetValidation}><RefreshCw size={15}/> Start over</button>
     </div>
-    <div style={{ padding: 12, border: "1px solid #d6b979", borderRadius: 8, background: "#fffcf5", marginBottom: 16 }}>
-      <strong>Temporary review only</strong>
-      <div className="muted">Completed paperwork and results stay in this browser session. They are not uploaded, saved, or attached to a trade. Only official blank reference forms and their rules are stored in the Document Library.</div>
+    <div style={{ padding: 12, border: "1px solid #d6b979", borderRadius: 8, background: "#fffcf5", marginBottom: 20 }}>
+      <strong>Private temporary review</strong>
+      <div className="muted">Your uploaded paperwork and results stay in this browser session. They are not saved or attached to a trade. Only official blank forms and their rules are stored in Document Library.</div>
     </div>
     {error && <div className="error" role="alert">{error}</div>}
     {message && <div className="notice" role="status">{message}</div>}
-    <h3>1. Upload the paperwork package</h3>
-    <p className="muted">Upload multiple PDF forms or scanned page images together. Select the matching official form for each document so the correct completion rules can be applied.</p>
-    {libraryError && <p className="muted">The reference library could not be loaded: {libraryError}</p>}
-    {!libraryForms.length && !libraryError && <p className="muted">No published reference forms are available yet. An administrator can add them in Document Library.</p>}
-    <label className="secondary" style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 12 }}>
-      <Upload size={16}/> Select multiple files
-      <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff" style={{ display: "none" }} onChange={event => { addFiles(event.target.files); event.target.value = ""; }}/>
-    </label>
-    {files.length > 0 && <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
-      {files.map(item => <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(170px,260px) minmax(150px,220px) auto", alignItems: "center", gap: 8, border: "1px solid #e4e7ec", borderRadius: 8, padding: 8 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, overflowWrap: "anywhere" }}><FileText size={16}/>{item.file.name}</span>
-        <select aria-label="Document category" value={item.type} onChange={e => setFileValue(item.id,{type:e.target.value})}>{TYPES.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
-        <select aria-label="Reference form" value={item.referenceId} onChange={e => setFileValue(item.id,{referenceId:e.target.value})}>
-          <option value="">Select reference form…</option>
-          {libraryForms.map(form => <option key={form.id} value={form.id}>{form.document_name} · v{form.version}</option>)}
-        </select>
-        <button type="button" className="textbutton" aria-label={"Remove " + item.file.name} onClick={() => { setFiles(current => current.filter(file => file.id !== item.id)); setAnalyses({}); setReports({ pre: null, post: null }); }}><Trash2 size={16}/></button>
-      </div>)}
-    </div>}
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
-      <button className="primary" type="button" disabled={busy || !files.length} onClick={runPreCheck}>{busy ? "Checking forms…" : "Check Form Completion"}</button>
-      <button className="secondary" type="button" disabled={busy || !Object.keys(analyses).length} onClick={runPostCheck}>Run Post-Signature Check</button>
-    </div>
-    {resultSection("Pre-signature form completion results",reports.pre)}
-    {resultSection("Post-signature review results",reports.post)}
-    {Object.keys(analyses).length > 0 && <section style={{ border: "1px solid #e4e7ec", borderRadius: 8, padding: 14, marginBottom: 14 }}>
-      <h3 style={{ marginTop: 0 }}>2. Review signatures after signing</h3>
-      <p className="muted">Open each original page and confirm the required signatures, initials and dates are visibly present. The system can detect blank digital signature fields, but it cannot authenticate handwritten signatures or reliably detect ink signatures in flattened scans.</p>
-      {files.map(item => {
-        const pages = analyses[item.id] || [];
-        const reference = libraryForms.find(form => form.id === item.referenceId);
-        const rules = postSignatureRules(reference?.validation_rules);
-        return <div key={item.id} style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #e4e7ec" }}>
-          <strong>{item.file.name}</strong>
-          {rules.length ? rules.map((rule,index) => {
-            const key = "rule:" + item.id + ":" + (rule.id || index);
-            const kind = rule.kind === "INITIAL" ? "initials" : rule.kind === "DATE" ? "signing date" : "signature";
-            return <label key={key} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 8 }}>
-              <input type="checkbox" checked={signatureChecks[key] === true} onChange={e => setSignatureChecks(current => ({ ...current, [key]: e.target.checked }))}/>
-              <span>Page {rule.page}: I confirmed the required {kind} for {rule.label} is present.</span>
-            </label>;
-          }) : pages.map(page => {
-            const key = item.id + ":" + page.pageNumber;
-            return <label key={key} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 8 }}>
-              <input type="checkbox" checked={signatureChecks[key] === true} onChange={e => setSignatureChecks(current => ({ ...current, [key]: e.target.checked }))}/>
-              <span>Page {page.pageNumber}: I checked that all required signatures, initials and dates are present.</span>
-            </label>;
-          })}
-        </div>;
-      })}
+
+    <section style={{ border: "1px solid #e4e7ec", borderRadius: 10, padding: 16, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+        <span style={{ background: "#0f2141", color: "#fff", borderRadius: 20, width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>1</span>
+        <h3 style={{ margin: 0 }}>Upload documents</h3>
+      </div>
+      <p className="muted">Upload all the forms in the package together. Match each document to its official reference form when one is available.</p>
+      {libraryError && <p className="error">The reference library could not be loaded: {libraryError}</p>}
+      {!libraryForms.length && !libraryError && <div className="muted" style={{ padding: 10, background: "#f8f9fb", borderRadius: 6, marginBottom: 12 }}>No official reference forms are published yet. An administrator must add them in Document Library before automatic form-specific checks are available.</div>}
+      <label className="secondary" style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 12 }}>
+        <Upload size={16}/> Choose files
+        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff" style={{ display: "none" }} onChange={event => { addFiles(event.target.files); event.target.value = ""; }}/>
+      </label>
+      {files.length > 0 && <div style={{ display: "grid", gap: 8, marginBottom: 14 }}>
+        {files.map(item => <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(190px,280px) auto", alignItems: "center", gap: 10, border: "1px solid #e4e7ec", borderRadius: 8, padding: 10 }}>
+          <span title={item.file.name} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}><FileText size={18}/><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.file.name}</span></span>
+          <select aria-label={"Official reference for " + item.file.name} value={item.referenceId} onChange={e => setFileValue(item.id,{referenceId:e.target.value})} style={{ minWidth: 0 }}>
+            <option value="">Choose matching reference form…</option>
+            {libraryForms.map(form => <option key={form.id} value={form.id}>{form.document_name} · v{form.version}</option>)}
+          </select>
+          <button type="button" className="textbutton" aria-label={"Remove " + item.file.name} onClick={() => { setFiles(current => current.filter(file => file.id !== item.id)); setAnalyses({}); setReports({ pre: null, post: null }); setShowPostReview(false); }}><Trash2 size={16}/></button>
+        </div>)}
+        <button className="primary" type="button" disabled={busy || !files.length} onClick={runPreCheck}>{busy ? "Checking documents…" : "Check form completion"}</button>
+      </div>}
+    </section>
+
+    {resultSection("2. Form completion results",reports.pre)}
+    {reports.pre && <section style={{ border: "1px solid #e4e7ec", borderRadius: 10, padding: 16, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+        <span style={{ background: "#0f2141", color: "#fff", borderRadius: 20, width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>3</span>
+        <h3 style={{ margin: 0 }}>Review signatures after signing</h3>
+      </div>
+      <p className="muted">When the documents have been signed, open this review and check the required signatures, initials and dates. Handwritten signatures must be visually checked by a person.</p>
+      {!showPostReview ? <button className="secondary" type="button" onClick={() => { setShowPostReview(true); setReports(current => ({ ...current, post: null })); }}>Start signature review</button> : <>
+        {files.map(item => {
+          const pages = analyses[item.id] || [];
+          const reference = libraryForms.find(form => form.id === item.referenceId);
+          const rules = postSignatureRules(reference?.validation_rules);
+          return <div key={item.id} style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #e4e7ec" }}>
+            <strong title={item.file.name}>{item.file.name}</strong>
+            {rules.length ? rules.map((rule,index) => {
+              const key = "rule:" + item.id + ":" + (rule.id || index);
+              const kind = rule.kind === "INITIAL" ? "initials" : rule.kind === "DATE" ? "signing date" : "signature";
+              return <label key={key} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10 }}>
+                <input type="checkbox" checked={signatureChecks[key] === true} onChange={e => setSignatureChecks(current => ({ ...current, [key]: e.target.checked }))}/>
+                <span>Page {rule.page}: Confirm {kind.toLowerCase()} for {rule.label} is present.</span>
+              </label>;
+            }) : pages.map(page => {
+              const key = item.id + ":" + page.pageNumber;
+              return <label key={key} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10 }}>
+                <input type="checkbox" checked={signatureChecks[key] === true} onChange={e => setSignatureChecks(current => ({ ...current, [key]: e.target.checked }))}/>
+                <span>Page {page.pageNumber}: I checked all required signatures, initials and dates.</span>
+              </label>;
+            })}
+          </div>;
+        })}
+        <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+          <button className="primary" type="button" disabled={busy} onClick={runPostCheck}>Complete signature review</button>
+          <button className="secondary" type="button" onClick={() => { setShowPostReview(false); setReports(current => ({ ...current, post: null })); }}>Close review</button>
+        </div>
+        {resultSection("Signature review results",reports.post)}
+      </>}
     </section>}
-    <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 18, color: "#667085", fontSize: 12 }}><AlertCircle size={15}/> The library tells the validator what to expect. Blank required fillable PDF fields can be detected automatically; flattened forms and handwritten entries still need visual review.</div>
+    <div className="muted" style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 14, fontSize: 12 }}><AlertCircle size={15}/> A result marked “Manual review required” is not a pass. Check the original document yourself. The system cannot confirm the authenticity of a signature.</div>
   </div>;
 }
