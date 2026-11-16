@@ -2,6 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS"};
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,"Content-Type":"application/json"}});
+const cardFeeFor=(i,b)=>{if(!i.card_fee_enabled||Number(i.card_fee_percentage)<=0)return {fee:0,tax:0,total:Number(b||0)};const total=Number(i.total_amount||0),sub=Number(i.subtotal||0),base=i.card_fee_basis==="TOTAL_INCL_HST"?Number(b||0):(total>0?sub*Number(b||0)/total:0);const fee=Number((base*Number(i.card_fee_percentage)/100).toFixed(2));const tax=Number((fee*Number(i.card_fee_tax_rate??13)/100).toFixed(2));return {fee,tax,total:Number((Number(b||0)+fee+tax).toFixed(2))};};
+
 Deno.serve(async(req:Request)=>{
  if(req.method==="OPTIONS")return new Response("ok",{headers:cors});
  if(req.method!=="POST")return json({error:"Method not allowed"},405);
@@ -19,18 +21,18 @@ Deno.serve(async(req:Request)=>{
   const role=String(user.app_metadata?.role||user.app_metadata?.user_role||profile?.role||"").toUpperCase().replace(/[^A-Z]/g,"");
   const adminRoles=["ADMIN","ADMINISTRATOR","SUPERADMIN","SUPERADMINISTRATOR","BROKER","BROKEROFRECORD","OFFICEADMIN","TRADEADMIN"];
   const isAdmin=adminRoles.includes(role)||String(user.email||"").toLowerCase()==="admin@dvrealty.ca";
-  const {data:invoice,error:invoiceErr}=await db.from("dv_agent_invoices").select("id,invoice_number,agent_id,total_amount,paid_amount,balance_amount,status").eq("id",invoiceId).maybeSingle();
+  const {data:invoice,error:invoiceErr}=await db.from("dv_agent_invoices").select("id,invoice_number,agent_id,subtotal,total_amount,paid_amount,balance_amount,status,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("id",invoiceId).maybeSingle();
   if(invoiceErr||!invoice)return json({error:"Invoice not found."},404);
   const {data:agent, error:agentErr}=await db.from("dv_accounting_agents").select("id,email,active").eq("id",invoice.agent_id).maybeSingle();
   if(agentErr||!agent||!agent.active||!agent.email)return json({error:"The invoice agent profile is not active or has no email address."},409);
   if(!isAdmin&&String(agent.email).trim().toLowerCase()!==String(user.email).trim().toLowerCase())return json({error:"You can only create checkout links for your own invoices."},403);
-  const balance=Number(invoice.balance_amount||0),cents=Math.round(balance*100);
+  const balance=Number(invoice.balance_amount||0),fee=cardFeeFor(invoice,balance),baseCents=Math.round(balance*100),feeCents=Math.round(fee.fee*100),feeTaxCents=Math.round(fee.tax*100),cents=baseCents+feeCents+feeTaxCents;
   if(cents<=0||invoice.status==="Void")return json({error:"This invoice has no payable balance."},409);
   const {data:pending,error:pendingErr}=await db.from("dv_agent_invoice_square_sessions").select("checkout_url,amount_cents").eq("invoice_id",invoice.id).eq("status","PENDING").maybeSingle();
   if(pendingErr)throw pendingErr;
   if(pending){
    if(Number(pending.amount_cents)!==cents)return json({error:"A previous Square checkout is still pending for a different balance. Contact the office before trying again."},409);
-   return json({ok:true,checkout_url:pending.checkout_url,invoice_number:invoice.invoice_number,amount:balance,reused:true});
+   return json({ok:true,checkout_url:pending.checkout_url,invoice_number:invoice.invoice_number,amount:balance,card_fee:fee.fee,card_fee_tax:fee.tax,card_total:fee.total,reused:true});
   }
   const token=Deno.env.get("SQUARE_ACCESS_TOKEN"),locationId=Deno.env.get("SQUARE_LOCATION_ID");
   if(!token||!locationId)return json({error:"Square credentials are not configured."},503);
@@ -47,12 +49,12 @@ Deno.serve(async(req:Request)=>{
   if(!square.ok||!result.payment_link?.url){const detail=result.errors?.find((x:any)=>x.detail)?.detail||"Square could not create checkout.";return json({error:detail},502)}
   const orderId=result.payment_link.order_id;
   if(!orderId)return json({error:"Square did not return an order reference."},502);
-  const {error:saveErr}=await db.from("dv_agent_invoice_square_sessions").insert({invoice_id:invoice.id,agent_id:agent.id,square_order_id:orderId,square_payment_link_id:result.payment_link.id,checkout_url:result.payment_link.url,amount_cents:cents,currency:"CAD"});
+  const {error:saveErr}=await db.from("dv_agent_invoice_square_sessions").insert({invoice_id:invoice.id,agent_id:agent.id,square_order_id:orderId,square_payment_link_id:result.payment_link.id,checkout_url:result.payment_link.url,amount_cents:cents,base_amount_cents:baseCents,fee_amount_cents:feeCents,fee_tax_cents:feeTaxCents,currency:"CAD"});
   if(saveErr){
    const {data:existing}=await db.from("dv_agent_invoice_square_sessions").select("checkout_url,amount_cents").eq("invoice_id",invoice.id).eq("status","PENDING").maybeSingle();
    if(existing&&Number(existing.amount_cents)===cents)return json({ok:true,checkout_url:existing.checkout_url,invoice_number:invoice.invoice_number,amount:balance,reused:true});
    throw saveErr;
   }
-  return json({ok:true,checkout_url:result.payment_link.url,invoice_number:invoice.invoice_number,amount:balance});
+  return json({ok:true,checkout_url:result.payment_link.url,invoice_number:invoice.invoice_number,amount:balance,card_fee:fee.fee,card_fee_tax:fee.tax,card_total:fee.total});
  }catch(e){return json({error:e instanceof Error?e.message:"Checkout could not be started."},500)}
 });
