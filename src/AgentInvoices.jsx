@@ -58,6 +58,7 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
   const billToAddress=inv.bill_to_type==="OTHER"?[inv.bill_to_company,inv.bill_to_address,[inv.bill_to_city,inv.bill_to_province,inv.bill_to_postal_code].filter(value=>String(value||"").trim()).join(", "),inv.bill_to_phone,inv.bill_to_email].filter(Boolean):[agentRecord.address,[agentRecord.city,agentRecord.province,agentRecord.postal_code].filter(value=>String(value||"").trim()).join(", ")].filter(Boolean);
   const logo=await getInvoiceLogo();
   const items=Array.isArray(inv.dv_agent_invoice_items)?inv.dv_agent_invoice_items:[];
+  const currentBalance=Math.max(Number(inv.total_amount||0)-Number(inv.paid_amount||0)-Number(inv.discount_amount||0),0);
   const fmtDate=value=>value?new Date(value+"T00:00:00").toLocaleDateString("en-CA",{year:"numeric",month:"short",day:"numeric"}):"—";
   const text=(value,x,y,opts={})=>doc.text(String(value??""),x,y,opts);
   const addHeader=()=>{
@@ -121,8 +122,9 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
   [["Subtotal",inv.subtotal],["HST",inv.tax_amount]].forEach(([label,value])=>{text(label,totalsX,y);doc.setTextColor(...ink);text(money(value),right-3,y,{align:"right"});y+=7;doc.setTextColor(...muted)});  doc.setFillColor(...navy);doc.roundedRect(totalsX,y-2,totalsW,12,1.5,1.5,"F");
   doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor(255,255,255);text("TOTAL",totalsX+4,y+5.5);text(money(inv.total_amount),right-3,y+5.5,{align:"right"});y+=19;
   doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(...muted);text("Paid to date",totalsX,y);doc.setTextColor(...ink);text(money(inv.paid_amount),right-3,y,{align:"right"});y+=7;
-  if(Number(inv.prior_balance_amount||0)>0){doc.setTextColor(...muted);text("Prior outstanding balance",totalsX,y);doc.setTextColor(...ink);text(money(inv.prior_balance_amount),right-3,y,{align:"right"});y+=7;doc.setFont("helvetica","bold");doc.setTextColor(...navy);text("TOTAL AMOUNT DUE",totalsX,y);text(money(Number(inv.balance_amount||0)+Number(inv.prior_balance_amount||0)),right-3,y,{align:"right"});y+=7;}
-  doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(...gold);text("BALANCE DUE",totalsX,y);text(money(inv.balance_amount),right-3,y,{align:"right"});y+=15;
+  if(Number(inv.discount_amount||0)>0){doc.setTextColor(...muted);text("E-transfer discount",totalsX,y);doc.setTextColor(...ink);text(money(inv.discount_amount),right-3,y,{align:"right"});y+=7;}
+  if(Number(inv.prior_balance_amount||0)>0){doc.setTextColor(...muted);text("Prior outstanding balance",totalsX,y);doc.setTextColor(...ink);text(money(inv.prior_balance_amount),right-3,y,{align:"right"});y+=7;doc.setFont("helvetica","bold");doc.setTextColor(...navy);text("TOTAL AMOUNT DUE",totalsX,y);text(money(currentBalance+Number(inv.prior_balance_amount||0)),right-3,y,{align:"right"});y+=7;}
+  doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(...gold);text("BALANCE DUE",totalsX,y);text(money(currentBalance),right-3,y,{align:"right"});y+=15;
   if(y>253){addFooter();doc.addPage();addHeader();y=63;}
   doc.setDrawColor(...line);doc.line(left,y,right,y);y+=9;
   doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor(...ink);text("PAYMENT INFORMATION",left,y);y+=7;
