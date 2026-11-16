@@ -36,7 +36,7 @@ create policy "paperwork library published or admin read"
   using (
     status = 'PUBLISHED'
     or public.dv_accounting_current_user_role() = any (
-      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
+      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER OF RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
     )
   );
 
@@ -46,7 +46,7 @@ create policy "paperwork library admins insert"
   for insert to authenticated
   with check (
     public.dv_accounting_current_user_role() = any (
-      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
+      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER OF RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
     )
     and (created_by is null or created_by = auth.uid())
   );
@@ -57,12 +57,12 @@ create policy "paperwork library admins update"
   for update to authenticated
   using (
     public.dv_accounting_current_user_role() = any (
-      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
+      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER OF RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
     )
   )
   with check (
     public.dv_accounting_current_user_role() = any (
-      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
+      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER OF RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
     )
   );
 
@@ -72,7 +72,7 @@ create policy "paperwork library admins delete"
   for delete to authenticated
   using (
     public.dv_accounting_current_user_role() = any (
-      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
+      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER OF RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
     )
   );
 
@@ -99,7 +99,7 @@ create policy "paperwork reference published or admin read"
           and l.status = 'PUBLISHED'
       )
       or public.dv_accounting_current_user_role() = any (
-        array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
+        array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER OF RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
       )
     )
   );
@@ -111,7 +111,7 @@ create policy "paperwork reference admins upload"
   with check (
     bucket_id = 'dv-paperwork-reference'
     and public.dv_accounting_current_user_role() = any (
-      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
+      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER OF RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
     )
   );
 
@@ -122,13 +122,13 @@ create policy "paperwork reference admins update"
   using (
     bucket_id = 'dv-paperwork-reference'
     and public.dv_accounting_current_user_role() = any (
-      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
+      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER OF RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
     )
   )
   with check (
     bucket_id = 'dv-paperwork-reference'
     and public.dv_accounting_current_user_role() = any (
-      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
+      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER OF RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
     )
   );
 
@@ -139,6 +139,6 @@ create policy "paperwork reference admins delete"
   using (
     bucket_id = 'dv-paperwork-reference'
     and public.dv_accounting_current_user_role() = any (
-      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
+      array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER OF RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
     )
   );
