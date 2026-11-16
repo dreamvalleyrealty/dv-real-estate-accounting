@@ -79,8 +79,12 @@ Deno.serve(async(req:Request)=>{
  const accountId=acct?.accountId||acct?.account_id||acct?.id;
  if(!accountId)return json({error:"Zoho returned account data but no account ID could be identified. Please contact the administrator.",accountFields:acct?Object.keys(acct):[]},502);
  const attachmentNames=files.map(f=>f.name).join("; ");
- const {data:log,error:logError}=await admin.from("dv_accounting_email_log").insert({transaction_id:body.transactionId||null,trade_submission_id:lawyerPackage?body.tradeSubmissionId||null:null,agent_invoice_id:agentInvoice?body.invoiceId:null,document_type:documentType,recipient_email:recipient,cc_email:cc||null,subject,attachment_name:attachmentNames,status:"PENDING",sent_by:userData.user.id,sent_by_email:from}).select("id").single();
- if(logError)return json({error:"Could not create the email audit record. No email was sent."},500);
+ const {data:log,error:logError}=await admin.from("dv_accounting_email_log").insert({transaction_id:body.transactionId||null,trade_submission_id:lawyerPackage?body.tradeSubmissionId||null:null,document_type:documentType,recipient_email:recipient,cc_email:cc||null,subject,attachment_name:attachmentNames,status:"PENDING",sent_by:userData.user.id,sent_by_email:from}).select("id").single();
+ if(logError)return json({error:"Could not create the email audit record. No email was sent.",details:logError.message},500);
+ if(agentInvoice){
+  const {error:linkError}=await admin.from("dv_accounting_email_log").update({agent_invoice_id:body.invoiceId}).eq("id",log.id);
+  if(linkError&&!/agent_invoice_id.*does not exist|column.*does not exist/i.test(linkError.message))return json({error:"Could not link the email to its invoice history. No email was sent.",details:linkError.message},500);
+ }
  try{
   const uploadedAttachments:any[]=[];
   for(const file of files){
