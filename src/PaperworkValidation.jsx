@@ -171,9 +171,12 @@ export default function PaperworkValidation({ isActive = true }) {
           if (!preRules.length) warnings.push(result(item.id + "_no_rules",fileName + ": no pre-signature rules configured","The selected library version has no pre-signature completion rules yet."));
           preRules.forEach((rule,index) => {
             const targetPage = Number(rule.page) > 0 ? Number(rule.page) : null;
-            const key = normalize(rule.label);
-            const matched = fields.filter(field => (!targetPage || field.pageNumber === targetPage) && key.length > 2 &&
-              (normalize(field.name) === key || normalize(field.name).includes(key) || key.includes(normalize(field.name))));
+            const key = normalize(rule.field_key || rule.label);
+            const matched = fields.filter(field => {
+              const fieldKey = normalize(field.name);
+              return (!targetPage || field.pageNumber === targetPage) && key.length > 2 && fieldKey.length > 2 &&
+                (fieldKey === key || fieldKey.includes(key) || key.includes(fieldKey));
+            });
             const code = item.id + "_rule_" + (rule.id || index);
             const location = targetPage ? "page " + targetPage : "the form";
             if (matched.length) {
