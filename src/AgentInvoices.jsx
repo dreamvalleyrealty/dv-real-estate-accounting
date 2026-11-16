@@ -198,7 +198,7 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
   if(!emailDraft)return;
   const to=String(emailDraft.to||"").trim(),cc=String(emailDraft.cc||"").trim();
   const validEmail=value=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  if(!validEmail(to)){setError("Enter a valid recipient email address.");return;}
+  if(!to.split(/[;,\\s]+/).filter(Boolean).length||to.split(/[;,\\s]+/).filter(Boolean).some(address=>!validEmail(address))){setError("Enter valid To email addresses. Separate multiple addresses with commas.");return;}
   if(cc.split(/[;,\\s]+/).filter(Boolean).some(address=>!validEmail(address))){setError("Check the CC addresses. Separate multiple addresses with commas.");return;}
   setSendingInvoice(emailDraft.invoiceId);setError("");setNotice("");
   try{
