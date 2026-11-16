@@ -17,14 +17,14 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
   if(!supabase)return;
   setBusy(true);setError("");
   try{
-   let aq=supabase.from("dv_agent_invoices").select("*,dv_accounting_agents(id,name,first_name,last_name,email),dv_agent_invoice_items(*)").order("created_at",{ascending:false});
+   let aq=supabase.from("dv_agent_invoices").select("*,dv_accounting_agents(id,name,first_name,last_name,email,legal_name,incorporated,corporation_name,address,city,province,postal_code),dv_agent_invoice_items(*)").order("created_at",{ascending:false});
    if(!adminMode)aq=aq.eq("agent_id",agentId);
    const {data,error:e}=await aq;if(e)throw e;
    const ids=(data||[]).map(x=>x.id);
    let p=[];
    if(ids.length){const{data:pd,error:pe}=await supabase.from("dv_agent_invoice_payments").select("*").in("invoice_id",ids).order("payment_date",{ascending:false});if(pe)throw pe;p=pd||[]}
    setInvoices(data||[]);setPayments(p);let emailRows=[];if(adminMode&&ids.length){const{data:ed,error:ee}=await supabase.from("dv_accounting_email_log").select("id,agent_invoice_id,recipient_email,cc_email,subject,status,sent_at,created_at,error_message").in("agent_invoice_id",ids).order("created_at",{ascending:false});if(ee){if(!/agent_invoice_id.*does not exist|column.*does not exist/i.test(ee.message))throw ee;}else emailRows=ed||[]}setEmailLogs(emailRows);
-   if(adminMode){const[{data:ad,error:ae},{data:ci,error:ce}]=await Promise.all([supabase.from("dv_accounting_agents").select("id,name,first_name,last_name,email").eq("active",true).order("name"),supabase.from("dv_accounting_inventory_items").select("id,item_code,item_name,item_type,description,sale_price,tax_rate,pricing_tiers,is_active,stock_quantity").eq("is_active",true).in("item_type",["SELLABLE","SERVICE","GIFT"]).order("item_name")]);if(ae)throw ae;if(ce)throw ce;setAgents(ad||[]);setCatalog(ci||[])}
+   if(adminMode){const[{data:ad,error:ae},{data:ci,error:ce}]=await Promise.all([supabase.from("dv_accounting_agents").select("id,name,first_name,last_name,email,legal_name,incorporated,corporation_name,address,city,province,postal_code").eq("active",true).order("name"),supabase.from("dv_accounting_inventory_items").select("id,item_code,item_name,item_type,description,sale_price,tax_rate,pricing_tiers,is_active,stock_quantity").eq("is_active",true).in("item_type",["SELLABLE","SERVICE","GIFT"]).order("item_name")]);if(ae)throw ae;if(ce)throw ce;setAgents(ad||[]);setCatalog(ci||[])}
   }catch(e){setError(e?.message||"Unable to load invoices.")}finally{setBusy(false)}
  },[agentId,adminMode]);
  useEffect(()=>{load()},[load]);
@@ -49,7 +49,10 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
  const buildInvoicePdf=async inv=>{
   const doc=new jsPDF({unit:"mm",format:"a4"}),left=16,right=194,width=178;
   const navy=[15,33,65],gold=[158,133,86],ink=[34,45,64],muted=[111,122,139],line=[226,230,236],pale=[247,248,250];
-  const agent=inv.dv_accounting_agents?.name||[inv.dv_accounting_agents?.first_name,inv.dv_accounting_agents?.last_name].filter(Boolean).join(" ")||inv.dv_accounting_agents?.email||"Agent";
+  const agentRecord=inv.dv_accounting_agents||{};
+  const agent=agentRecord.name||[agentRecord.first_name,agentRecord.last_name].filter(Boolean).join(" ")||agentRecord.legal_name||agentRecord.email||"Agent";
+  const hasPrec=Boolean(agentRecord.incorporated&&String(agentRecord.corporation_name||"").trim());
+  const billToAddress=[agentRecord.address,agentRecord.city,agentRecord.province,agentRecord.postal_code].filter(value=>String(value||"").trim()).join(", ");
   const logo=await getInvoiceLogo();
   const items=Array.isArray(inv.dv_agent_invoice_items)?inv.dv_agent_invoice_items:[];
   const fmtDate=value=>value?new Date(value+"T00:00:00").toLocaleDateString("en-CA",{year:"numeric",month:"short",day:"numeric"}):"—";
@@ -72,8 +75,19 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
   };
   addHeader();
   doc.setTextColor(...ink);doc.setFont("helvetica","bold");doc.setFontSize(9);text("BILL TO",left,63);
-  doc.setFont("helvetica","normal");doc.setFontSize(11);text(agent,left,71);
-  doc.setFontSize(8.5);doc.setTextColor(...muted);text(inv.dv_accounting_agents?.email||"",left,77);
+  let billY=71;
+  if(hasPrec){
+   doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(...ink);
+   const precLines=doc.splitTextToSize(String(agentRecord.corporation_name).trim(),96);doc.text(precLines,left,billY);billY+=precLines.length*4.5+1;
+   doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.setTextColor(...muted);text("C/O "+agent,left,billY);billY+=5;
+  }else{
+   doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(...ink);
+   const agentLines=doc.splitTextToSize(agent,96);doc.text(agentLines,left,billY);billY+=agentLines.length*4.5+1;
+  }
+  if(billToAddress){
+   doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.setTextColor(...muted);
+   const addressLines=doc.splitTextToSize(billToAddress,96);doc.text(addressLines,left,billY);
+  }
   doc.setFillColor(...pale);doc.roundedRect(119,57,75,27,2,2,"F");
   const meta=[["Invoice date",fmtDate(inv.invoice_date)],["Due date",fmtDate(inv.due_date)],["Status",inv.status||"Open"]];
   meta.forEach(([label,value],i)=>{const y=64+i*7;doc.setFont("helvetica","normal");doc.setFontSize(7.5);doc.setTextColor(...muted);text(label,124,y);doc.setFont("helvetica","bold");doc.setFontSize(8);doc.setTextColor(...ink);text(value,189,y,{align:"right"})});
