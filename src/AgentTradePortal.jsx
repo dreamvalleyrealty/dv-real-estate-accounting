@@ -755,6 +755,21 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
            }
            text+=[...rows.entries()].sort((a,b)=>b[0]-a[0]).map(([,parts])=>parts.join(" ")).join("\n")+"\n";
          }
+         if(text.trim().length<80){
+           const {createWorker}=await import("tesseract.js");
+           const worker=await createWorker("eng");
+           try{
+             let ocrText="";
+             for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber++){
+               const page=await pdf.getPage(pageNumber),viewport=page.getViewport({scale:1.35});
+               const canvas=document.createElement("canvas");canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+               await page.render({canvasContext:canvas.getContext("2d"),viewport}).promise;
+               const result=await worker.recognize(canvas);ocrText+="\n"+String(result?.data?.text||"");
+               canvas.width=0;canvas.height=0;
+             }
+             if(ocrText.trim().length>text.trim().length)text=ocrText;
+           }finally{await worker.terminate();}
+         }
          extracted.push({id:doc.id,name:doc.document_name,document_type:doc.document_type,text});
          pdf.destroy();
        }catch(readError){
