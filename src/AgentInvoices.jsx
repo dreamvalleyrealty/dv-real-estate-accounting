@@ -64,7 +64,7 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
    doc.addImage(logo,"PNG",left,9,19,19*844/703);
    doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(13);text("DREAM VALLEY REALTY INC.",41,18);
    doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(219,225,235);text("BROKERAGE",41,24);
-   doc.setFontSize(8);text("Toronto, Ontario, Canada",41,31);
+   doc.setFontSize(7.5);text("885 Progress Ave, Suite 109",41,30);text("Toronto, ON M1H 3G3",41,35);
    doc.setFont("helvetica","bold");doc.setFontSize(24);doc.setTextColor(255,255,255);text("INVOICE",right,20,{align:"right"});
    doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(226,231,240);text("# "+(inv.invoice_number||"DRAFT"),right,28,{align:"right"});
   };
