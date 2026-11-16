@@ -8,7 +8,7 @@ const labelFor = (type, types) => types.find(item => item[0] === type)?.[1] || t
 const cleanPayload = row => ({ ...(row?.payload || {}), side: String(row?.representation_side || row?.payload?.side || "SELLER").toUpperCase() });
 const isPdf = file => /pdf/i.test(file?.type || "") || /\.pdf$/i.test(file?.name || "");
 
-export default function PaperworkValidation({ user, agentId, adminMode = false }) {
+export default function PaperworkValidation({ user, agentId, adminMode = false, isActive = true }) {
   const [trades, setTrades] = useState([]);
   const [tradeId, setTradeId] = useState("");
   const [types, setTypes] = useState(DEFAULT_TYPES);
