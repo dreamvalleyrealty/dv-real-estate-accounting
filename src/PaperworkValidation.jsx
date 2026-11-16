@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { AlertCircle, FileCheck2, FileText, RefreshCw, Trash2, Upload } from "lucide-react";
 import { supabase } from "./lib/supabase";
 
-const TYPES = [["FORM","Form / Agreement"],["SCHEDULE","Schedule / Attachment"],["DISCLOSURE","Disclosure"],["ID","Identity Document"],["OTHER","Other"]];
 const isPdf = file => /pdf/i.test(file?.type || "") || /\\.pdf$/i.test(file?.name || "");
 const idFor = () => typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random();
 const hasValue = value => value !== undefined && value !== null && String(value).trim() !== "" && String(value).trim() !== "Off";
@@ -191,8 +190,8 @@ export default function PaperworkValidation({ isActive = true }) {
               warnings.push(result(code,fileName + " — " + location + ": visually check " + rule.label,"The reference library expects this item" + (rule.condition ? " when " + rule.condition : "") + ". The uploaded PDF does not expose a matching fillable field, so confirm it on the original form."));
             }
           });
-        } else if (libraryForms.length) {
-          warnings.push(result(item.id + "_reference",fileName + ": reference form not selected","Select the matching official form from the Document Library to apply its completion checklist."));
+        } else {
+          warnings.push(result(item.id + "_reference",fileName + ": official reference form not selected","No matching published reference form was selected. The system cannot confirm that all form-specific requirements have been checked."));
         }
       });
 
@@ -244,6 +243,7 @@ export default function PaperworkValidation({ isActive = true }) {
     setAnalyses({});
     setReports({ pre: null, post: null });
     setSignatureChecks({});
+    setShowPostReview(false);
   }
 
   const resultSection = (heading,report) => report && (
@@ -317,13 +317,13 @@ export default function PaperworkValidation({ isActive = true }) {
               const key = "rule:" + item.id + ":" + (rule.id || index);
               const kind = rule.kind === "INITIAL" ? "initials" : rule.kind === "DATE" ? "signing date" : "signature";
               return <label key={key} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10 }}>
-                <input type="checkbox" checked={signatureChecks[key] === true} onChange={e => setSignatureChecks(current => ({ ...current, [key]: e.target.checked })}/>
+                <input type="checkbox" checked={signatureChecks[key] === true} onChange={e => setSignatureChecks(current => ({ ...current, [key]: e.target.checked }))}/>
                 <span>Page {rule.page}: Confirm {kind.toLowerCase()} for {rule.label} is present.</span>
               </label>;
             }) : pages.map(page => {
               const key = item.id + ":" + page.pageNumber;
               return <label key={key} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10 }}>
-                <input type="checkbox" checked={signatureChecks[key] === true} onChange={e => setSignatureChecks(current => ({ ...current, [key]: e.target.checked })}/>
+                <input type="checkbox" checked={signatureChecks[key] === true} onChange={e => setSignatureChecks(current => ({ ...current, [key]: e.target.checked }))}/>
                 <span>Page {page.pageNumber}: I checked all required signatures, initials and dates.</span>
               </label>;
             })}
