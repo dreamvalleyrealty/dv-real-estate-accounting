@@ -137,6 +137,8 @@ export default function PaperworkValidation({ isActive = true }) {
     }
     const uploaded = await Promise.all(files.map(async item => ({
       name: item.file.name,
+      referenceFormName: libraryForms.find(form => form.id === item.referenceId)?.document_name || "",
+      referenceVersion: libraryForms.find(form => form.id === item.referenceId)?.version || "",
       mimeType: item.file.type || (isPdf(item.file) ? "application/pdf" : ""),
       base64: await fileToBase64(item.file),
     })));
@@ -388,7 +390,7 @@ export default function PaperworkValidation({ isActive = true }) {
             <div>{check.explanation}</div>
           </div>)}
         </div>}
-        <p className="muted" style={{ fontSize: 11, marginBottom: 0 }}>AI findings are suggestions for human review, not legal advice or signature authentication. Uploaded files are sent to the AI provider for processing and are not saved by this application.</p>
+        <p className="muted" style={{ fontSize: 11, marginBottom: 0 }}>AI findings are suggestions for human review, not legal advice or signature authentication. Uploaded files are sent to OpenAI for processing and are not saved by this application. OpenAI API data controls and retention terms apply.</p>
       </>}
     </section>}
     {reports.pre && <section style={{ border: "1px solid #e4e7ec", borderRadius: 10, padding: 16, marginBottom: 16 }}>
