@@ -776,7 +776,8 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
          extracted.push({id:doc.id,name:doc.document_name,document_type:doc.document_type,text:""});
        }
      }
-     const report=validateOfferPackage({form,docs,requirements:requirementsBySide||{},documentTexts:extracted});
+     const validationRequirements=requirementsBySide||{[String(form.side||"SELLER").toUpperCase()]:{types:requiredTypes,required:requiredTypes,counts:requiredDocCounts}};
+     const report=validateOfferPackage({form,docs,requirements:validationRequirements,documentTexts:extracted});
      const unreadable=docs.filter(doc=>(/pdf/i.test(String(doc.mime_type||""))||/\.pdf$/i.test(String(doc.document_name||"")))&&!extracted.some(item=>item.id===doc.id&&item.text.trim()));
      unreadable.forEach(doc=>report.warnings.push({severity:"warning",code:"pdf_unreadable_"+doc.id,title:"Could not read "+(doc.document_name||"a PDF"),detail:"The file is attached, but its text could not be extracted. Check that it opens correctly and review it manually."}));
      report.checkedDocuments=docs.length;report.readableDocuments=extracted.filter(item=>item.text.trim()).length;
