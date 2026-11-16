@@ -11,6 +11,22 @@ alter table public.dv_agent_invoice_payment_submissions
   add column if not exists discount_percentage numeric(7,4) not null default 0
   check (discount_percentage between 0 and 100);
 
+-- Reconcile stored invoice balances against invoice totals and recorded payments.
+update public.dv_agent_invoices i
+set discount_amount = coalesce((
+      select sum(d.amount) from public.dv_agent_invoice_discounts d where d.invoice_id=i.id
+    ),0),
+    balance_amount = greatest(i.total_amount - i.paid_amount - coalesce((
+      select sum(d.amount) from public.dv_agent_invoice_discounts d where d.invoice_id=i.id
+    ),0),0),
+    status = case
+      when i.paid_amount + coalesce((select sum(d.amount) from public.dv_agent_invoice_discounts d where d.invoice_id=i.id),0) >= i.total_amount then 'Paid'
+      when i.paid_amount + coalesce((select sum(d.amount) from public.dv_agent_invoice_discounts d where d.invoice_id=i.id),0) > 0 then 'Partially Paid'
+      when i.due_date is not null and i.due_date < current_date then 'Overdue'
+      else 'Open'
+    end,
+    updated_at = now();
+
 create table if not exists public.dv_agent_invoice_discounts (
   id uuid primary key default gen_random_uuid(),
   invoice_id uuid not null references public.dv_agent_invoices(id) on delete restrict,
