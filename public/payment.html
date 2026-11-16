@@ -28,17 +28,17 @@ button:disabled{opacity:.6;cursor:wait}.msg{display:none;padding:12px;background
 <div id="loading" class="muted">Loading secure payment details…</div>
 <div id="content" class="hidden">
 <div class="muted">Invoice <strong id="invoice"></strong></div>
-<div class="amount" id="amount"></div>
+<div class="muted">Outstanding balance</div><div class="amount" id="amount"></div><div id="priceSummary" class="choice hidden" aria-live="polite"></div>
 <section class="choice">
 <h2>E-transfer</h2>
-<p class="muted">Send payment to <strong>admin@dvrealty.ca</strong>. Include the invoice number in your transfer message. After sending, enter the e-transfer reference number below.</p>
+<p class="muted">Send the discounted amount shown below to <strong>admin@dvrealty.ca</strong>. Include the invoice number in your transfer message. After sending, enter the e-transfer reference number below.</p><p class="muted"><strong id="etransferAmount"></strong></p>
 <label for="ref">E-transfer reference number</label>
 <input id="ref" maxlength="120" minlength="3" placeholder="Enter reference number" autocomplete="off">
 <button id="send" type="button">Submit reference</button>
 </section>
 <section class="choice hidden" id="cardChoice">
 <h2>Credit card (Square)</h2>
-<p class="muted">Secure card payment. No additional fee is currently applied.</p>
+<p class="muted">Pay the invoice balance plus the applicable credit-card fee and HST shown below.</p><p class="muted"><strong id="cardAmount"></strong></p>
 <button id="card" type="button">Continue to Square</button>
 </section>
 <p class="muted">Submitting a reference does not mark the invoice as paid. The office will verify the deposit first.</p>
@@ -62,8 +62,14 @@ button:disabled{opacity:.6;cursor:wait}.msg{display:none;padding:12px;background
    if(!/^[a-f0-9]{64}$/i.test(token))throw new Error("This payment link is invalid. Please contact admin@dvrealty.ca.");
    const data=await post({action:"details"});
    document.getElementById("invoice").textContent=data.invoice_number;
-   document.getElementById("amount").textContent=new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(data.balance_amount));
-   if(data.card)document.getElementById("cardChoice").classList.remove("hidden");
+   const fmt=value=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(value||0));
+   document.getElementById("amount").textContent=fmt(data.balance_amount);
+   document.getElementById("etransferAmount").textContent="Amount to send: "+fmt(data.etransfer_amount);
+   const rows=["<div style='display:flex;justify-content:space-between;padding:6px 0'><span>Invoice balance</span><strong>"+fmt(data.balance_amount)+"</strong></div>"];
+   if(Number(data.etransfer_discount_amount)>0)rows.push("<div style='display:flex;justify-content:space-between;padding:6px 0;color:#26734d'><span>E-transfer discount ("+Number(data.etransfer_discount_percentage||0).toFixed(2)+"%)</span><strong>-"+fmt(data.etransfer_discount_amount)+"</strong></div>");
+   rows.push("<div style='display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid #dfe4eb'><strong>E-transfer total</strong><strong>"+fmt(data.etransfer_amount)+"</strong></div>");
+   if(data.card){rows.push("<div style='display:flex;justify-content:space-between;padding:6px 0'><span>Credit-card fee</span><strong>"+fmt(data.card_fee)+"</strong></div>");if(Number(data.card_fee_tax)>0)rows.push("<div style='display:flex;justify-content:space-between;padding:6px 0'><span>HST on card fee</span><strong>"+fmt(data.card_fee_tax)+"</strong></div>");rows.push("<div style='display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid #dfe4eb'><strong>Credit-card total</strong><strong>"+fmt(data.card_total)+"</strong></div>");document.getElementById("cardAmount").textContent="Total to pay: "+fmt(data.card_total);document.getElementById("cardChoice").classList.remove("hidden");}
+   document.getElementById("priceSummary").innerHTML=rows.join("");document.getElementById("priceSummary").classList.remove("hidden");
    loading.classList.add("hidden");content.classList.remove("hidden");
   }catch(error){loading.textContent=error.message;loading.classList.remove("hidden");loading.classList.add("error")}
  }
