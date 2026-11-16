@@ -56,7 +56,9 @@ Deno.serve(async(req:Request)=>{
   const {data:invoice,error:invoiceError}=await admin.from("dv_agent_invoices").select("id,invoice_number,agent_id").eq("id",invoiceId).maybeSingle();
   if(invoiceError||!invoice)return json({error:"The invoice could not be verified. Apply the agent invoice database migration first."},404);
   const {data:invoiceAgent,error:agentError}=await admin.from("dv_accounting_agents").select("email").eq("id",invoice.agent_id).maybeSingle();
-  if(agentError||!invoiceAgent?.email||String(invoiceAgent.email).trim().toLowerCase()!==recipient.toLowerCase())return json({error:"The recipient must match the email address on this invoice's agent record."},403);
+  if(agentError||!invoiceAgent?.email)return json({error:"The invoice agent email could not be verified."},403);
+  // Agent invoice emails are initiated by administrators; allow the administrator to edit the To field in the review dialog.
+  if(!isAdmin&&String(invoiceAgent.email).trim().toLowerCase()!==recipient.toLowerCase())return json({error:"The recipient must match the email address on this invoice's agent record."},403);
   if(String(body.invoiceNumber||"")!==String(invoice.invoice_number||""))return json({error:"The invoice number does not match the database record."},409);
  }
  if(lawyerPackage&&requestedAdminSender&&!isAdmin)return json({error:"Only an authorized administrator can send from admin@dvrealty.ca."},403);
