@@ -753,7 +753,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
              const y=Math.round((item.transform?.[5]||0)/2)*2;
              const row=rows.get(y)||[];row.push(value);rows.set(y,row);
            }
-           text+=[...rows.entries()].sort((a,b)=>b[0]-a[0]).map(([,parts])=>parts.join(" ")).join("\\n")+"\\n";
+           text+=[...rows.entries()].sort((a,b)=>b[0]-a[0]).map(([,parts])=>parts.join(" ")).join("\n")+"\n";
          }
          extracted.push({id:doc.id,name:doc.document_name,document_type:doc.document_type,text});
          pdf.destroy();
