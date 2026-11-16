@@ -185,3 +185,34 @@ drop trigger if exists trg_dv_agent_invoice_refund_balance on public.dv_agent_in
 create trigger trg_dv_agent_invoice_refund_balance
   after update of status on public.dv_agent_invoice_refunds
   for each row execute function public.dv_agent_invoice_refresh_balance();
+
+
+create or replace function public.dv_agent_invoice_refresh_refund_allocations()
+returns trigger language plpgsql security definer set search_path=public as $$
+declare v_id uuid;
+begin
+  for v_id in
+    select distinct invoice_id from public.dv_agent_invoice_refund_allocations where refund_id=new.id
+  loop
+    perform 1 from public.dv_agent_invoices where id=v_id for update;
+    update public.dv_agent_invoices i
+      set paid_amount=greatest(coalesce((select sum(p.amount) from public.dv_agent_invoice_payments p where p.invoice_id=i.id),0)
+          - coalesce((select sum(ra.amount) from public.dv_agent_invoice_refund_allocations ra join public.dv_agent_invoice_refunds r on r.id=ra.refund_id where ra.invoice_id=i.id and r.status='COMPLETED'),0),0),
+        balance_amount=greatest(i.total_amount-greatest(coalesce((select sum(p.amount) from public.dv_agent_invoice_payments p where p.invoice_id=i.id),0)
+          - coalesce((select sum(ra.amount) from public.dv_agent_invoice_refund_allocations ra join public.dv_agent_invoice_refunds r on r.id=ra.refund_id where ra.invoice_id=i.id and r.status='COMPLETED'),0),0),0),
+        status=case
+          when greatest(coalesce((select sum(p.amount) from public.dv_agent_invoice_payments p where p.invoice_id=i.id),0)
+            - coalesce((select sum(ra.amount) from public.dv_agent_invoice_refund_allocations ra join public.dv_agent_invoice_refunds r on r.id=ra.refund_id where ra.invoice_id=i.id and r.status='COMPLETED'),0),0)>=i.total_amount then 'Paid'
+          when greatest(coalesce((select sum(p.amount) from public.dv_agent_invoice_payments p where p.invoice_id=i.id),0)
+            - coalesce((select sum(ra.amount) from public.dv_agent_invoice_refund_allocations ra join public.dv_agent_invoice_refunds r on r.id=ra.refund_id where ra.invoice_id=i.id and r.status='COMPLETED'),0),0)>0 then 'Partially Paid'
+          when i.due_date is not null and i.due_date<current_date then 'Overdue' else 'Open' end,
+        updated_at=now()
+      where i.id=v_id;
+  end loop;
+  return new;
+end;
+$$;
+drop trigger if exists trg_dv_agent_invoice_refund_balance on public.dv_agent_invoice_refunds;
+create trigger trg_dv_agent_invoice_refund_balance
+  after update of status on public.dv_agent_invoice_refunds
+  for each row execute function public.dv_agent_invoice_refresh_refund_allocations();
