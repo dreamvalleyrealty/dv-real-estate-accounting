@@ -75,13 +75,72 @@ function PdfSplitterTool(){
 
 function PdfMerger(){
  const [files,setFiles]=useState([]),[busy,setBusy]=useState(false),[error,setError]=useState(""),[done,setDone]=useState(null),[outputName,setOutputName]=useState("merged-document.pdf");
- const chooseFiles=async e=>{setError("");setDone(null);const incoming=Array.from(e.target.files||[]);const valid=incoming.filter(f=>f.type==="application/pdf"||f.name.toLowerCase().endsWith(".pdf"));if(valid.length!==incoming.length)setError("Only PDF files can be added. Non-PDF files were skipped.");const prepared=[];for(const file of valid){try{const bytes=await file.arrayBuffer();const doc=await PDFDocument.load(bytes);prepared.push({file,bytes,pageCount:doc.getPageCount(),id:file.name+"-"+file.size+"-"+file.lastModified});}catch{setError("One or more files could not be read. Password-protected or damaged PDFs may not be supported.");}}setFiles(prev=>[...prev,...prepared]);e.target.value="";};
+ const [fileWarnings,setFileWarnings]=useState([]);
+ const chooseFiles=async e=>{
+  setError("");setDone(null);setFileWarnings([]);
+  const incoming=Array.from(e.target.files||[]);
+  const valid=incoming.filter(f=>f.type==="application/pdf"||f.name.toLowerCase().endsWith(".pdf"));
+  if(valid.length!==incoming.length)setError("Only PDF files can be added. Non-PDF files were skipped.");
+  const prepared=[],warnings=[];
+  for(const file of valid){
+   try{
+    const bytes=await file.arrayBuffer();
+    if(bytes.byteLength<8)throw new Error("The file is empty or too small to be a valid PDF.");
+    const header=new TextDecoder("latin1").decode(new Uint8Array(bytes.slice(0,1024)));
+    if(!header.includes("%PDF-"))throw new Error("The file does not contain a valid PDF header. It may be a renamed or damaged file.");
+    let pdf;
+    try{
+     pdf=await pdfjsLib.getDocument({data:new Uint8Array(bytes.slice(0)),useWorkerFetch:false,isEvalSupported:false}).promise;
+    }catch(parseError){
+     const message=String(parseError?.message||parseError||"");
+     if(/password|encrypt/i.test(message))throw new Error("This PDF is password-protected or encrypted. Remove its password in a trusted PDF app, save an unlocked copy, and try again.");
+     if(/invalid pdf|missing pdf|formaterror|unexpected.*eof|end of file/i.test(message))throw new Error("PDF.js could not parse this file. It may be damaged, incomplete, or not a real PDF.");
+     throw new Error("PDF.js could not open this file: "+(message||"unknown PDF parsing error"));
+    }
+    const pageCount=pdf.numPages;
+    if(!Number.isInteger(pageCount)||pageCount<1)throw new Error("The PDF contains no readable pages.");
+    pdf.destroy();
+    prepared.push({file,bytes,pageCount,id:file.name+"-"+file.size+"-"+file.lastModified});
+   }catch(err){
+    warnings.push({name:file.name,message:err?.message||"Unable to read this PDF."});
+   }
+  }
+  setFiles(prev=>[...prev,...prepared]);
+  setFileWarnings(warnings);
+  if(warnings.length)setError(warnings.length+" file"+(warnings.length===1?" was":"s were")+" skipped. See the details below. "+warnings.map(w=>w.name+": "+w.message).join(" "));
+  e.target.value="";
+ };
  const move=(index,delta)=>setFiles(prev=>{const to=index+delta;if(to<0||to>=prev.length)return prev;const next=[...prev];[next[index],next[to]]=[next[to],next[index]];return next;});
- const merge=async()=>{if(files.length<2){setError("Add at least two PDF files to merge.");return;}setBusy(true);setError("");setDone(null);try{const merged=await PDFDocument.create();for(const item of files){const source=await PDFDocument.load(item.bytes.slice(0));const pages=await merged.copyPages(source,source.getPageIndices());pages.forEach(page=>merged.addPage(page));}const bytes=await merged.save();const blob=new Blob([bytes],{type:"application/pdf"});const name=(outputName.trim()||"merged-document.pdf").toLowerCase().endsWith(".pdf")?(outputName.trim()||"merged-document.pdf"):(outputName.trim()+".pdf");setDone({blob,name,pages:merged.getPageCount()});}catch(e){setError(e?.message||"Unable to merge these PDFs.");}finally{setBusy(false);}};
+ const merge=async()=>{
+  if(files.length<2){setError("Add at least two readable PDF files to merge.");return;}
+  setBusy(true);setError("");setDone(null);
+  try{
+   const merged=await PDFDocument.create();
+   for(const item of files){
+    let source;
+    try{
+     source=await PDFDocument.load(item.bytes.slice(0),{ignoreEncryption:false,updateMetadata:false,throwOnInvalidObject:false,parseSpeed:2});
+    }catch(loadError){
+     const message=String(loadError?.message||loadError||"");
+     if(/encrypt|password/i.test(message))throw new Error(item.file.name+" is encrypted or password-protected. Remove its password and add the unlocked copy.");
+     throw new Error("Could not import "+item.file.name+": "+(message||"unsupported PDF structure"));
+    }
+    const pages=await merged.copyPages(source,source.getPageIndices());
+    pages.forEach(page=>merged.addPage(page));
+   }
+   const bytes=await merged.save({useObjectStreams:false,addDefaultPage:false});
+   const blob=new Blob([bytes],{type:"application/pdf"});
+   const rawName=outputName.trim()||"merged-document.pdf";
+   const name=rawName.toLowerCase().endsWith(".pdf")?rawName:rawName+".pdf";
+   setDone({blob,name,pages:merged.getPageCount()});
+  }catch(e){setError(e?.message||"Unable to merge these PDFs.");}
+  finally{setBusy(false);}
+ };
  const download=()=>{if(!done)return;const url=URL.createObjectURL(done.blob);const a=document.createElement("a");a.href=url;a.download=done.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);};
  return <div><div className="pagehead"><div><h1>PDF Merger</h1><p>Combine multiple PDF files into one document. Reorder the files before merging.</p></div></div><section className="panel" style={{maxWidth:1150,padding:18}}><div style={{padding:18,border:"1px dashed #9e8556",borderRadius:12}}><strong>Add PDF files</strong><p className="muted" style={{margin:"6px 0 14px"}}>Files are processed locally in your browser. They are not uploaded or saved to the server. The merge follows the order shown below.</p><input type="file" accept="application/pdf,.pdf" multiple onChange={chooseFiles}/></div>
- {files.length>0&&<div style={{marginTop:18}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}><strong>{files.length} PDF file{files.length===1?"":"s"} selected</strong><button className="secondary" onClick={()=>{setFiles([]);setDone(null);setError("");}}>Clear all</button></div><div style={{display:"grid",gap:8,marginTop:12}}>{files.map((item,index)=><div key={item.id} style={{display:"flex",alignItems:"center",gap:10,padding:12,border:"1px solid #e4e7ec",borderRadius:8,flexWrap:"wrap"}}><FileText size={20} color="#9e8556"/><div style={{flex:1,minWidth:180}}><strong>{index+1}. {item.file.name}</strong><div className="muted" style={{fontSize:13}}>{item.pageCount} page{item.pageCount===1?"":"s"} · {(item.file.size/1024/1024).toFixed(2)} MB</div></div><button className="secondary" disabled={index===0} onClick={()=>move(index,-1)} aria-label={"Move "+item.file.name+" up"}>↑</button><button className="secondary" disabled={index===files.length-1} onClick={()=>move(index,1)} aria-label={"Move "+item.file.name+" down"}>↓</button><button className="secondary" onClick={()=>{setFiles(prev=>prev.filter((_,i)=>i!==index));setDone(null);}} aria-label={"Remove "+item.file.name}>Remove</button></div>)}</div><div style={{marginTop:16,maxWidth:500}}><label>Output file name</label><input value={outputName} onChange={e=>setOutputName(e.target.value)} style={{width:"100%",marginTop:6}} placeholder="merged-document.pdf"/></div><div style={{display:"flex",gap:10,alignItems:"center",marginTop:16,flexWrap:"wrap"}}><button onClick={merge} disabled={busy||files.length<2}>{busy?"Merging PDFs…":"Merge PDFs"}</button><span className="muted">At least 2 PDFs are required.</span></div></div>}
+ {files.length>0&&<div style={{marginTop:18}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}><strong>{files.length} readable PDF file{files.length===1?"":"s"} selected</strong><button className="secondary" onClick={()=>{setFiles([]);setFileWarnings([]);setDone(null);setError("");}}>Clear all</button></div><div style={{display:"grid",gap:8,marginTop:12}}>{files.map((item,index)=><div key={item.id} style={{display:"flex",alignItems:"center",gap:10,padding:12,border:"1px solid #e4e7ec",borderRadius:8,flexWrap:"wrap"}}><FileText size={20} color="#9e8556"/><div style={{flex:1,minWidth:180}}><strong>{index+1}. {item.file.name}</strong><div className="muted" style={{fontSize:13}}>{item.pageCount} page{item.pageCount===1?"":"s"} · {(item.file.size/1024/1024).toFixed(2)} MB</div></div><button className="secondary" disabled={index===0} onClick={()=>move(index,-1)} aria-label={"Move "+item.file.name+" up"}>↑</button><button className="secondary" disabled={index===files.length-1} onClick={()=>move(index,1)} aria-label={"Move "+item.file.name+" down"}>↓</button><button className="secondary" onClick={()=>{setFiles(prev=>prev.filter((_,i)=>i!==index));setDone(null);}} aria-label={"Remove "+item.file.name}>Remove</button></div>)}</div><div style={{marginTop:16,maxWidth:500}}><label>Output file name</label><input value={outputName} onChange={e=>setOutputName(e.target.value)} style={{width:"100%",marginTop:6}} placeholder="merged-document.pdf"/></div><div style={{display:"flex",gap:10,alignItems:"center",marginTop:16,flexWrap:"wrap"}}><button onClick={merge} disabled={busy||files.length<2}>{busy?"Merging PDFs…":"Merge PDFs"}</button><span className="muted">At least 2 readable PDFs are required.</span></div></div>}
  {error&&<div className="notice" role="alert" style={{marginTop:14}}>{error}</div>}
+ {fileWarnings.length>0&&<div className="notice" role="status" style={{marginTop:14}}><strong>Files that were not added</strong><ul style={{margin:"8px 0 0",paddingLeft:20}}>{fileWarnings.map((item,index)=><li key={item.name+"-"+index}><strong>{item.name}:</strong> {item.message}</li>)}</ul></div>}
  {done&&<div className="notice" style={{marginTop:14}}><strong>PDF merged successfully.</strong><p style={{margin:"6px 0"}}>{done.name} · {done.pages} total pages</p><button onClick={download}>Download merged PDF</button></div>}
  </section></div>;
 }
