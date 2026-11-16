@@ -53,7 +53,7 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
   const agentRecord=inv.dv_accounting_agents||{};
   const agent=agentRecord.name||[agentRecord.first_name,agentRecord.last_name].filter(Boolean).join(" ")||agentRecord.legal_name||agentRecord.email||"Agent";
   const hasPrec=Boolean(agentRecord.incorporated&&String(agentRecord.corporation_name||"").trim());
-  const billToAddress=[agentRecord.address,agentRecord.city,agentRecord.province,agentRecord.postal_code].filter(value=>String(value||"").trim()).join(", ");
+  const billToAddress=[agentRecord.address,[agentRecord.city,agentRecord.province,agentRecord.postal_code].filter(value=>String(value||"").trim()).join(", ")].filter(Boolean);
   const logo=await getInvoiceLogo();
   const items=Array.isArray(inv.dv_agent_invoice_items)?inv.dv_agent_invoice_items:[];
   const fmtDate=value=>value?new Date(value+"T00:00:00").toLocaleDateString("en-CA",{year:"numeric",month:"short",day:"numeric"}):"—";
@@ -87,7 +87,7 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
   }
   if(billToAddress){
    doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.setTextColor(...muted);
-   const addressLines=doc.splitTextToSize(billToAddress,96);doc.text(addressLines,left,billY);
+   const addressLines=billToAddress.flatMap(line=>doc.splitTextToSize(line,96));doc.text(addressLines,left,billY);
   }
   doc.setFillColor(...pale);doc.roundedRect(119,57,75,27,2,2,"F");
   const meta=[["Invoice date",fmtDate(inv.invoice_date)],["Due date",fmtDate(inv.due_date)],["Status",inv.status||"Open"]];
@@ -152,7 +152,7 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
  const scheduleInvoiceEmail=async()=>{
   if(!emailDraft)return;
   const to=String(emailDraft.to||"").trim(),cc=String(emailDraft.cc||"").trim();
-  const validEmail=value=>/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value);
+  const validEmail=value=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   if(!validEmail(to)){setError("Enter a valid recipient email address.");return;}
   if(cc&&!validEmail(cc)){setError("Enter a valid CC email address or leave it blank.");return;}
   const scheduledDate=new Date(scheduleAt);
@@ -175,7 +175,7 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
  const confirmSendInvoice=async()=>{
   if(!emailDraft)return;
   const to=String(emailDraft.to||"").trim(),cc=String(emailDraft.cc||"").trim();
-  const validEmail=value=>/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value);
+  const validEmail=value=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   if(!validEmail(to)){setError("Enter a valid recipient email address.");return;}
   if(cc&&!validEmail(cc)){setError("Enter a valid CC email address or leave it blank.");return;}
   setSendingInvoice(emailDraft.invoiceId);setError("");setNotice("");
