@@ -13,7 +13,7 @@ const CATEGORIES = [
   ["OTHER", "Other"]
 ];
 const ADMIN_ROLES = ["SUPERADMIN", "ADMIN", "BROKER_OF_RECORD", "BROKER OF RECORD", "BROKER", "MANAGER", "MANAGEMENT"];
-const newRule = () => ({ id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), label: "", page: 1, stage: "PRE_SIGN", kind: "FIELD", required: true, condition: "" });
+const newRule = () => ({ id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), label: "", page: 1, stage: "PRE_SIGN", kind: "FIELD", field_key: "", required: true, condition: "" });
 const safeName = name => String(name || "reference.pdf").normalize("NFKD").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120);
 
 export default function DocumentLibrary({ user, adminMode = false, role = "" }) {
@@ -114,6 +114,12 @@ export default function DocumentLibrary({ user, adminMode = false, role = "" }) 
     if (!canManage) return;
     setSaving(true); setError(""); setMessage("");
     const { data: authData } = await supabase.auth.getUser();
+    if (status === "PUBLISHED") {
+      const { error: archiveError } = await supabase.from("dv_accounting_paperwork_library")
+        .update({ status: "ARCHIVED", updated_at: new Date().toISOString(), updated_by: authData?.user?.id || user?.id || null })
+        .eq("document_name", row.document_name).eq("status", "PUBLISHED").neq("id", row.id);
+      if (archiveError) { setError(archiveError.message); setSaving(false); return; }
+    }
     const { error: updateError } = await supabase.from("dv_accounting_paperwork_library").update({
       status, published_at: status === "PUBLISHED" ? new Date().toISOString() : null,
       updated_by: authData?.user?.id || user?.id || null, updated_at: new Date().toISOString()
@@ -162,8 +168,9 @@ export default function DocumentLibrary({ user, adminMode = false, role = "" }) 
         <button className="secondary" type="button" onClick={() => setEditing(null)}>Close</button>
       </div>
       <div style={{ display: "grid", gap: 8, marginTop: 14 }}>
-        {rules.map((rule,index) => <div key={rule.id || index} style={{ display: "grid", gridTemplateColumns: "minmax(180px,1.4fr) 75px 130px 125px 80px 36px", gap: 7, alignItems: "center" }}>
-          <input aria-label="Field or section label" value={rule.label} onChange={e => setRules(list => list.map((item,i) => i===index ? { ...item, label: e.target.value } : item))} placeholder="Field / section name"/>
+        {rules.map((rule,index) => <div key={rule.id || index} style={{ display: "grid", gridTemplateColumns: "minmax(160px,1.2fr) minmax(130px,1fr) 65px 125px 115px 75px 36px", gap: 7, alignItems: "center" }}>
+          <input aria-label="Field or section label" value={rule.label} onChange={e => setRules(list => list.map((item,i) => i===index ? { ...item, label: e.target.value } : item))} placeholder="Checklist label"/>
+          <input aria-label="PDF field name" value={rule.field_key || ""} onChange={e => setRules(list => list.map((item,i) => i===index ? { ...item, field_key: e.target.value } : item))} placeholder="PDF field name (optional)"/>
           <input aria-label="Page number" type="number" min="1" value={rule.page} onChange={e => setRules(list => list.map((item,i) => i===index ? { ...item, page: e.target.value } : item))}/>
           <select aria-label="Check stage" value={rule.stage || "PRE_SIGN"} onChange={e => setRules(list => list.map((item,i) => i===index ? { ...item, stage: e.target.value } : item))}><option value="PRE_SIGN">Before signing</option><option value="POST_SIGN">After signing</option><option value="BOTH">Both stages</option></select>
           <select aria-label="Field type" value={rule.kind || "FIELD"} onChange={e => setRules(list => list.map((item,i) => i===index ? { ...item, kind: e.target.value } : item))}><option value="FIELD">Field</option><option value="CHECKBOX">Checkbox</option><option value="DATE">Date</option><option value="INITIAL">Initials</option><option value="SIGNATURE">Signature</option></select>
