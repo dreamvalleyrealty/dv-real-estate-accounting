@@ -71,7 +71,7 @@ const outputSchema = {
 };
 
 function cleanBase64(value: unknown): string {
-  return String(value || "").replace(/^data:[^,]+,/, "").replace(/\\s/g, "");
+  return String(value || "").replace(/^data:[^,]+,/, "").replace(/\s/g, "");
 }
 
 Deno.serve(async (req: Request) => {
@@ -116,7 +116,7 @@ Deno.serve(async (req: Request) => {
     const estimatedBytes = Math.floor(base64.length * 3 / 4);
     totalBytes += estimatedBytes;
     if (totalBytes > MAX_TOTAL_BYTES) return json({ error: "The combined upload is larger than 4 MB for this first AI audit version. Reduce the file size or split the package." }, 413);
-    fileNames.push(name);
+    fileNames.push(name + " -> selected reference: " + String(file?.referenceFormName || "not selected") + (file?.referenceVersion ? " v" + String(file.referenceVersion) : ""));
     if (mimeType === "application/pdf") {
       content.push({ type: "input_file", filename: name, file_data: "data:application/pdf;base64," + base64, detail: "high" });
     } else {
