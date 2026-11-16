@@ -66,13 +66,13 @@ declare v_invoice_id uuid; v_total numeric(14,2); v_paid numeric(14,2); v_due da
 begin
  v_invoice_id:=coalesce(new.invoice_id,old.invoice_id);
  select total_amount,due_date into v_total,v_due from public.dv_agent_invoices where id=v_invoice_id for update;
- if not found then return coalesce(new,old); end if;
+ if not found then if tg_op='DELETE' then return old; else return new; end if; end if;
  select coalesce(sum(amount),0) into v_paid from public.dv_agent_invoice_payments where invoice_id=v_invoice_id;
  update public.dv_agent_invoices set paid_amount=v_paid,balance_amount=greatest(v_total-v_paid,0),
  status=case when v_paid>=v_total then 'Paid' when v_paid>0 then 'Partially Paid' when due_date is not null and due_date<current_date then 'Overdue' else 'Open' end,
  updated_at=now() where id=v_invoice_id;
- return coalesce(new,old);
-end; $$;
+ if tg_op='DELETE' then return old; else return new; end if;
+end; $;
 drop trigger if exists trg_dv_agent_invoice_payment_balance on public.dv_agent_invoice_payments;
 create trigger trg_dv_agent_invoice_payment_balance after insert or update or delete on public.dv_agent_invoice_payments
 for each row execute function public.dv_agent_invoice_refresh_balance();
