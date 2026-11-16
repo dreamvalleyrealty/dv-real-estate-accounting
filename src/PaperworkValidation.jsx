@@ -20,6 +20,7 @@ export default function PaperworkValidation({ isActive = true }) {
   const [reports, setReports] = useState({ pre: null, post: null });
   const [signatureChecks, setSignatureChecks] = useState({});
   const [showPostReview, setShowPostReview] = useState(false);
+  const [aiAudit, setAiAudit] = useState({ loading: false, audit: null, error: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -45,6 +46,7 @@ export default function PaperworkValidation({ isActive = true }) {
     setReports({ pre: null, post: null });
     setSignatureChecks({});
     setShowPostReview(false);
+    setAiAudit({ loading: false, audit: null, error: "" });
     setError("");
     setMessage("");
   }
@@ -58,6 +60,7 @@ export default function PaperworkValidation({ isActive = true }) {
     setReports({ pre: null, post: null });
     setSignatureChecks({});
     setShowPostReview(false);
+    setAiAudit({ loading: false, audit: null, error: "" });
     setError("");
     setMessage("");
   }
@@ -116,12 +119,49 @@ export default function PaperworkValidation({ isActive = true }) {
     } finally { await worker.terminate(); }
   }
 
+  async function fileToBase64(file) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+    }
+    return btoa(binary);
+  }
+
+  async function runAiAudit() {
+    if (!supabase) throw new Error("The Back Office connection is unavailable.");
+    const totalBytes = files.reduce((sum, item) => sum + item.file.size, 0);
+    if (totalBytes > 4 * 1024 * 1024) {
+      throw new Error("The AI review limit for this first release is 4 MB for the combined package. Reduce the file sizes or split the package.");
+    }
+    const uploaded = await Promise.all(files.map(async item => ({
+      name: item.file.name,
+      referenceFormName: libraryForms.find(form => form.id === item.referenceId)?.document_name || "",
+      referenceVersion: libraryForms.find(form => form.id === item.referenceId)?.version || "",
+      mimeType: item.file.type || (isPdf(item.file) ? "application/pdf" : ""),
+      base64: await fileToBase64(item.file),
+    })));
+    const referenceRules = files.map(item => {
+      const form = libraryForms.find(candidate => candidate.id === item.referenceId);
+      return form ? { document_name: form.document_name, version: form.version, rules: form.validation_rules || [] } : null;
+    }).filter(Boolean);
+    const { data, error: invokeError } = await supabase.functions.invoke("ai-paperwork-audit", {
+      body: { files: uploaded, referenceRules },
+    });
+    if (invokeError) throw new Error(invokeError.message || "AI review could not be completed.");
+    if (data?.error) throw new Error(data.error);
+    if (!data?.audit) throw new Error("The AI service returned an incomplete review.");
+    setAiAudit({ loading: false, audit: data.audit, error: "" });
+  }
+
   async function runPreCheck() {
     if (!files.length) { setError("Upload one or more forms first."); return; }
     setBusy(true);
     setError("");
     setMessage("");
     setReports({ pre: null, post: null });
+    setAiAudit({ loading: true, audit: null, error: "" });
     try {
       const next = {};
       for (const item of files) {
@@ -200,7 +240,13 @@ export default function PaperworkValidation({ isActive = true }) {
       setReports({ pre: report, post: null });
       setShowPostReview(false);
       setMessage(errors.length ? "Some required items are missing. Correct them and run the check again." : warnings.length ? "The automated check is finished. Please complete the manual reviews listed below." : "The automated checks passed.");
+      try {
+        await runAiAudit();
+      } catch (aiError) {
+        setAiAudit({ loading: false, audit: null, error: aiError?.message || "AI review could not be completed." });
+      }
     } catch (e) {
+      setAiAudit({ loading: false, audit: null, error: "" });
       setError(e?.message || "Paperwork validation failed.");
     } finally {
       setBusy(false);
@@ -285,12 +331,12 @@ export default function PaperworkValidation({ isActive = true }) {
         <span style={{ background: "#0f2141", color: "#fff", borderRadius: 20, width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>1</span>
         <h3 style={{ margin: 0 }}>Upload documents</h3>
       </div>
-      <p className="muted">Upload all the forms in the package together. Match each document to its official reference form when one is available.</p>
+      <p className="muted">Upload all the forms in the package together. Match each document to its official reference form when one is available. The first AI review supports up to 4 MB combined per package.</p>
       {libraryError && <p className="error">The reference library could not be loaded: {libraryError}</p>}
       {!libraryForms.length && !libraryError && <div className="muted" style={{ padding: 10, background: "#f8f9fb", borderRadius: 6, marginBottom: 12 }}>No official reference forms are published yet. An administrator must add them in Document Library before automatic form-specific checks are available.</div>}
       <label className="secondary" style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 12 }}>
         <Upload size={16}/> Choose files
-        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff" style={{ display: "none" }} onChange={event => { addFiles(event.target.files); event.target.value = ""; }}/>
+        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff" style={{ display: "none" }} onChange={event => { addFiles(event.target.files); event.target.value = ""; }}/>
       </label>
       {files.length > 0 && <div style={{ display: "grid", gap: 8, marginBottom: 14 }}>
         {files.map(item => <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(190px,280px) auto", alignItems: "center", gap: 10, border: "1px solid #e4e7ec", borderRadius: 8, padding: 10 }}>
@@ -301,11 +347,53 @@ export default function PaperworkValidation({ isActive = true }) {
           </select>
           <button type="button" className="textbutton" aria-label={"Remove " + item.file.name} onClick={() => { setFiles(current => current.filter(file => file.id !== item.id)); setAnalyses({}); setReports({ pre: null, post: null }); setShowPostReview(false); }}><Trash2 size={16}/></button>
         </div>)}
-        <button className="primary" type="button" disabled={busy || !files.length} onClick={runPreCheck}>{busy ? "Checking documents…" : "Check form completion"}</button>
+        <button className="primary" type="button" disabled={busy || !files.length} onClick={runPreCheck}>{busy ? "Checking documents and AI…" : "Run completion + AI check"}</button>
       </div>}
     </section>
 
     {resultSection("2. Form completion results",reports.pre)}
+    {(aiAudit.loading || aiAudit.error || aiAudit.audit) && <section style={{ border: "1px solid #d0d5dd", borderRadius: 10, padding: 16, margin: "14px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
+        <strong style={{ fontSize: 16 }}>AI paperwork review</strong>
+        {aiAudit.loading && <span className="muted">Reviewing documents…</span>}
+        {aiAudit.audit && <span className="muted">OpenAI-assisted review</span>}
+      </div>
+      {aiAudit.loading && <p className="muted">AI is reading the uploaded pages and checking information across the package. Keep this page open.</p>}
+      {aiAudit.error && <div className="notice" role="status">{aiAudit.error}</div>}
+      {aiAudit.audit && <>
+        <p style={{ marginTop: 0 }}>{aiAudit.audit.summary}</p>
+        <div style={{ display: "grid", gap: 7, marginBottom: 12 }}>
+          {(aiAudit.audit.documents || []).map((doc,index) => <div key={doc.document_name+index} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 10px", background: "#f8f9fb", borderRadius: 6 }}>
+            <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>{doc.detected_type || "Document"}</strong><span className="muted"> · {doc.document_name}</span></span>
+            <span className="muted" style={{ whiteSpace: "nowrap" }}>{doc.page_count ?? "?"} pages · {doc.review_status === "REVIEWED" ? "Reviewed" : doc.review_status === "PARTIAL" ? "Partial" : "Unreadable"}</span>
+          </div>)}
+        </div>
+        {(aiAudit.audit.findings || []).length > 0 ? <div style={{ display: "grid", gap: 8 }}>
+          <strong>AI findings ({aiAudit.audit.findings.length})</strong>
+          {aiAudit.audit.findings.map((finding,index) => {
+            const color = finding.severity === "ERROR" ? "#b42318" : finding.severity === "WARNING" ? "#946200" : finding.severity === "INFO" ? "#167344" : "#475467";
+            return <div key={index} style={{ border: "1px solid #e4e7ec", borderLeft: "3px solid "+color, borderRadius: 7, padding: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                <strong>{finding.title}</strong><span style={{ color, fontSize: 11, fontWeight: 700 }}>{finding.severity.replace("_"," ")} · {finding.confidence} CONFIDENCE</span>
+              </div>
+              <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>{finding.document_name}{finding.page_number ? " · Page "+finding.page_number : ""}</div>
+              <p style={{ margin: "7px 0", fontSize: 13 }}>{finding.explanation}</p>
+              {finding.evidence && <div style={{ fontSize: 12, background: "#f8f9fb", padding: 7, borderRadius: 5 }}>Evidence: {finding.evidence}</div>}
+              {finding.suggested_action && <div style={{ fontSize: 12, marginTop: 6 }}><strong>Suggested action:</strong> {finding.suggested_action}</div>}
+            </div>;
+          })}
+        </div> : <div className="notice">AI did not identify any specific issues. This is not a legal approval; complete all required human checks.</div>}
+        {(aiAudit.audit.cross_document_checks || []).length > 0 && <div style={{ marginTop: 14 }}>
+          <strong>Cross-document consistency</strong>
+          {(aiAudit.audit.cross_document_checks || []).map((check,index) => <div key={index} style={{ padding: "8px 0", borderBottom: "1px solid #e4e7ec", fontSize: 13 }}>
+            <strong>{check.field}</strong> · {check.result.replace("_"," ")}
+            <div className="muted">{check.documents_compared.join(" / ")}</div>
+            <div>{check.explanation}</div>
+          </div>)}
+        </div>}
+        <p className="muted" style={{ fontSize: 11, marginBottom: 0 }}>AI findings are suggestions for human review, not legal advice or signature authentication. Uploaded files are sent to OpenAI for processing and are not saved by this application. OpenAI API data controls and retention terms apply.</p>
+      </>}
+    </section>}
     {reports.pre && <section style={{ border: "1px solid #e4e7ec", borderRadius: 10, padding: 16, marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
         <span style={{ background: "#0f2141", color: "#fff", borderRadius: 20, width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>3</span>
