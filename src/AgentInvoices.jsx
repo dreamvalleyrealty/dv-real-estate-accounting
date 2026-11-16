@@ -23,7 +23,7 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
    const ids=(data||[]).map(x=>x.id);
    let p=[];
    if(ids.length){const{data:pd,error:pe}=await supabase.from("dv_agent_invoice_payments").select("*").in("invoice_id",ids).order("payment_date",{ascending:false});if(pe)throw pe;p=pd||[]}
-   setInvoices(data||[]);setPayments(p);let emailRows=[];if(adminMode&&ids.length){const{data:ed,error:ee}=await supabase.from("dv_accounting_email_log").select("id,agent_invoice_id,recipient_email,subject,status,sent_at,created_at,error_message").in("agent_invoice_id",ids).order("created_at",{ascending:false});if(ee)throw ee;emailRows=ed||[]}setEmailLogs(emailRows);
+   setInvoices(data||[]);setPayments(p);let emailRows=[];if(adminMode&&ids.length){const{data:ed,error:ee}=await supabase.from("dv_accounting_email_log").select("id,agent_invoice_id,recipient_email,cc_email,subject,status,sent_at,created_at,error_message").in("agent_invoice_id",ids).order("created_at",{ascending:false});if(ee){if(!/agent_invoice_id.*does not exist|column.*does not exist/i.test(ee.message))throw ee;}else emailRows=ed||[]}setEmailLogs(emailRows);
    if(adminMode){const[{data:ad,error:ae},{data:ci,error:ce}]=await Promise.all([supabase.from("dv_accounting_agents").select("id,name,first_name,last_name,email").eq("active",true).order("name"),supabase.from("dv_accounting_inventory_items").select("id,item_code,item_name,item_type,description,sale_price,tax_rate,pricing_tiers,is_active,stock_quantity").eq("is_active",true).in("item_type",["SELLABLE","SERVICE","GIFT"]).order("item_name")]);if(ae)throw ae;if(ce)throw ce;setAgents(ad||[]);setCatalog(ci||[])}
   }catch(e){setError(e?.message||"Unable to load invoices.")}finally{setBusy(false)}
  },[agentId,adminMode]);
