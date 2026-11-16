@@ -1,4 +1,4 @@
--- Invoice line items linked to the existing inventory catalogue.
+-- Invoice line items linked to the existing inventory catalogue, with supported manual custom lines.
 create table if not exists public.dv_agent_invoice_items (
   id uuid primary key default gen_random_uuid(),
   invoice_id uuid not null references public.dv_agent_invoices(id) on delete cascade,
@@ -77,7 +77,11 @@ begin
   for v_line in select value from jsonb_array_elements(p_items)
   loop
     v_item_id := nullif(v_line->>'inventory_item_id','')::uuid;
-    if v_item_id is null or not exists (
+    if v_item_id is null then
+      if coalesce(v_line->>'item_code','') <> 'CUSTOM' or length(trim(coalesce(v_line->>'item_name',''))) = 0 then
+        raise exception 'Custom invoice lines require a description and CUSTOM item code';
+      end if;
+    elsif not exists (
       select 1 from public.dv_accounting_inventory_items inv
       where inv.id=v_item_id and inv.is_active=true
         and inv.item_type in ('SELLABLE','SERVICE','GIFT')
