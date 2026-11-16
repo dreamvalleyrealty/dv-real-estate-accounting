@@ -1,3 +1,5 @@
+import { validateCommercialLeaseCommission } from "./commercialLeaseCommission";
+
 const clean = value => String(value ?? "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 const norm = value => clean(value).toLowerCase().replace(/[^a-z0-9]/g, "");
 const money = value => {
@@ -48,8 +50,9 @@ export function validateOfferPackage({ form = {}, docs = [], requirements = {}, 
     const rent = money(form.sale_price) || money(form.list_price);
     if (!rent && !form.commercial_lease_commission) add("error", "rent_missing", "Rent / lease value missing", "Enter the agreed rent or lease value in the trade details.");
     if (isCommercial(form) && form.commercial_lease_commission) {
-      const lease = form.commercial_lease_commission;
-      if (!(Number(lease.annual_rent || lease.base_rent || lease.lease_value || 0) > 0)) add("warning", "commercial_rent_review", "Commercial lease value needs review", "Confirm the rent schedule and lease term in the commercial lease calculation.");
+      const commercialCheck = validateCommercialLeaseCommission(form.commercial_lease_commission);
+      commercialCheck.errors.forEach((detail, index) => add("error", "commercial_lease_" + index, "Commercial lease details need correction", detail));
+      commercialCheck.warnings.forEach((detail, index) => add("warning", "commercial_lease_warning_" + index, "Commercial lease review", detail));
     }
   } else {
     if (!money(form.sale_price)) add("error", "purchase_price_missing", "Purchase price missing", "Enter the agreed purchase price.");
@@ -80,7 +83,7 @@ export function validateOfferPackage({ form = {}, docs = [], requirements = {}, 
     else add("error", "aps_missing", "Offer form not identified", "Upload the applicable agreement form and label it as the Agreement of Purchase and Sale / Lease.");
   } else {
     const text = aps.text;
-    const leaseMarker = /agreement to lease|offer to lease|tenant|landlord/i.test(text);
+    const leaseMarker = /commercial lease|lease agreement|agreement to lease|offer to lease|tenant|landlord/i.test(text);
     const saleMarker = /agreement of purchase and sale|purchase price|buyer|seller/i.test(text);
     if (isLease(form) && !leaseMarker) add("warning", "form_type_mismatch", "Uploaded form may not be a lease", "The trade is recorded as a lease, but the extracted form text does not clearly identify a lease agreement.", aps.name);
     else if (!isLease(form) && !saleMarker) add("warning", "form_type_mismatch", "Uploaded form may not be a purchase agreement", "The trade is recorded as a purchase and sale, but the extracted form text does not clearly identify an APS.", aps.name);
