@@ -12,7 +12,7 @@ const CATEGORIES = [
   ["COMPLIANCE", "Compliance"],
   ["OTHER", "Other"]
 ];
-const ADMIN_ROLES = ["SUPERADMIN", "ADMIN", "BROKER_OF_RECORD", "BROKER OF RECORD", "BROKER", "MANAGER", "MANAGEMENT"];
+const ADMIN_ROLES = ["SUPERADMIN", "ADMIN", "BROKER_OF_RECORD", "BROKER-OF-RECORD", "BROKER OF RECORD", "BROKER", "MANAGER", "MANAGEMENT"];
 const newRule = () => ({ id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), label: "", page: 1, stage: "PRE_SIGN", kind: "FIELD", field_key: "", required: true, condition: "" });
 const safeName = name => String(name || "reference.pdf").normalize("NFKD").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120);
 async function detectReferenceRules(file) {
