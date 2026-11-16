@@ -89,17 +89,17 @@ function PdfMerger(){
     const header=new TextDecoder("latin1").decode(new Uint8Array(bytes.slice(0,1024)));
     if(!header.includes("%PDF-"))throw new Error("The file does not contain a valid PDF header. It may be a renamed or damaged file.");
     let pdf;
+    let pageCount=0;
     try{
      pdf=await pdfjsLib.getDocument({data:new Uint8Array(bytes.slice(0)),useWorkerFetch:false,isEvalSupported:false}).promise;
+     pageCount=pdf.numPages;
+     pdf.destroy();
     }catch(parseError){
      const message=String(parseError?.message||parseError||"");
      if(/password|encrypt/i.test(message))throw new Error("This PDF is password-protected or encrypted. Remove its password in a trusted PDF app, save an unlocked copy, and try again.");
-     if(/invalid pdf|missing pdf|formaterror|unexpected.*eof|end of file/i.test(message))throw new Error("PDF.js could not parse this file. It may be damaged, incomplete, or not a real PDF.");
      throw new Error("PDF.js could not open this file: "+(message||"unknown PDF parsing error"));
     }
-    const pageCount=pdf.numPages;
     if(!Number.isInteger(pageCount)||pageCount<1)throw new Error("The PDF contains no readable pages.");
-    pdf.destroy();
     prepared.push({file,bytes,pageCount,id:file.name+"-"+file.size+"-"+file.lastModified});
    }catch(err){
     warnings.push({name:file.name,message:err?.message||"Unable to read this PDF."});
