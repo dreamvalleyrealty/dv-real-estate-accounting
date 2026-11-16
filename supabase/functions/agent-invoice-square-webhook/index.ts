@@ -65,7 +65,7 @@ Deno.serve(async (req: Request) => {
     if (payment.amount_money?.currency !== "CAD" || !payment.order_id) return json({ ok: true, ignored: true });
 
     const { data: session, error: sessionError } = await db.from("dv_agent_invoice_square_sessions")
-      .select("id,invoice_id,agent_id,square_order_id,amount_cents,base_amount_cents,fee_amount_cents,fee_tax_cents,status,square_payment_id")
+      .select("id,invoice_id,agent_id,square_order_id,amount_cents,base_amount_cents,fee_amount_cents,fee_tax_cents,allocations,status,square_payment_id")
       .eq("square_order_id", payment.order_id).maybeSingle();
     if (sessionError) throw sessionError;
     if (!session) return json({ ok: true, ignored: true, reason: "No matching invoice checkout." });
@@ -77,17 +77,26 @@ Deno.serve(async (req: Request) => {
       ? new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(payment.created_at))
       : new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
-    const { error: insertError } = await db.from("dv_agent_invoice_payments").insert({
-      invoice_id: session.invoice_id, agent_id: session.agent_id,
-      amount: (Number(session.base_amount_cents ?? session.amount_cents) / 100).toFixed(2),
-      card_fee_amount: (Number(session.fee_amount_cents || 0) / 100).toFixed(2),
-      card_fee_tax: (Number(session.fee_tax_cents || 0) / 100).toFixed(2),
-      payment_date: paymentDate, payment_method: "Square", reference_number: payment.id,
-      notes: Number(session.fee_amount_cents||0)+Number(session.fee_tax_cents||0)>0 ? "Online Square payment. Card fee and fee HST recorded separately." : "Online payment through Square", square_payment_id: payment.id
+    const allocations = Array.isArray(session.allocations) ? session.allocations : [];
+    if (!allocations.length) return json({ error: "Checkout has no saved invoice allocations. Contact the office before recording this payment." }, 409);
+    const allocationBase = allocations.reduce((sum:any, item:any) => sum + Math.round(Number(item.amount||0)*100), 0);
+    const allocationFees = allocations.reduce((sum:any, item:any) => sum + Math.round(Number(item.card_fee_amount||0)*100), 0);
+    const allocationTax = allocations.reduce((sum:any, item:any) => sum + Math.round(Number(item.card_fee_tax||0)*100), 0);
+    if (allocationBase !== Number(session.base_amount_cents) || allocationFees !== Number(session.fee_amount_cents||0) || allocationTax !== Number(session.fee_tax_cents||0)) {
+      return json({ error: "Saved invoice allocation totals do not match the Square checkout." }, 409);
+    }
+    const { data: recorded, error: recordError } = await db.rpc("dv_record_agent_invoice_multi_payment", {
+      p_agent_id: session.agent_id,
+      p_allocations: allocations.map((item:any) => ({invoice_id:item.invoice_id,amount:item.amount,card_fee_amount:item.card_fee_amount,card_fee_tax:item.card_fee_tax})),
+      p_payment_method: "Square",
+      p_payment_date: paymentDate,
+      p_reference_number: payment.id,
+      p_square_payment_id: payment.id,
+      p_notes: "Verified Square payment. Allocated oldest outstanding invoice first."
     });
-    if (insertError) {
+    if (recordError) {
       const { data: existing } = await db.from("dv_agent_invoice_payments").select("id").eq("square_payment_id", payment.id).maybeSingle();
-      if (!existing) throw insertError;
+      if (!existing) throw recordError;
     }
 
     const { error: updateError } = await db.from("dv_agent_invoice_square_sessions").update({
