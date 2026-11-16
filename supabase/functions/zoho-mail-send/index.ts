@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS"};
 function json(body:unknown,status=200){return new Response(JSON.stringify(body),{status,headers:{...cors,"Content-Type":"application/json","Cache-Control":"no-store"}})}
 const validEmail=(v:string)=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+const parseEmailList=(v:string)=>v.split(/[;,\\s]+/).map(x=>x.trim()).filter(Boolean);
 function decodeBase64(input:string){const raw=atob(input);const bytes=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);return bytes;}
 Deno.serve(async(req:Request)=>{
  if(req.method==="OPTIONS")return new Response("ok",{headers:cors});
@@ -15,11 +16,11 @@ Deno.serve(async(req:Request)=>{
  const {data:userData,error:userError}=await admin.auth.getUser(auth.slice(7));
  if(userError||!userData?.user)return json({error:"Your session could not be verified. Please sign in again."},401);
  let body:any;try{body=await req.json()}catch{return json({error:"Invalid request body."},400)}
- const recipient=String(body.to||"").trim(),cc=String(body.cc||"").trim(),subject=String(body.subject||"").trim(),html=String(body.htmlBody||"").trim();
+ const recipients=parseEmailList(String(body.to||"")),ccRecipients=parseEmailList(String(body.cc||"")),recipient=recipients.join(", "),cc=ccRecipients.join(", "),subject=String(body.subject||"").trim(),html=String(body.htmlBody||"").trim();
  const documentType=String(body.documentType||"");
  const lawyerPackage=documentType==="LAWYER_DOCUMENT_PACKAGE";
  const agentInvoice=documentType==="AGENT_INVOICE";
- if(!validEmail(recipient)||(cc&&!validEmail(cc)))return json({error:"Enter a valid recipient email address."},400);
+ if(!recipients.length||recipients.length>20||recipients.some(x=>!validEmail(x))||ccRecipients.length>20||ccRecipients.some(x=>!validEmail(x)))return json({error:"Enter valid To and CC email addresses. Separate multiple addresses with commas."},400);
  if(!subject||subject.length>250||!html||html.length>250000)return json({error:"Subject or email body is missing or too long. Email body limit is 250 KB."},400);
  if(!["COMMISSION_INVOICE","SELLER_COMMISSION_STATEMENT","LAWYER_DOCUMENT_PACKAGE","AGENT_INVOICE"].includes(documentType))return json({error:"Unsupported document type."},400);
  const files:any[]=[];
