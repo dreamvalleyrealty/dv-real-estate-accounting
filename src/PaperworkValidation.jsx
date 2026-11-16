@@ -1,235 +1,217 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, FileCheck2, FileText, RefreshCw, Trash2, Upload } from "lucide-react";
-import { supabase } from "./lib/supabase";
-import { validateOfferPackage, validateOfferPostSignature } from "./lib/offerValidation";
 
-const DEFAULT_TYPES = [["APS","Agreement of Purchase and Sale / Lease"],["MLS","MLS / Listing sheet"],["COMMISSION","Commission confirmation"],["ID","Identity / compliance document"],["OTHER","Other supporting document"]];
-const labelFor = (type, types) => types.find(item => item[0] === type)?.[1] || type;
-const cleanPayload = row => ({ ...(row?.payload || {}), side: String(row?.representation_side || row?.payload?.side || "SELLER").toUpperCase() });
-const isPdf = file => /pdf/i.test(file?.type || "") || /\.pdf$/i.test(file?.name || "");
+const TYPES = [["FORM","Form / Agreement"],["SCHEDULE","Schedule / Attachment"],["DISCLOSURE","Disclosure"],["ID","Identity Document"],["OTHER","Other"]];
+const isPdf = file => /pdf/i.test(file?.type || "") || /\\.pdf$/i.test(file?.name || "");
+const idFor = () => typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random();
+const hasValue = value => value !== undefined && value !== null && String(value).trim() !== "" && String(value).trim() !== "Off";
 
-export default function PaperworkValidation({ user, agentId, adminMode = false, isActive = true }) {
-  const [trades, setTrades] = useState([]);
-  const [tradeId, setTradeId] = useState("");
-  const [types, setTypes] = useState(DEFAULT_TYPES);
-  const [requirements, setRequirements] = useState({});
+export default function PaperworkValidation({ isActive = true }) {
   const [files, setFiles] = useState([]);
+  const [analyses, setAnalyses] = useState({});
   const [reports, setReports] = useState({ pre: null, post: null });
-  const [confirmations, setConfirmations] = useState({});
+  const [signatureChecks, setSignatureChecks] = useState({});
   const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const selected = useMemo(() => trades.find(row => String(row.id) === String(tradeId)) || null, [trades, tradeId]);
-  const form = useMemo(() => cleanPayload(selected), [selected]);
-  const side = String(form.side || "SELLER").toUpperCase();
-  const sideRules = requirements[side] || requirements[side === "LANDLORD" ? "SELLER" : side] || {};
-  const requiredTypes = Array.isArray(sideRules.required) ? sideRules.required : (Array.isArray(sideRules.types) ? sideRules.types : ["APS","MLS","COMMISSION"]);
-  const requiredCounts = sideRules.counts || {};
-  const postClients = reports.post?.clients || [];
-
-  useEffect(() => {
-    let live = true;
-    async function load() {
-      setLoading(true); setError("");
-      if (!supabase) { setError("Database connection is unavailable."); setLoading(false); return; }
-      if (!adminMode && !agentId) { setError("Your agent profile could not be matched to your login."); setTrades([]); setLoading(false); return; }
-      let query = supabase.from("dv_accounting_agent_trade_submissions")
-        .select("id,agent_id,payload,transaction_id,trade_number,status,created_at,representation_side")
-        .order("created_at", { ascending: false }).limit(adminMode ? 500 : 250);
-      const { data, error: queryError } = await query;
-      if (!live) return;
-      if (queryError) { setError(queryError.message); setTrades([]); }
-      else {
-        const rows = (data || []).filter(row => adminMode ||
-          String(row.agent_id) === String(agentId) ||
-          (Array.isArray(row.payload?.additional_own_side_agents) && row.payload.additional_own_side_agents.some(a => String(a.agent_id || a.id) === String(agentId))));
-        setTrades(rows);
-      }
-      try {
-        const { data: company } = await supabase.from("dv_accounting_companies").select("id").limit(1).maybeSingle();
-        if (company?.id) {
-          const keys = ["TRADE_REQUIRED_DOCUMENT_TYPES","TRADE_DOCUMENT_TYPES","TRADE_REQUIRED_DOCUMENT_COUNTS","TRADE_DOCUMENT_REQUIREMENTS_BY_SIDE"];
-          const results = await Promise.all(keys.map(key => supabase.from("dv_accounting_settings").select("value").eq("company_id", company.id).eq("key", key).maybeSingle()));
-          if (!live) return;
-          const [required, custom, counts, bySide] = results.map(result => result.data?.value);
-          let docTypes = Array.isArray(custom) && custom.length ? custom.filter(x => Array.isArray(x) && x.length >= 2) : DEFAULT_TYPES;
-          if (!docTypes.some(x => x[0] === "OTHER")) docTypes = [...docTypes, ["OTHER","Other supporting document"]];
-          setTypes(docTypes);
-          const globalTypes = Array.isArray(required) ? required : ["APS","MLS","COMMISSION"];
-          if (bySide && typeof bySide === "object") {
-            const normalized = { ...bySide };
-            if (!normalized.SELLER && normalized.LISTING) normalized.SELLER = normalized.LISTING;
-            setRequirements(normalized);
-          } else {
-            setRequirements(Object.fromEntries(["SELLER","BUYER","LANDLORD","TENANT"].map(key => [key,{ types: globalTypes, required: globalTypes, counts: counts || {} }])));
-          }
-        }
-      } catch { /* Defaults remain usable if optional settings are unavailable. */ }
-      setLoading(false);
-    }
-    load();
-    return () => { live = false; };
-  }, [adminMode, agentId]);
-
-  function resetValidation() { setFiles([]); setReports({ pre: null, post: null }); setConfirmations({}); setError(""); setMessage(""); }
+  function resetValidation() {
+    setFiles([]);
+    setAnalyses({});
+    setReports({ pre: null, post: null });
+    setSignatureChecks({});
+    setError("");
+    setMessage("");
+  }
   useEffect(() => { if (!isActive) resetValidation(); }, [isActive]);
-  function chooseTrade(id) { setTradeId(id); resetValidation(); }
 
   function addFiles(list) {
     const picked = Array.from(list || []);
     if (!picked.length) return;
-    setFiles(current => [...current, ...picked.map((file, index) => ({
-      id: (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "-" + index),
-      file, type: "APS"
-    }))]);
-    setReports({ pre: null, post: null }); setMessage(""); setError("");
+    setFiles(current => [...current, ...picked.map(file => ({ id: idFor(), file, type: "FORM" }))]);
+    setAnalyses({});
+    setReports({ pre: null, post: null });
+    setSignatureChecks({});
+    setError("");
+    setMessage("");
   }
 
-  async function extractText(file) {
-    if (!isPdf(file)) return "";
+  async function analyzePdf(file) {
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
     const workerUrl = (await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url")).default;
     pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
     const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-    let text = "";
+    const pages = [];
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
-      const rows = new Map();
-      for (const item of content.items || []) {
-        const value = String(item.str || "").trim(); if (!value) continue;
-        const y = Math.round((item.transform?.[5] || 0) / 2) * 2;
-        const row = rows.get(y) || []; row.push(value); rows.set(y, row);
-      }
-      text += [...rows.entries()].sort((a,b) => b[0]-a[0]).map(([,parts]) => parts.join(" ")).join("\n") + "\n";
-    }
-    if (text.trim().length < 80) {
-      const { createWorker } = await import("tesseract.js");
-      const worker = await createWorker("eng");
-      try {
-        let ocr = "";
-        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-          const page = await pdf.getPage(pageNumber), viewport = page.getViewport({ scale: 1.35 });
-          const canvas = document.createElement("canvas");
-          canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
-          await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-          const result = await worker.recognize(canvas); ocr += "\n" + String(result?.data?.text || "");
-          canvas.width = 0; canvas.height = 0;
-        }
-        if (ocr.trim().length > text.trim().length) text = ocr;
-      } finally { await worker.terminate(); }
+      const text = (content.items || []).map(item => String(item.str || "").trim()).filter(Boolean).join(" ");
+      const annotations = await page.getAnnotations({ intent: "display" });
+      const fields = annotations.filter(item => item.subtype === "Widget").map(item => ({
+        name: item.fieldName || item.alternativeText || "Unnamed field",
+        type: item.fieldType || "Text",
+        value: item.fieldValue,
+        required: Boolean((Number(item.fieldFlags) || 0) & 2),
+        rect: item.rect || null
+      }));
+      pages.push({ pageNumber, text, fields, hasText: text.trim().length > 0 });
     }
     pdf.destroy();
-    return text;
+    return pages;
+  }
+
+  async function analyzeImage(file) {
+    const { createWorker } = await import("tesseract.js");
+    const worker = await createWorker("eng");
+    try {
+      const result = await worker.recognize(file);
+      return [{ pageNumber: 1, text: String(result?.data?.text || ""), fields: [], hasText: Boolean(String(result?.data?.text || "").trim()) }];
+    } finally { await worker.terminate(); }
   }
 
   async function runPreCheck() {
-    if (!selected) { setError("Select a trade first."); return; }
-    if (!files.length) { setError("Add the offer and supporting documents first."); return; }
-    setBusy(true); setError(""); setMessage(""); setReports({ pre: null, post: null });
+    if (!files.length) { setError("Upload one or more forms first."); return; }
+    setBusy(true);
+    setError("");
+    setMessage("");
+    setReports({ pre: null, post: null });
     try {
-      const extracted = [];
+      const next = {};
       for (const item of files) {
-        let text = "";
-        try { text = await extractText(item.file); } catch { /* Report unreadable PDFs below. */ }
-        extracted.push({ id: item.id, name: item.file.name, document_type: item.type, text });
+        let pages = [];
+        try {
+          if (isPdf(item.file)) pages = await analyzePdf(item.file);
+          else if (/^image\\//i.test(item.file.type) || /\\.(png|jpe?g|tiff?)$/i.test(item.file.name)) pages = await analyzeImage(item.file);
+          else pages = [{ pageNumber: 1, text: "", fields: [], hasText: false, unsupported: true }];
+        } catch (e) {
+          pages = [{ pageNumber: 1, text: "", fields: [], hasText: false, unreadable: true, error: e?.message || "Could not read this file" }];
+        }
+        next[item.id] = pages;
       }
-      const docs = files.map(item => ({ id: item.id, document_name: item.file.name, document_type: item.type, mime_type: item.file.type, file_size: item.file.size, match_status: "APPROVED" }));
-      const report = validateOfferPackage({
-        form, docs,
-        requirements: Object.keys(requirements).length ? requirements : { [side]: { types: requiredTypes, required: requiredTypes, counts: requiredCounts } },
-        requirementExceptions: [], documentTexts: extracted
+      setAnalyses(next);
+
+      const errors = [];
+      const warnings = [];
+      const passed = [];
+      files.forEach(item => {
+        const pages = next[item.id] || [];
+        const fileName = item.file.name;
+        if (!pages.length || pages.every(page => !page.hasText && !page.fields.length)) {
+          warnings.push({ code: item.id + "_manual", title: fileName + ": manual review required", detail: "No readable form fields or text were detected. Open the original and inspect every page." });
+          return;
+        }
+        let requiredCount = 0;
+        let blankRequired = 0;
+        pages.forEach(page => {
+          page.fields.filter(field => field.required).forEach(field => {
+            requiredCount++;
+            if (!hasValue(field.value)) {
+              blankRequired++;
+              errors.push({ code: item.id + "_" + page.pageNumber + "_" + field.name, title: fileName + " — page " + page.pageNumber + ": " + field.name + " is blank", detail: "This PDF field is marked as required and has no entered value." });
+            }
+          });
+          page.fields.filter(field => field.type === "Sig").forEach(field => {
+            if (!hasValue(field.value)) warnings.push({ code: item.id + "_sig_" + page.pageNumber + "_" + field.name, title: fileName + " — page " + page.pageNumber + ": signature field is empty", detail: "A digital signature field appears blank. Confirm whether this form is expected to be signed at this stage." });
+          });
+          if (!page.hasText && !page.fields.length) warnings.push({ code: item.id + "_page_" + page.pageNumber, title: fileName + " — page " + page.pageNumber + " needs visual review", detail: "The system could not read this page. Check the page for blank required sections, checkboxes and missing entries." });
+        });
+        if (requiredCount && blankRequired === 0) passed.push({ code: item.id + "_required", title: fileName + ": required PDF fields completed", detail: requiredCount + " required fillable field(s) contain values." });
+        if (!requiredCount) warnings.push({ code: item.id + "_no_required", title: fileName + ": no machine-readable required fields found", detail: "This may be a flattened or printed form. The system cannot tell which blank lines are mandatory; review the original page by page." });
+        if (pages.some(page => page.fields.some(field => field.type === "Btn"))) warnings.push({ code: item.id + "_checkbox", title: fileName + ": review checkboxes and selections", detail: "Confirm that every applicable checkbox, option and declaration has been selected. Unselected options may be intentional." });
       });
-      extracted.filter(item => isPdf(files.find(f => f.id === item.id)?.file) && !item.text.trim()).forEach(item => report.warnings.push({
-        severity: "warning", code: "pdf_unreadable_" + item.id, title: "Could not read " + item.name,
-        detail: "The file could not be read automatically. Open the original and review it manually."
-      }));
-      report.checkedDocuments = files.length;
-      report.readableDocuments = extracted.filter(item => item.text.trim()).length;
-      setReports(current => ({ ...current, pre: report }));
-      setMessage(report.canProceed ? "Pre-signature check completed. Review all warnings and the original files." : "Pre-signature check found " + report.errors.length + " blocking issue(s).");
-    } catch (e) { setError(e?.message || "Paperwork validation failed."); }
-    finally { setBusy(false); }
+      const report = { errors, warnings, passed, checkedDocuments: files.length, totalPages: Object.values(next).reduce((sum, pages) => sum + pages.length, 0), canProceed: errors.length === 0 };
+      setReports({ pre: report, post: null });
+      setMessage(errors.length ? "The form check found " + errors.length + " blank required field(s)." : "The initial form check is complete. Review all warnings and visually inspect the original forms.");
+    } catch (e) {
+      setError(e?.message || "Paperwork validation failed.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function runPostCheck() {
-    if (!selected) { setError("Select a trade first."); return; }
-    const docs = files.map(item => ({ id: item.id, document_name: item.file.name, document_type: item.type, mime_type: item.file.type, match_status: "APPROVED" }));
-    const report = validateOfferPostSignature({ form, docs, clientConfirmations: confirmations });
+    if (!Object.keys(analyses).length) { setError("Run the form completion check first."); return; }
+    const errors = [];
+    const warnings = [];
+    const passed = [];
+    files.forEach(item => {
+      const pages = analyses[item.id] || [];
+      pages.forEach(page => {
+        const key = item.id + ":" + page.pageNumber;
+        if (signatureChecks[key] === true) {
+          passed.push({ code: key, title: item.file.name + " — page " + page.pageNumber + ": signature review confirmed", detail: "You confirmed that the required signatures, initials and dates are present on this page." });
+        } else {
+          errors.push({ code: key, title: item.file.name + " — page " + page.pageNumber + ": signature review not confirmed", detail: "Inspect this page and confirm that all required parties have signed, initialled and dated the required fields." });
+        }
+        const emptyDigital = page.fields.filter(field => field.type === "Sig" && !hasValue(field.value));
+        emptyDigital.forEach(field => warnings.push({ code: key + "_" + field.name, title: item.file.name + " — page " + page.pageNumber + ": empty digital signature field", detail: "The PDF contains an empty signature field named " + field.name + "." }));
+      });
+    });
+    const report = { errors, warnings, passed, canProceed: errors.length === 0 };
     setReports(current => ({ ...current, post: report }));
-    setMessage(report.canProceed ? "Post-signature check passed for our client(s)." : "Post-signature check needs attention.");
+    setMessage(errors.length ? "Post-signature review is incomplete. Check the pages listed below." : "You confirmed the required signature review for every uploaded page.");
   }
 
+  const resultSection = (heading, report) => report && (
+    <section style={{ border: "1px solid #d0d5dd", borderRadius: 8, padding: 14, marginBottom: 14 }}>
+      <h3 style={{ marginTop: 0 }}>{heading}</h3>
+      <strong style={{ color: report.canProceed ? "#167344" : "#b42318" }}>{report.canProceed ? "No blocking issues detected" : report.errors.length + " item(s) need attention"}</strong>
+      {report.checkedDocuments !== undefined && <div className="muted">Checked {report.checkedDocuments} document(s) across {report.totalPages} page(s).</div>}
+      {[[ "Errors", report.errors, "#b42318" ],[ "Warnings", report.warnings, "#946200" ],[ "Passed", report.passed, "#167344" ]].map(([label, items, color]) => items.length > 0 && (
+        <div key={label} style={{ marginTop: 10 }}><strong style={{ color }}>{label}</strong>{items.map(item => (
+          <div key={item.code} style={{ marginTop: 7, fontSize: 13 }}><b>{item.title}:</b> {item.detail}</div>
+        ))}</div>
+      ))}
+    </section>
+  );
+
   return <div className="panel" style={{ maxWidth: 1180, margin: "0 auto" }}>
-    <div className="paneltitle"><div><h2><FileCheck2 size={22} style={{ verticalAlign: "middle", marginRight: 8 }} />Paperwork Validation</h2>
-      <p className="muted">Temporary document checks for residential purchases and sales, residential leases, and commercial transactions.</p></div>
+    <div className="paneltitle">
+      <div><h2><FileCheck2 size={22} style={{ verticalAlign: "middle", marginRight: 8 }} />Paperwork Validation</h2>
+        <p className="muted">Check that forms are completed before signing, then review signatures after signing. No trade selection is required.</p></div>
       <button className="secondary" type="button" onClick={resetValidation}><RefreshCw size={15}/> Clear check</button>
     </div>
     <div style={{ padding: 12, border: "1px solid #d6b979", borderRadius: 8, background: "#fffcf5", marginBottom: 16 }}>
       <strong>Temporary review only</strong>
-      <div className="muted">Files stay in this browser session for validation. They are not uploaded, saved, or attached to a trade. Clearing the check or leaving this page removes them from the tool.</div>
+      <div className="muted">Files and results stay in this browser session. They are not uploaded, saved, or attached to a trade. Clearing the check or leaving this page removes them.</div>
     </div>
     {error && <div className="error" role="alert">{error}</div>}
     {message && <div className="notice" role="status">{message}</div>}
-    <label style={{ display: "grid", gap: 6, maxWidth: 680, marginBottom: 16 }}>
-      <strong>Select trade</strong>
-      <select value={tradeId} onChange={event => chooseTrade(event.target.value)}>
-        <option value="">Choose a trade…</option>
-        {trades.map(row => {
-          const p = row.payload || {};
-          const tradeNo = p.transaction_number || row.trade_number || "Trade number pending";
-          const address = p.property_address || [p.street_number,p.street_name].filter(Boolean).join(" ");
-          return <option key={row.id} value={row.id}>{tradeNo} · {address || "Address not entered"} · {row.status || "Draft"}</option>;
-        })}
-      </select>
+    <h3>1. Upload the paperwork package</h3>
+    <p className="muted">Upload multiple PDF forms or scanned page images together. Choose a category for each file if helpful.</p>
+    <label className="secondary" style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 12 }}>
+      <Upload size={16}/> Select multiple files
+      <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff" style={{ display: "none" }} onChange={event => { addFiles(event.target.files); event.target.value = ""; }}/>
     </label>
-    {loading && <p className="muted">Loading trades…</p>}
-    {!loading && !trades.length && <p className="muted">No trades are available for this account.</p>}
-    {selected && <>
-      <div style={{ border: "1px solid #e4e7ec", borderRadius: 8, padding: 12, marginBottom: 16 }}>
-        <strong>{form.transaction_number || selected.trade_number || "Trade"}</strong>
-        <div className="muted">{form.property_address || [form.street_number,form.street_name,form.city].filter(Boolean).join(", ")}</div>
-        <div className="muted">{String(form.transaction_type || "BUY_SELL").toUpperCase() === "LEASE" ? "Lease" : "Purchase and sale"} · {String(form.market_segment || "RESIDENTIAL").toUpperCase() === "COMMERCIAL" ? "Commercial" : "Residential"} · {side}</div>
-      </div>
-      <h3>1. Add documents</h3>
-      <p className="muted">Choose a document category for each file. PDF text extraction and OCR are used where possible.</p>
-      <label className="secondary" style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 12 }}>
-        <Upload size={16}/> Select files
-        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx" style={{ display: "none" }} onChange={event => { addFiles(event.target.files); event.target.value = ""; }}/>
-      </label>
-      {files.length > 0 && <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
-        {files.map(item => <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(160px,220px) auto", alignItems: "center", gap: 8, border: "1px solid #e4e7ec", borderRadius: 8, padding: 8 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, overflowWrap: "anywhere" }}><FileText size={16}/>{item.file.name}</span>
-          <select value={item.type} onChange={event => { setFiles(current => current.map(x => x.id === item.id ? { ...x, type: event.target.value } : x)); setReports({ pre: null, post: null }); }}>
-            {types.map(([type,label]) => <option key={type} value={type}>{label}</option>)}
-          </select>
-          <button type="button" className="textbutton" aria-label={"Remove " + item.file.name} onClick={() => { setFiles(current => current.filter(x => x.id !== item.id)); setReports({ pre: null, post: null }); }}><Trash2 size={16}/></button>
-        </div>)}
-      </div>}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
-        <button className="primary" type="button" disabled={busy || !files.length} onClick={runPreCheck}>{busy ? "Checking…" : "Run Pre-Signature Check"}</button>
-        <button className="secondary" type="button" disabled={busy || !files.some(item => item.type === "APS")} onClick={runPostCheck}>Run Post-Signature Check</button>
-      </div>
-      {reports.pre && <section style={{ border: "1px solid #d0d5dd", borderRadius: 8, padding: 14, marginBottom: 14 }}>
-        <h3 style={{ marginTop: 0 }}>Pre-signature results</h3>
-        <strong style={{ color: reports.pre.canProceed ? "#167344" : "#b42318" }}>{reports.pre.canProceed ? "No blocking issues detected" : reports.pre.errors.length + " blocking issue(s) found"}</strong>
-        <div className="muted">Checked {reports.pre.checkedDocuments} temporary file(s), {reports.pre.readableDocuments} readable by text extraction.</div>
-        {[["Errors",reports.pre.errors,"#b42318"],["Warnings",reports.pre.warnings,"#946200"],["Passed",reports.pre.passed,"#167344"]].map(([heading,items,color]) => items.length > 0 && <div key={heading} style={{ marginTop: 10 }}><strong style={{ color }}>{heading}</strong>{items.map(item => <div key={item.code} style={{ marginTop: 6, fontSize: 13 }}><b>{item.title}:</b> {item.detail}</div>)}</div>)}
-      </section>}
-      {reports.post && <section style={{ border: "1px solid #d0d5dd", borderRadius: 8, padding: 14 }}>
-        <h3 style={{ marginTop: 0 }}>Post-signature results</h3>
-        <strong style={{ color: reports.post.canProceed ? "#167344" : "#b42318" }}>{reports.post.canProceed ? "Our client signature review confirmed" : "Post-signature check needs attention"}</strong>
-        <p className="muted">This check applies only to Dream Valley's represented client(s). Other-party signatures are outside its scope. You must visually inspect the signed original; the tool cannot authenticate signatures.</p>
-        {postClients.map(client => <label key={client.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 9 }}>
-          <input type="checkbox" checked={confirmations[client.id] === true} onChange={event => setConfirmations(current => ({ ...current, [client.id]: event.target.checked }))}/>
-          <span>I visually checked {client.name}'s signature, all required initials, and signing dates.</span>
-        </label>)}
-        <button className="primary" type="button" style={{ marginTop: 12 }} onClick={runPostCheck}>Re-run Post-Signature Check</button>
-        {[["Items to complete",reports.post.errors,"#b42318"],["Warnings",reports.post.warnings,"#946200"],["Confirmed",reports.post.passed,"#167344"]].map(([heading,items,color]) => items.length > 0 && <div key={heading} style={{ marginTop: 10 }}><strong style={{ color }}>{heading}</strong>{items.map(item => <div key={item.code} style={{ marginTop: 6, fontSize: 13 }}><b>{item.title}:</b> {item.detail}</div>)}</div>)}
-      </section>}
-    </>}
-    <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 18, color: "#667085", fontSize: 12 }}><AlertCircle size={15}/> Validation is a review aid. Always inspect original documents and obtain legal or compliance review where required.</div>
+    {files.length > 0 && <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+      {files.map(item => <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(150px,210px) auto", alignItems: "center", gap: 8, border: "1px solid #e4e7ec", borderRadius: 8, padding: 8 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, overflowWrap: "anywhere" }}><FileText size={16}/>{item.file.name}</span>
+        <select value={item.type} onChange={event => { setFiles(current => current.map(file => file.id === item.id ? { ...file, type: event.target.value } : file)); setAnalyses({}); setReports({ pre: null, post: null }); }}>
+          {TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+        <button type="button" className="textbutton" aria-label={"Remove " + item.file.name} onClick={() => { setFiles(current => current.filter(file => file.id !== item.id)); setAnalyses({}); setReports({ pre: null, post: null }); }}><Trash2 size={16}/></button>
+      </div>)}
+    </div>}
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+      <button className="primary" type="button" disabled={busy || !files.length} onClick={runPreCheck}>{busy ? "Checking forms…" : "Check Form Completion"}</button>
+      <button className="secondary" type="button" disabled={busy || !Object.keys(analyses).length} onClick={runPostCheck}>Run Post-Signature Check</button>
+    </div>
+    {resultSection("Pre-signature form completion results", reports.pre)}
+    {resultSection("Post-signature review results", reports.post)}
+    {analyses && Object.keys(analyses).length > 0 && <section style={{ border: "1px solid #e4e7ec", borderRadius: 8, padding: 14, marginBottom: 14 }}>
+      <h3 style={{ marginTop: 0 }}>2. Review signatures after signing</h3>
+      <p className="muted">Open each original page and confirm the required signatures, initials and dates are visibly present. The system can detect blank digital signature fields, but it cannot authenticate handwritten signatures or reliably detect ink signatures in flattened scans.</p>
+      {files.map(item => <div key={item.id} style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #e4e7ec" }}>
+        <strong>{item.file.name}</strong>
+        {(analyses[item.id] || []).map(page => {
+          const key = item.id + ":" + page.pageNumber;
+          return <label key={key} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 8 }}>
+            <input type="checkbox" checked={signatureChecks[key] === true} onChange={event => setSignatureChecks(current => ({ ...current, [key]: event.target.checked }))}/>
+            <span>Page {page.pageNumber}: I checked that all required signatures, initials and dates are present.</span>
+          </label>;
+        })}
+      </div>)}
+    </section>}
+    <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 18, color: "#667085", fontSize: 12 }}><AlertCircle size={15}/> Automated checks can identify blank required fillable PDF fields. Flattened forms and handwritten entries still need visual review.</div>
   </div>;
 }
