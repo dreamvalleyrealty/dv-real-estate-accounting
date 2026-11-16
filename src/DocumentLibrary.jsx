@@ -103,6 +103,7 @@ export default function DocumentLibrary({ user, adminMode = false, role = "" }) 
         contentType: "application/pdf", upsert: false
       });
       if (uploadError) throw uploadError;
+      const detectedRules = await detectReferenceRules(draft.file);
       const { data: authData } = await supabase.auth.getUser();
       const { error: insertError } = await supabase.from("dv_accounting_paperwork_library").insert({
         id, document_name: draft.document_name.trim(), category: draft.category, version: draft.version.trim(),
