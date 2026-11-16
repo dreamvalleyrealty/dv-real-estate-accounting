@@ -111,3 +111,42 @@ export function validateOfferPackage({ form = {}, docs = [], requirements = {}, 
   const unique = list => list.filter((item, index) => list.findIndex(other => other.code === item.code) === index);
   return { transaction, checkedAt: new Date().toISOString(), errors: unique(errors), warnings: unique(warnings), passed: unique(passed), canProceed: errors.length === 0, total: errors.length + warnings.length + passed.length };
 }
+
+
+/**
+ * Post-signature check is limited to the client represented by this brokerage.
+ * Actual handwritten signatures cannot be authenticated by text extraction;
+ * each client's signature, initials and date must be visually confirmed.
+ */
+export function validateOfferPostSignature({ form = {}, docs = [], clientConfirmations = {} } = {}) {
+  const errors = [];
+  const warnings = [];
+  const passed = [];
+  const side = String(form.side || "").toUpperCase();
+  const clientSide = ["BUYER", "TENANT"].includes(side) ? "BUYER" : "SELLER";
+  const partyList = clientSide === "BUYER" ? form.buyers : form.sellers;
+  const fallback = clientSide === "BUYER" ? form.buyer_name : form.seller_name;
+  const clients = (Array.isArray(partyList) ? partyList : []).map((party, index) => {
+    const company = String(party?.entity_type || "").toUpperCase() === "COMPANY" || Boolean(party?.company_name);
+    const name = company
+      ? clean(party.company_name)
+      : clean([party?.first_name, party?.last_name].filter(Boolean).join(" "));
+    const representatives = (party?.representatives || []).map(rep => clean([rep?.first_name, rep?.last_name].filter(Boolean).join(" "))).filter(Boolean);
+    return { id: clientSide.toLowerCase() + "_" + index, name: name || (clientSide === "BUYER" ? "Buyer " : "Seller ") + (index + 1), company, representatives };
+  }).filter(Boolean);
+  if (!clients.length && clean(fallback)) clients.push({ id: clientSide.toLowerCase() + "_0", name: clean(fallback), company: false, representatives: [] });
+  if (!clients.length) errors.push(issue("error", "post_client_missing", "Our client is not identified", "Complete the represented buyer/tenant or seller/landlord details before the post-signature check."));
+  const signedAgreement = docs.filter(doc => String(doc.document_type || "").toUpperCase() === "APS");
+  if (!signedAgreement.length) errors.push(issue("error", "post_signed_agreement_missing", "Signed agreement not uploaded", "Upload the signed agreement under the APS document type before running the post-signature check."));
+  else passed.push(issue("pass", "post_signed_agreement_present", "Agreement uploaded", signedAgreement.length + " agreement document(s) attached. Confirm that the correct fully signed version is selected."));
+  clients.forEach(client => {
+    if (clientConfirmations[client.id] === true) {
+      passed.push(issue("pass", "client_signoff_" + client.id, "Client signature review confirmed", client.name + ": signature, required initials and signing date visually checked."));
+    } else {
+      errors.push(issue("error", "client_signoff_" + client.id, "Client signature review not confirmed", "Open the signed agreement and visually confirm " + client.name + " has signed, completed all required initials and dates."));
+    }
+  });
+  warnings.push(issue("warning", "other_party_not_checked", "Other party signatures are outside this check", "This post-check covers only our represented client(s). It does not require or verify the other party's signatures."));
+  warnings.push(issue("warning", "manual_visual_review", "Visual review is required", "Automated checks cannot authenticate handwritten signatures or reliably determine whether every signature, initial and date field is complete. The confirmations above must be made after inspecting the original signed document."));
+  return { stage: "POST_SIGNATURE", clientSide, clients, checkedAt: new Date().toISOString(), errors, warnings, passed, canProceed: errors.length === 0, total: errors.length + warnings.length + passed.length };
+}
