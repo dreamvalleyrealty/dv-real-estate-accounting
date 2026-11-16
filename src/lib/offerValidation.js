@@ -20,7 +20,7 @@ const partyNames = (list, fallback) => {
   return names.length ? names : (clean(fallback) ? [clean(fallback)] : []);
 };
 
-export function validateOfferPackage({ form = {}, docs = [], requirements = {}, documentTexts = [] } = {}) {
+export function validateOfferPackage({ form = {}, docs = [], requirements = {}, requirementExceptions = [], documentTexts = [] } = {}) {
   const errors = [];
   const warnings = [];
   const passed = [];
@@ -60,7 +60,7 @@ export function validateOfferPackage({ form = {}, docs = [], requirements = {}, 
   if (representation.some(value => !value || String(value).toUpperCase() === "UNKNOWN")) add("warning", "representation_unknown", "Representation status needs confirmation", "Confirm the representation status for both sides and complete any required self-represented-party disclosures.");
   const activeSide = String(form.side || "SELLER").toUpperCase();
   const rules = requirements?.[activeSide] || requirements?.[activeSide === "LANDLORD" ? "SELLER" : activeSide] || {};
-  const requiredTypes = Array.isArray(rules.required) ? rules.required : (Array.isArray(rules.types) ? rules.types : []);
+  const configuredRequiredTypes = Array.isArray(rules.required) ? rules.required : (Array.isArray(rules.types) ? rules.types : []);\n  const waivedTypes = new Set((requirementExceptions || []).filter(item => item?.requirement_waived !== false).map(item => String(item?.document_type || "").toUpperCase()));\n  const requiredTypes = configuredRequiredTypes.filter(type => !waivedTypes.has(String(type).toUpperCase()));
   const counts = rules.counts || {};
   requiredTypes.forEach(type => {
     const count = Math.max(1, Number(counts[type] || 1));
