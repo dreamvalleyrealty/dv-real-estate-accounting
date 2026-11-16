@@ -5,9 +5,9 @@ const json=(x:unknown,s=200)=>new Response(JSON.stringify(x),{status:s,headers:{
 const hash=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)))).map(x=>x.toString(16).padStart(2,"0")).join("");
 const esc=(s:unknown)=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]!));
 const moneyRound=(n:number)=>Number(Number(n||0).toFixed(2));
-const invoiceBalance=(i:any)=>moneyRound(Math.max(Number(i.total_amount||0)-Number(i.paid_amount||0)-Number(i.discount_amount||0),0));
-const cardFeeFor=(i:any,b:number)=>{if(!i.card_fee_enabled||Number(i.card_fee_percentage)<=0)return {fee:0,tax:0,total:moneyRound(b)};const total=Number(i.total_amount||0),sub=Number(i.subtotal||0),base=i.card_fee_basis==="TOTAL_INCL_HST"?Number(b||0):(total>0?sub*Number(b||0)/total:0);const fee=moneyRound(base*Number(i.card_fee_percentage)/100);const tax=moneyRound(fee*Number(i.card_fee_tax_rate??13)/100);return {fee,tax,total:moneyRound(Number(b||0)+fee+tax)};};
-const discountedAllocations=(rows:any[],percentage:number)=>rows.map((x:any)=>{const amount=moneyRound(Number(x.amount||0));const discount=Math.min(moneyRound(amount*percentage/100),Math.max(amount-0.01,0));return {...x,discount_amount:discount,payment_amount:moneyRound(amount-discount)};});
+const invoiceBalance=(i:any)=>moneyRound(Math.max(Number(i.total_amount||0)-Number(i.paid_amount||0),0));
+const cardFeeFor=(i:any,b:number)=>{if(!i.card_fee_enabled||Number(i.card_fee_percentage)<=0)return {fee:0,tax:0,total:moneyRound(b)};const base=Number(b||0);const fee=moneyRound(base*Number(i.card_fee_percentage)/100);const tax=moneyRound(fee*Number(i.card_fee_tax_rate??13)/100);return {fee,tax,total:moneyRound(Number(b||0)+fee+tax)};};
+const discountedAllocations=(rows:any[],_percentage:number)=>rows.map((x:any)=>{const amount=moneyRound(Number(x.amount||0));return {...x,discount_amount:0,payment_amount:amount};});
 
 Deno.serve(async(req:Request)=>{
  if(req.method==="OPTIONS")return new Response("ok",{headers:cors});
@@ -36,7 +36,7 @@ Deno.serve(async(req:Request)=>{
     const raw=Array.from(crypto.getRandomValues(new Uint8Array(32))).map(v=>v.toString(16).padStart(2,"0")).join("");
     const {error:e}=await db.from("dv_agent_invoice_payment_links").insert({invoice_id:i.id,token_hash:await hash(raw),created_by:u.user.id});
     if(e)throw e;
-    const {data:feeSetting,error:feeSettingError}=await db.from("dv_accounting_settings").select("value").eq("key","AGENT_INVOICE_CARD_FEE").limit(1).maybeSingle();if(feeSettingError)throw feeSettingError;const discountPct=Math.min(99.99,Math.max(0,Number(feeSetting?.value?.etransfer_discount_percentage||0)));const etransferAllocations=discountedAllocations(allocations,discountPct);const discountAmount=moneyRound(etransferAllocations.reduce((s:number,x:any)=>s+x.discount_amount,0));const currentInvoiceBalance=moneyRound(allocations.find((x:any)=>x.invoice_id===i.id)?.amount||0);return json({ok:true,payment_url:"https://bo.dvrealty.ca/payment.html?token="+raw,balance_amount:balanceAmount,current_invoice_balance:currentInvoiceBalance,prior_balance_amount:moneyRound(Math.max(balanceAmount-currentInvoiceBalance,0)),invoice_count:allocations.length,card:Boolean(i.agent_id),card_fee:cardFee,card_fee_tax:cardFeeTax,card_total:Number((balanceAmount+cardFee+cardFeeTax).toFixed(2)),etransfer_discount_percentage:discountPct,etransfer_discount_amount:discountAmount,etransfer_amount:moneyRound(balanceAmount-discountAmount)});
+    const {data:feeSetting,error:feeSettingError}=await db.from("dv_accounting_settings").select("value").eq("key","AGENT_INVOICE_CARD_FEE").limit(1).maybeSingle();if(feeSettingError)throw feeSettingError;const discountPct=0;const etransferAllocations=discountedAllocations(allocations,discountPct);const discountAmount=moneyRound(etransferAllocations.reduce((s:number,x:any)=>s+x.discount_amount,0));const currentInvoiceBalance=moneyRound(allocations.find((x:any)=>x.invoice_id===i.id)?.amount||0);return json({ok:true,payment_url:"https://bo.dvrealty.ca/payment.html?token="+raw,balance_amount:balanceAmount,current_invoice_balance:currentInvoiceBalance,prior_balance_amount:moneyRound(Math.max(balanceAmount-currentInvoiceBalance,0)),invoice_count:allocations.length,card:Boolean(i.agent_id),card_fee:cardFee,card_fee_tax:cardFeeTax,card_total:Number((balanceAmount+cardFee+cardFeeTax).toFixed(2)),etransfer_discount_percentage:discountPct,etransfer_discount_amount:discountAmount,etransfer_amount:moneyRound(balanceAmount-discountAmount)});
    }
    const token=String(b.token||"");
    if(!/^[a-f0-9]{64}$/i.test(token))return json({error:"Invalid payment link."},400);
@@ -56,7 +56,7 @@ Deno.serve(async(req:Request)=>{
    const payable=Number((baseAmount+feeAmount+feeTax).toFixed(2));
    const {data:feeSetting,error:feeSettingError}=await db.from("dv_accounting_settings").select("value").eq("key","AGENT_INVOICE_CARD_FEE").limit(1).maybeSingle();
    if(feeSettingError)throw feeSettingError;
-   const discountPct=Math.min(99.99,Math.max(0,Number(feeSetting?.value?.etransfer_discount_percentage||0)));
+   const discountPct=0;
    const etransferAllocations=discountedAllocations(allocations,discountPct);
    const discountAmount=moneyRound(etransferAllocations.reduce((s:number,x:any)=>s+x.discount_amount,0));
    const etransferAmount=moneyRound(baseAmount-discountAmount);
