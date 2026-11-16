@@ -216,3 +216,45 @@ drop trigger if exists trg_dv_agent_invoice_refund_balance on public.dv_agent_in
 create trigger trg_dv_agent_invoice_refund_balance
   after update of status on public.dv_agent_invoice_refunds
   for each row execute function public.dv_agent_invoice_refresh_refund_allocations();
+
+
+create or replace function public.dv_confirm_agent_invoice_etransfer_submission(p_submission_id uuid)
+returns jsonb
+language plpgsql security definer set search_path=public as $$
+declare
+  v_submission public.dv_agent_invoice_payment_submissions%rowtype;
+  v_result jsonb;
+begin
+  if not public.dv_is_management_user() then
+    raise exception 'Only management users can confirm invoice payments';
+  end if;
+  select * into v_submission
+    from public.dv_agent_invoice_payment_submissions
+    where id=p_submission_id for update;
+  if not found then raise exception 'Payment submission not found'; end if;
+  if v_submission.status='CONFIRMED' then
+    return jsonb_build_object('ok',true,'already_confirmed',true);
+  end if;
+  if v_submission.status<>'PENDING' then
+    raise exception 'Only pending e-transfer submissions can be confirmed';
+  end if;
+  if jsonb_typeof(v_submission.allocations)<>'array' or jsonb_array_length(v_submission.allocations)=0 then
+    raise exception 'This payment submission has no saved invoice allocation. Record it manually after verifying the deposit.';
+  end if;
+  v_result:=public.dv_record_agent_invoice_multi_payment(
+    v_submission.agent_id,
+    v_submission.allocations,
+    'E-transfer',
+    current_date,
+    v_submission.reference_number,
+    null,
+    'E-transfer verified by management. Allocated oldest outstanding invoice first.'
+  );
+  update public.dv_agent_invoice_payment_submissions
+    set status='CONFIRMED',reviewed_by=auth.uid(),reviewed_at=now()
+    where id=p_submission_id;
+  return jsonb_build_object('ok',true,'allocations',v_result);
+end;
+$$;
+revoke all on function public.dv_confirm_agent_invoice_etransfer_submission(uuid) from public,anon;
+grant execute on function public.dv_confirm_agent_invoice_etransfer_submission(uuid) to authenticated;
