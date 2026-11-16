@@ -7,7 +7,7 @@ const esc=(s:unknown)=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt
 const moneyRound=(n:number)=>Number(Number(n||0).toFixed(2));
 const invoiceBalance=(i:any)=>moneyRound(Math.max(Number(i.total_amount||0)-Number(i.paid_amount||0),0));
 const cardFeeFor=(i:any,b:number)=>{if(!i.card_fee_enabled||Number(i.card_fee_percentage)<=0)return {fee:0,tax:0,total:moneyRound(b)};const total=Number(i.total_amount||0),sub=Number(i.subtotal||0),base=i.card_fee_basis==="TOTAL_INCL_HST"?Number(b||0):(total>0?sub*Number(b||0)/total:0);const fee=moneyRound(base*Number(i.card_fee_percentage)/100);const tax=moneyRound(fee*Number(i.card_fee_tax_rate??13)/100);return {fee,tax,total:moneyRound(Number(b||0)+fee+tax)};};
-const discountedAllocations=(rows:any[],percentage:number)=>rows.map((x:any)=>{const discount=moneyRound(Number(x.amount||0)*percentage/100);return {...x,discount_amount:discount,payment_amount:moneyRound(Number(x.amount||0)-discount)};});
+const discountedAllocations=(rows:any[],percentage:number)=>rows.map((x:any)=>{const amount=moneyRound(Number(x.amount||0));const discount=Math.min(moneyRound(amount*percentage/100),Math.max(amount-0.01,0));return {...x,discount_amount:discount,payment_amount:moneyRound(amount-discount)};});
 
 Deno.serve(async(req:Request)=>{
  if(req.method==="OPTIONS")return new Response("ok",{headers:cors});
@@ -68,7 +68,7 @@ Deno.serve(async(req:Request)=>{
     if(ref.length<3||ref.length>120)return json({error:"Enter a reference number between 3 and 120 characters."},400);
     const {data:dup}=await db.from("dv_agent_invoice_payment_submissions").select("id").eq("invoice_id",i.id).eq("reference_number",ref).maybeSingle();
     if(dup)return json({error:"That reference number has already been submitted for this invoice."},409);
-    const {error:e}=await db.from("dv_agent_invoice_payment_submissions").insert({invoice_id:i.id,agent_id:i.agent_id,amount:etransferAmount,discount_amount:discountAmount,allocations:etransferAllocations,payment_method:"E-transfer",reference_number:ref});
+    const {error:e}=await db.from("dv_agent_invoice_payment_submissions").insert({invoice_id:i.id,agent_id:i.agent_id,amount:etransferAmount,discount_amount:discountAmount,discount_percentage:discountPct,allocations:etransferAllocations,payment_method:"E-transfer",reference_number:ref});
     if(e)throw e;
     return json({ok:true,message:"Reference submitted. The office will verify the bank deposit before marking this invoice paid."});
    }
