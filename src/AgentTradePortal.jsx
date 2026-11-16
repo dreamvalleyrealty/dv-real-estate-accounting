@@ -6,7 +6,7 @@ import MoneyInput from "./MoneyInput";
 import AgentSearchSelect from "./AgentSearchSelect";
 import CommercialLeaseCommissionEditor from "./CommercialLeaseCommissionEditor";
 import { calculateCommercialLeaseCommission } from "./lib/commercialLeaseCommission";
-import { validateOfferPackage } from "./lib/offerValidation";
+import { validateOfferPackage, validateOfferPostSignature } from "./lib/offerValidation";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 let lastAgentFormEditAt=0;
@@ -109,13 +109,13 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
  const [submissions,setSubmissions]=useState([]),[docs,setDocs]=useState([]),[agents,setAgents]=useState([]),[requirementExceptions,setRequirementExceptions]=useState([]);
  const [selected,setSelected]=useState(null),[selectedTradeIds,setSelectedTradeIds]=useState([]),[selectedTransactionStatus,setSelectedTransactionStatus]=useState(""),[form,setForm]=useState({...blank}),[file,setFile]=useState(null),[files,setFiles]=useState([]),[docType,setDocType]=useState("APS"),[extractBusy,setExtractBusy]=useState(false),[extractedPreview,setExtractedPreview]=useState(null);
  const [bulkFile,setBulkFile]=useState(null),[bulkGroups,setBulkGroups]=useState([]),[bulkBusy,setBulkBusy]=useState(false),[bulkOriginal,setBulkOriginal]=useState(true),[bulkPageCount,setBulkPageCount]=useState(0);
- const [offerValidation,setOfferValidation]=useState(null),[offerValidationBusy,setOfferValidationBusy]=useState(false);
+ const [offerValidation,setOfferValidation]=useState(null),[offerValidationBusy,setOfferValidationBusy]=useState(false);\n const [postSignatureConfirmations,setPostSignatureConfirmations]=useState({}),[postSignatureReport,setPostSignatureReport]=useState(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[reviewNotes,setReviewNotes]=useState(""),[documentReviewNotes,setDocumentReviewNotes]=useState({}),[missingRequiredDocs,setMissingRequiredDocs]=useState([]),[showAdminNotePrompt,setShowAdminNotePrompt]=useState(false);
  const [lawyerShareOpen,setLawyerShareOpen]=useState(false),[lawyerShareSide,setLawyerShareSide]=useState("buyer"),[lawyerShareTo,setLawyerShareTo]=useState(""),[lawyerShareCc,setLawyerShareCc]=useState(""),[lawyerShareSelectedIds,setLawyerShareSelectedIds]=useState([]),[lawyerShareBusy,setLawyerShareBusy]=useState(false),[lawyerShareError,setLawyerShareError]=useState("");
  const [lawyerEmailHistory,setLawyerEmailHistory]=useState([]),[lawyerEmailHistoryLoading,setLawyerEmailHistoryLoading]=useState(false),[lawyerEmailHistoryError,setLawyerEmailHistoryError]=useState("");
  useEffect(()=>{let live=true;const loadHistory=async()=>{if(!supabase||!selected?.id){setLawyerEmailHistory([]);setLawyerEmailHistoryError("");setLawyerEmailHistoryLoading(false);return}setLawyerEmailHistoryLoading(true);setLawyerEmailHistoryError("");try{const cols="id,document_type,recipient_email,cc_email,sent_by_email,subject,attachment_name,status,error_message,sent_at,created_at";const requests=[supabase.from("dv_accounting_email_log").select(cols).eq("trade_submission_id",selected.id),...(selected.transaction_id?[supabase.from("dv_accounting_email_log").select(cols).eq("transaction_id",selected.transaction_id)]:[])];const results=await Promise.all(requests);const failed=results.find(r=>r.error);if(failed)throw failed.error;const rows=[...new Map(results.flatMap(r=>r.data||[]).map(row=>[row.id,row])).values()].sort((x,y)=>String(y.created_at||"").localeCompare(String(x.created_at||"")));if(live)setLawyerEmailHistory(rows)}catch(e){if(live){setLawyerEmailHistory([]);setLawyerEmailHistoryError(e?.message||"Could not load lawyer email history.")}}finally{if(live)setLawyerEmailHistoryLoading(false)}};loadHistory();return()=>{live=false}},[selected?.id,selected?.transaction_id]);
  const draftWriteLock=useRef(false);
- useEffect(()=>{setOfferValidation(null)},[form,docs]);
+ useEffect(()=>{setOfferValidation(null);setPostSignatureReport(null);setPostSignatureConfirmations({})},[form,docs]);
  const [previewUrl,setPreviewUrl]=useState(""),[previewDoc,setPreviewDoc]=useState(null);
  const [filter,setFilter]=useState("ALL"),[submissionSearch,setSubmissionSearch]=useState(""),[debouncedSubmissionSearch,setDebouncedSubmissionSearch]=useState(""),[tradeTypeFilter,setTradeTypeFilter]=useState("ALL");const [listPage,setListPage]=useState(0),[listHasNext,setListHasNext]=useState(false);useEffect(()=>{const timer=setTimeout(()=>setDebouncedSubmissionSearch(submissionSearch),300);return()=>clearTimeout(timer)},[submissionSearch]);
  const [tradeSort,setTradeSort]=useState({key:"address",direction:"asc"});
@@ -787,7 +787,24 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      setError("Offer validation could not be completed: "+(validationError?.message||String(validationError)));
    }finally{setOfferValidationBusy(false);}
  }
- async function uploadFile(){
+
+ function runOfferPostSignatureCheck(){
+   if(!selected?.id){setError("Save this trade before running the post-signature check.");return;}
+   const side=String(form.side||"").toUpperCase();
+   const isOurBuyer=["BUYER","TENANT"].includes(side);
+   const parties=isOurBuyer?(Array.isArray(form.buyers)?form.buyers:[]):(Array.isArray(form.sellers)?form.sellers:[]);
+   const fallback=isOurBuyer?form.buyer_name:form.seller_name;
+   const clients=parties.map((party,index)=>{
+     const company=String(party?.entity_type||"").toUpperCase()==="COMPANY"||Boolean(party?.company_name);
+     const name=company?String(party.company_name||"").trim():[party?.first_name,party?.last_name].filter(Boolean).join(" ").trim();
+     return {id:(isOurBuyer?"buyer_":"seller_")+index,name:name||(isOurBuyer?"Buyer ":"Seller ")+(index+1)};
+   }).filter(client=>client.name);
+   if(!clients.length&&String(fallback||"").trim())clients.push({id:isOurBuyer?"buyer_0":"seller_0",name:String(fallback).trim()});
+   const report=validateOfferPostSignature({form,docs,clientConfirmations:postSignatureConfirmations});
+   setPostSignatureReport(report);
+   setMessage(report.canProceed?"Post-signature check passed for our client(s).":"Post-signature check found items that must be completed.");
+ }
+\n async function uploadFile(){
    const filesToUpload=files.length?files:(file?[file]:[]);
    if(!filesToUpload.length){setError("Choose at least one file before uploading.");return;}
    if(!supabase){setError("The database connection is not ready. Refresh the page and try again.");return;}
@@ -1311,6 +1328,24 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
                 <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:10}}><strong style={{color:offerValidation.canProceed?"#167344":"#b42318"}}>{offerValidation.canProceed?"No blocking issues found":"Needs correction before signatures"}</strong><span className="agent-trade-muted">{offerValidation.checkedDocuments||0} document(s) checked · {offerValidation.readableDocuments||0} PDF(s) readable · {new Date(offerValidation.checkedAt).toLocaleString()}</span></div>
                 {[[ "Blocking issues",offerValidation.errors,"#b42318","#fff1f0"],["Warnings",offerValidation.warnings,"#946200","#fff8e6"],["Passed checks",offerValidation.passed,"#167344","#ecfdf3"]].map(([heading,items,color,background])=>items.length>0&&<div key={heading} style={{marginTop:9,border:"1px solid #e4e7ec",borderRadius:7,padding:9,background}}><strong style={{fontSize:12,color}}>{heading} ({items.length})</strong><div style={{display:"grid",gap:8,marginTop:7}}>{items.map(item=><div key={item.code} style={{display:"flex",gap:8,alignItems:"flex-start"}}><span style={{fontWeight:800,color}}>{heading==="Passed checks"?"✓":heading==="Warnings"?"!":"×"}</span><div style={{minWidth:0}}><strong style={{fontSize:12}}>{item.title}</strong><div style={{fontSize:12,color:"#475467",marginTop:2}}>{item.detail}</div>{item.source&&<div style={{fontSize:11,color:"#667085",marginTop:2}}>Source: {item.source}</div>}</div></div>)}</div></div>)}
                 <p className="agent-trade-muted" style={{margin:"9px 0 0"}}>Automated checks are a second set of eyes. They cannot confirm legal compliance or reliably verify handwritten signatures, initials or scanned fields. Inspect the original documents before sending for signatures.</p>
+              </div>}
+            </div>
+
+            <div style={{border:"1px solid #d0d5dd",borderRadius:9,padding:12,margin:"12px 0",background:"#fff"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+                <div><h4 style={{margin:"0 0 4px",fontSize:14}}>Post-Signature Check — Our Client Only</h4><p className="agent-trade-muted" style={{margin:0}}>After our client signs, open the signed agreement and confirm their signature, required initials and signing dates. Other-party signatures are not part of this check.</p></div>
+                <button type="button" className="primary" disabled={busy||!selected?.id} onClick={runOfferPostSignatureCheck}><ShieldCheck size={16}/>Run Post-Signature Check</button>
+              </div>
+              <div style={{display:"grid",gap:8,marginTop:12}}>
+                {((["BUYER","TENANT"].includes(String(form.side||"").toUpperCase())?(Array.isArray(form.buyers)?form.buyers:[]):(Array.isArray(form.sellers)?form.sellers:[])).map((party,index)=>({id:(["BUYER","TENANT"].includes(String(form.side||"").toUpperCase())?"buyer_":"seller_")+index,name:(String(party?.entity_type||"").toUpperCase()==="COMPANY"||party?.company_name?String(party.company_name||"").trim():[party?.first_name,party?.last_name].filter(Boolean).join(" ").trim())||((["BUYER","TENANT"].includes(String(form.side||"").toUpperCase())?"Buyer ":"Seller ")+(index+1))})).concat((!((["BUYER","TENANT"].includes(String(form.side||"").toUpperCase())?(form.buyers||[]):(form.sellers||[])).length)&&String((["BUYER","TENANT"].includes(String(form.side||"").toUpperCase())?form.buyer_name:form.seller_name)||"").trim())?[{id:["BUYER","TENANT"].includes(String(form.side||"").toUpperCase())?"buyer_0":"seller_0",name:String(["BUYER","TENANT"].includes(String(form.side||"").toUpperCase())?form.buyer_name:form.seller_name).trim()}]:[])).map(client=><label key={client.id} style={{display:"flex",gap:9,alignItems:"flex-start",padding:9,border:"1px solid #e4e7ec",borderRadius:7}}>
+                  <input type="checkbox" checked={postSignatureConfirmations[client.id]===true} onChange={e=>setPostSignatureConfirmations(old=>({...old,[client.id]:e.target.checked}))} style={{width:18,height:18,flexShrink:0}}/>
+                  <span><strong>{client.name}</strong><span style={{display:"block",fontSize:12,color:"#475467"}}>I visually checked this client's signature, all required initials and signing dates on the signed agreement.</span></span>
+                </label>)}
+              </div>
+              {postSignatureReport&&<div style={{marginTop:10}}>
+                <strong style={{color:postSignatureReport.canProceed?"#167344":"#b42318"}}>{postSignatureReport.canProceed?"Our client signature review confirmed":"Post-signature check needs attention"}</strong>
+                {[["Items to complete",postSignatureReport.errors,"#b42318"],["Warnings",postSignatureReport.warnings,"#946200"],["Confirmed",postSignatureReport.passed,"#167344"]].map(([heading,items,color])=>items.length>0&&<div key={heading} style={{marginTop:8}}><strong style={{fontSize:12,color}}>{heading}</strong>{items.map(item=><div key={item.code} style={{fontSize:12,color:"#475467",marginTop:4}}>{item.title}: {item.detail}</div>)}</div>)}
+                <div className="agent-trade-muted" style={{marginTop:7}}>Checked {new Date(postSignatureReport.checkedAt).toLocaleString()}. This report is a review aid and does not authenticate signatures electronically.</div>
               </div>}
             </div>
             <h4 style={{margin:"0 0 5px",fontSize:13}}>3. Upload documents</h4><p className="agent-trade-muted" style={{margin:"0 0 8px"}}>Choose a category and select multiple files. Use PDF extraction when you want to suggest trade details from a PDF.</p>
