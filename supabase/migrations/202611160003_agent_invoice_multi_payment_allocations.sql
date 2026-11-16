@@ -3,6 +3,12 @@
 -- allocated in reverse order without losing the source payment history.
 
 alter table public.dv_agent_invoice_square_sessions
+  add column if not exists allocations jsonb not null default '[]'::jsonb,
+  add column if not exists base_amount_cents bigint not null default 0,
+  add column if not exists fee_amount_cents bigint not null default 0,
+  add column if not exists fee_tax_cents bigint not null default 0;
+
+alter table public.dv_agent_invoice_payment_submissions
   add column if not exists allocations jsonb not null default '[]'::jsonb;
 
 alter table public.dv_agent_invoice_payments
