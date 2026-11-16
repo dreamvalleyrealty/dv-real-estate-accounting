@@ -175,8 +175,8 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
   if(!emailDraft)return;
   const to=String(emailDraft.to||"").trim(),cc=String(emailDraft.cc||"").trim();
   const validEmail=value=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  if(!to.split(/[;,\\s]+/).filter(Boolean).length||to.split(/[;,\\s]+/).filter(Boolean).some(address=>!validEmail(address))){setError("Enter valid To email addresses. Separate multiple addresses with commas.");return;}
-  if(cc.split(/[;,\\s]+/).filter(Boolean).some(address=>!validEmail(address))){setError("Check the CC addresses. Separate multiple addresses with commas.");return;}
+  if(!to.split(/[;,\s]+/).filter(Boolean).length||to.split(/[;,\s]+/).filter(Boolean).some(address=>!validEmail(address))){setError("Enter valid To email addresses. Separate multiple addresses with commas.");return;}
+  if(cc.split(/[;,\s]+/).filter(Boolean).some(address=>!validEmail(address))){setError("Check the CC addresses. Separate multiple addresses with commas.");return;}
   const scheduledDate=new Date(scheduleAt);
   if(!scheduleAt||Number.isNaN(scheduledDate.getTime())||scheduledDate.getTime()<=Date.now()){setError("Choose a future date and time for the scheduled email.");return;}
   setSendingInvoice(emailDraft.invoiceId);setError("");setNotice("");
@@ -198,8 +198,8 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
   if(!emailDraft)return;
   const to=String(emailDraft.to||"").trim(),cc=String(emailDraft.cc||"").trim();
   const validEmail=value=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  if(!to.split(/[;,\\s]+/).filter(Boolean).length||to.split(/[;,\\s]+/).filter(Boolean).some(address=>!validEmail(address))){setError("Enter valid To email addresses. Separate multiple addresses with commas.");return;}
-  if(cc.split(/[;,\\s]+/).filter(Boolean).some(address=>!validEmail(address))){setError("Check the CC addresses. Separate multiple addresses with commas.");return;}
+  if(!to.split(/[;,\s]+/).filter(Boolean).length||to.split(/[;,\s]+/).filter(Boolean).some(address=>!validEmail(address))){setError("Enter valid To email addresses. Separate multiple addresses with commas.");return;}
+  if(cc.split(/[;,\s]+/).filter(Boolean).some(address=>!validEmail(address))){setError("Check the CC addresses. Separate multiple addresses with commas.");return;}
   setSendingInvoice(emailDraft.invoiceId);setError("");setNotice("");
   try{
    const {data,error:e}=await supabase.functions.invoke("zoho-mail-send",{body:{documentType:"AGENT_INVOICE",invoiceId:emailDraft.invoiceId,invoiceNumber:emailDraft.invoiceNumber,to,cc:cc||undefined,subject:emailDraft.subject,htmlBody:emailDraft.htmlBody,attachmentName:emailDraft.attachmentName,attachmentBase64:emailDraft.attachmentBase64,senderMode:"admin"}});
