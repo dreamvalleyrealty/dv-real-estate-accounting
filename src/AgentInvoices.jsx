@@ -11,7 +11,7 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
  const [agents,setAgents]=useState([]),[invoices,setInvoices]=useState([]),[payments,setPayments]=useState([]),[emailLogs,setEmailLogs]=useState([]),[catalog,setCatalog]=useState([]),[addItemId,setAddItemId]=useState(""),[addItemType,setAddItemType]=useState("ITEM");
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState(""),[sendingInvoice,setSendingInvoice]=useState(null),[checkoutInvoice,setCheckoutInvoice]=useState(null),[refunds,setRefunds]=useState([]),[showRefund,setShowRefund]=useState(null),[refundForm,setRefundForm]=useState({amount:"",reason:""}),[refunding,setRefunding]=useState(false);
  const [showCreate,setShowCreate]=useState(false),[showEdit,setShowEdit]=useState(null),[showPayment,setShowPayment]=useState(null),[expandedInvoice,setExpandedInvoice]=useState(null);
- const [form,setForm]=useState({agent_id:"",invoice_date:dateToday(),due_date:"",notes:"",items:[]});
+ const [form,setForm]=useState({bill_to_type:"AGENT",agent_id:"",bill_to_name:"",bill_to_company:"",bill_to_email:"",bill_to_phone:"",bill_to_address:"",bill_to_city:"",bill_to_province:"ON",bill_to_postal_code:"",invoice_date:dateToday(),due_date:"",notes:"",items:[]});
  const [customLine,setCustomLine]=useState({name:"",unit_price:"",tax_rate:13});
  const [priorOutstanding,setPriorOutstanding]=useState(0),[emailDraft,setEmailDraft]=useState(null),[scheduleAt,setScheduleAt]=useState(defaultScheduleDateTime());
  const [paymentForm,setPaymentForm]=useState({amount:"",payment_date:dateToday(),method:"E-transfer",reference_number:"",notes:""});
@@ -52,9 +52,9 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
   const doc=new jsPDF({unit:"mm",format:"a4"}),left=16,right=194,width=178;
   const navy=[15,33,65],gold=[158,133,86],ink=[34,45,64],muted=[111,122,139],line=[226,230,236],pale=[247,248,250];
   const agentRecord=inv.dv_accounting_agents||{};
-  const agent=agentRecord.name||[agentRecord.first_name,agentRecord.last_name].filter(Boolean).join(" ")||agentRecord.legal_name||agentRecord.email||"Agent";
-  const hasPrec=Boolean(agentRecord.incorporated&&String(agentRecord.corporation_name||"").trim());
-  const billToAddress=[agentRecord.address,[agentRecord.city,agentRecord.province,agentRecord.postal_code].filter(value=>String(value||"").trim()).join(", ")].filter(Boolean);
+  const agent=inv.bill_to_type==="OTHER"?(inv.bill_to_name||"Customer"):(agentRecord.name||[agentRecord.first_name,agentRecord.last_name].filter(Boolean).join(" ")||agentRecord.legal_name||agentRecord.email||"Agent");
+  const hasPrec=inv.bill_to_type!=="OTHER"&&Boolean(agentRecord.incorporated&&String(agentRecord.corporation_name||"").trim());
+  const billToAddress=inv.bill_to_type==="OTHER"?[inv.bill_to_company,inv.bill_to_address,[inv.bill_to_city,inv.bill_to_province,inv.bill_to_postal_code].filter(value=>String(value||"").trim()).join(", "),inv.bill_to_phone,inv.bill_to_email].filter(Boolean):[agentRecord.address,[agentRecord.city,agentRecord.province,agentRecord.postal_code].filter(value=>String(value||"").trim()).join(", ")].filter(Boolean);
   const logo=await getInvoiceLogo();
   const items=Array.isArray(inv.dv_agent_invoice_items)?inv.dv_agent_invoice_items:[];
   const fmtDate=value=>value?new Date(value+"T00:00:00").toLocaleDateString("en-CA",{year:"numeric",month:"short",day:"numeric"}):"—";
@@ -136,8 +136,8 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
  const makeInvoicePdf=async inv=>{try{const doc=await buildInvoicePdf(inv);doc.save("Invoice-"+(inv.invoice_number||inv.id)+".pdf")}catch(e){setError(e?.message||"Could not create the invoice PDF.")}};
  const escapeHtml=value=>String(value??"").replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
  const sendInvoice=async inv=>{
-  const recipient=String(inv.dv_accounting_agents?.email||"").trim();
-  if(!recipient){setError("This agent does not have an email address on their accounting profile.");return;}
+  const recipient=String(inv.bill_to_type==="OTHER"?inv.bill_to_email:inv.dv_accounting_agents?.email||"").trim();
+  if(!recipient){setError("This invoice recipient does not have an email address.");return;}
   setSendingInvoice(inv.id);setError("");setNotice("");
   try{
    let checkoutUrl="";
@@ -150,10 +150,10 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
    }catch(checkoutUnavailable){console.warn("Square checkout link unavailable for invoice email.",checkoutUnavailable)}
    const doc=await buildInvoicePdf(inv),dataUri=doc.output("datauristring"),base64=dataUri.split(",")[1]||"";
    const agentRecord=inv.dv_accounting_agents||{};
-   const agentName=agentRecord.name||[agentRecord.first_name,agentRecord.last_name].filter(Boolean).join(" ")||"Agent";
-   const isPrec=Boolean(agentRecord.incorporated&&String(agentRecord.corporation_name||"").trim());
-   const street=String(agentRecord.address||"").trim();
-   const cityLine=[agentRecord.city,agentRecord.province,agentRecord.postal_code].filter(x=>String(x||"").trim()).join(", ");
+   const agentName=inv.bill_to_type==="OTHER"?(inv.bill_to_name||"there"):(agentRecord.name||[agentRecord.first_name,agentRecord.last_name].filter(Boolean).join(" ")||"Agent");
+   const isPrec=inv.bill_to_type!=="OTHER"&&Boolean(agentRecord.incorporated&&String(agentRecord.corporation_name||"").trim());
+   const street=String(inv.bill_to_type==="OTHER"?inv.bill_to_address:agentRecord.address||"").trim();
+   const cityLine=(inv.bill_to_type==="OTHER"?[inv.bill_to_city,inv.bill_to_province,inv.bill_to_postal_code]:[agentRecord.city,agentRecord.province,agentRecord.postal_code]).filter(x=>String(x||"").trim()).join(", ");
    const billToHtml=(inv.bill_to_type==="OTHER"?(inv.bill_to_company?"<strong>"+escapeHtml(inv.bill_to_company)+"</strong><br/>Attn: "+escapeHtml(agentName):"<strong>"+escapeHtml(agentName)+"</strong>"):(isPrec?"<strong>"+escapeHtml(agentRecord.corporation_name)+"</strong><br/>C/O "+escapeHtml(agentName):"<strong>"+escapeHtml(agentName)+"</strong>"))+(street?"<br/>"+escapeHtml(street):"")+(cityLine?"<br/>"+escapeHtml(cityLine):"")+(inv.bill_to_type==="OTHER"&&inv.bill_to_phone?"<br/>"+escapeHtml(inv.bill_to_phone):"")+(inv.bill_to_type==="OTHER"&&inv.bill_to_email?"<br/>"+escapeHtml(inv.bill_to_email):"");
    const invoiceLines=(inv.dv_agent_invoice_items||[]).map(item=>({name:item.item_name||"Item",kind:item.line_type==="ADD_ON"?"Optional add-on":"Item",qty:Number(item.quantity||1),price:Number(item.unit_price||0),amount:Number(item.line_subtotal||0)}));
    const itemRows=invoiceLines.length?invoiceLines.map(item=>"<tr><td style='padding:10px 8px;border-bottom:1px solid #e8ebf0;color:#26344b'><strong>"+escapeHtml(item.name)+"</strong><div style='font-size:12px;color:#8a93a2'>"+escapeHtml(item.kind)+"</div></td><td style='padding:10px 8px;text-align:center;border-bottom:1px solid #e8ebf0;color:#26344b'>"+item.qty+"</td><td style='padding:10px 8px;text-align:right;border-bottom:1px solid #e8ebf0;color:#26344b'>"+money(item.price)+"</td><td style='padding:10px 8px;text-align:right;border-bottom:1px solid #e8ebf0;color:#26344b'>"+money(item.amount)+"</td></tr>").join(""):"<tr><td style='padding:10px 8px;color:#26344b'>"+escapeHtml(inv.description||"Brokerage charges")+"</td><td style='text-align:center;color:#26344b'>1</td><td style='text-align:right;color:#26344b'>"+money(inv.subtotal)+"</td><td style='text-align:right;color:#26344b'>"+money(inv.subtotal)+"</td></tr>";
@@ -260,13 +260,13 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
  const createInvoice=async e=>{
   e.preventDefault();setBusy(true);setError("");setNotice("");
   try{
-   if(!form.agent_id||!form.items.length)throw new Error("Select an agent and add at least one inventory item or add-on.");
+   if((form.bill_to_type==="AGENT"&&!form.agent_id)||(form.bill_to_type==="OTHER"&&(!form.bill_to_name.trim()||!form.bill_to_email.trim()))||!form.items.length)throw new Error("Complete the bill-to details and add at least one invoice item.");
    const lines=form.items.map(x=>{const qty=Number(x.quantity),price=x.custom?Number(x.unit_price):tierPrice(catalog.find(c=>c.id===x.id),Number(x.quantity)),rate=Number(x.tax_rate);if(!Number.isInteger(qty)||qty<1||!Number.isFinite(price)||price<0||!Number.isFinite(rate)||rate<0||!String(x.item_name||"").trim())throw new Error("Check each item description, quantity, price and HST rate.");const sub=Number((qty*price).toFixed(2));return {inventory_item_id:x.id||null,item_code:x.item_code||null,item_name:x.item_name,line_type:x.line_type||"ITEM",quantity:qty,unit_price:price,tax_rate:rate,line_subtotal:sub,line_tax:Number((sub*rate/100).toFixed(2)),line_total:Number((sub+sub*rate/100).toFixed(2))}});
    const subtotal=Number(lines.reduce((s,x)=>s+x.line_subtotal,0).toFixed(2)),tax=Number(lines.reduce((s,x)=>s+x.line_tax,0).toFixed(2)),total=Number((subtotal+tax).toFixed(2)),rates=[...new Set(lines.map(x=>x.tax_rate))];
    const description=lines.map(x=>(x.line_type==="ADD_ON"?"Add-on: ":"")+x.item_name+" × "+x.quantity).join("; ");
-   const {error:e1}=await supabase.rpc("dv_create_agent_invoice_with_items",{p_invoice:{agent_id:form.agent_id,invoice_date:form.invoice_date,due_date:form.due_date||null,description,subtotal,tax_rate:rates.length===1?rates[0]:0,tax_amount:tax,total_amount:total,paid_amount:0,balance_amount:total,status:"Open",notes:form.notes||null},p_items:lines});
+   const {error:e1}=await supabase.rpc("dv_create_agent_invoice_with_items",{p_invoice:{...form,agent_id:form.bill_to_type==="AGENT"?form.agent_id:null,invoice_date:form.invoice_date,due_date:form.due_date||null,description,subtotal,tax_rate:rates.length===1?rates[0]:0,tax_amount:tax,total_amount:total,paid_amount:0,balance_amount:total,status:"Open",notes:form.notes||null},p_items:lines});
    if(e1)throw e1;
-   setShowCreate(false);setForm({agent_id:"",invoice_date:dateToday(),due_date:"",notes:"",items:[]});setPriorOutstanding(0);setNotice("Invoice created with "+lines.length+" line item(s).");await load();
+   setShowCreate(false);setForm({bill_to_type:"AGENT",agent_id:"",bill_to_name:"",bill_to_company:"",bill_to_email:"",bill_to_phone:"",bill_to_address:"",bill_to_city:"",bill_to_province:"ON",bill_to_postal_code:"",invoice_date:dateToday(),due_date:"",notes:"",items:[]});setPriorOutstanding(0);setNotice("Invoice created with "+lines.length+" line item(s).");await load();
   }catch(e){setError(e?.message||"Invoice could not be created.")}finally{setBusy(false)}
  };
  const recordPayment=async e=>{
