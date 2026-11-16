@@ -4,7 +4,10 @@ const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"au
 const json=(x:unknown,s=200)=>new Response(JSON.stringify(x),{status:s,headers:{...cors,"Content-Type":"application/json","Cache-Control":"no-store"}});
 const hash=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)))).map(x=>x.toString(16).padStart(2,"0")).join("");
 const esc=(s:unknown)=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]!));
-const cardFeeFor=(i,b)=>{if(!i.card_fee_enabled||Number(i.card_fee_percentage)<=0)return {fee:0,tax:0,total:Number(b||0)};const total=Number(i.total_amount||0),sub=Number(i.subtotal||0),base=i.card_fee_basis==="TOTAL_INCL_HST"?Number(b||0):(total>0?sub*Number(b||0)/total:0);const fee=Number((base*Number(i.card_fee_percentage)/100).toFixed(2));const tax=Number((fee*Number(i.card_fee_tax_rate??13)/100).toFixed(2));return {fee,tax,total:Number((Number(b||0)+fee+tax).toFixed(2))};};
+const moneyRound=(n:number)=>Number(Number(n||0).toFixed(2));
+const invoiceBalance=(i:any)=>moneyRound(Math.max(Number(i.total_amount||0)-Number(i.paid_amount||0)-Number(i.discount_amount||0),0));
+const cardFeeFor=(i:any,b:number)=>{if(!i.card_fee_enabled||Number(i.card_fee_percentage)<=0)return {fee:0,tax:0,total:moneyRound(b)};const total=Number(i.total_amount||0),sub=Number(i.subtotal||0),base=i.card_fee_basis==="TOTAL_INCL_HST"?Number(b||0):(total>0?sub*Number(b||0)/total:0);const fee=moneyRound(base*Number(i.card_fee_percentage)/100);const tax=moneyRound(fee*Number(i.card_fee_tax_rate??13)/100);return {fee,tax,total:moneyRound(Number(b||0)+fee+tax)};};
+const discountedAllocations=(rows:any[],percentage:number)=>rows.map((x:any)=>{const amount=moneyRound(Number(x.amount||0));const discount=Math.min(moneyRound(amount*percentage/100),Math.max(amount-0.01,0));return {...x,discount_amount:discount,payment_amount:moneyRound(amount-discount)};});
 
 Deno.serve(async(req:Request)=>{
  if(req.method==="OPTIONS")return new Response("ok",{headers:cors});
@@ -21,43 +24,51 @@ Deno.serve(async(req:Request)=>{
     const {data:p}=await db.from("dv_accounting_user_profiles").select("role").eq("user_id",u.user.id).maybeSingle();
     const role=String(u.user.app_metadata?.role||u.user.app_metadata?.user_role||p?.role||"").toUpperCase().replace(/[^A-Z]/g,"");
     if(!["ADMIN","ADMINISTRATOR","SUPERADMIN","SUPERADMINISTRATOR","BROKER","BROKEROFRECORD","OFFICEADMIN","TRADEADMIN"].includes(role)&&String(u.user.email).toLowerCase()!=="admin@dvrealty.ca")return json({error:"Administrator access required."},403);
-    const {data:i}=await db.from("dv_agent_invoices").select("id,invoice_number,agent_id,balance_amount,status,subtotal,total_amount,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("id",String(b.invoice_id||"")).maybeSingle();
+    const {data:i}=await db.from("dv_agent_invoices").select("id,invoice_number,agent_id,balance_amount,paid_amount,discount_amount,status,subtotal,total_amount,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("id",String(b.invoice_id||"")).maybeSingle();
     if(!i)return json({error:"Invoice not found."},404);
-    if(Number(i.balance_amount)<=0||i.status==="Void")return json({error:"No outstanding balance."},409);
+    if(invoiceBalance(i)<=0||i.status==="Void")return json({error:"No outstanding balance."},409);
     let rows:any[]=[i];
-    if(i.agent_id){const {data:openRows,error:rowsError}=await db.from("dv_agent_invoices").select("id,invoice_number,invoice_date,created_at,balance_amount,subtotal,total_amount,status,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("agent_id",i.agent_id).neq("status","Void").gt("balance_amount",0).order("invoice_date",{ascending:true}).order("created_at",{ascending:true}).order("invoice_number",{ascending:true});if(rowsError)throw rowsError;rows=openRows||[];}
-    const allocations=rows.map((row:any)=>{const amount=Number(row.balance_amount||0),fee=cardFeeFor(row,amount);return {invoice_id:row.id,invoice_number:row.invoice_number,amount:Number(amount.toFixed(2)),card_fee_amount:fee.fee,card_fee_tax:fee.tax};});
+    if(i.agent_id){const {data:openRows,error:rowsError}=await db.from("dv_agent_invoices").select("id,invoice_number,invoice_date,created_at,balance_amount,paid_amount,discount_amount,subtotal,total_amount,status,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("agent_id",i.agent_id).neq("status","Void").order("invoice_date",{ascending:true}).order("created_at",{ascending:true}).order("invoice_number",{ascending:true});if(rowsError)throw rowsError;rows=(openRows||[]).filter((row:any)=>invoiceBalance(row)>0);}
+    const allocations=rows.map((row:any)=>{const amount=invoiceBalance(row),fee=cardFeeFor(row,amount);return {invoice_id:row.id,invoice_number:row.invoice_number,amount:Number(amount.toFixed(2)),card_fee_amount:fee.fee,card_fee_tax:fee.tax};});
     const balanceAmount=Number(allocations.reduce((s:number,x:any)=>s+x.amount,0).toFixed(2));
     const cardFee=Number(allocations.reduce((s:number,x:any)=>s+x.card_fee_amount,0).toFixed(2));
     const cardFeeTax=Number(allocations.reduce((s:number,x:any)=>s+x.card_fee_tax,0).toFixed(2));
     const raw=Array.from(crypto.getRandomValues(new Uint8Array(32))).map(v=>v.toString(16).padStart(2,"0")).join("");
     const {error:e}=await db.from("dv_agent_invoice_payment_links").insert({invoice_id:i.id,token_hash:await hash(raw),created_by:u.user.id});
     if(e)throw e;
-    return json({ok:true,payment_url:"https://bo.dvrealty.ca/payment.html?token="+raw,balance_amount:balanceAmount,invoice_count:allocations.length,card:Boolean(i.agent_id),card_fee:cardFee,card_fee_tax:cardFeeTax,card_total:Number((balanceAmount+cardFee+cardFeeTax).toFixed(2))});
+    const {data:feeSetting,error:feeSettingError}=await db.from("dv_accounting_settings").select("value").eq("key","AGENT_INVOICE_CARD_FEE").limit(1).maybeSingle();if(feeSettingError)throw feeSettingError;const discountPct=Math.min(99.99,Math.max(0,Number(feeSetting?.value?.etransfer_discount_percentage||0)));const etransferAllocations=discountedAllocations(allocations,discountPct);const discountAmount=moneyRound(etransferAllocations.reduce((s:number,x:any)=>s+x.discount_amount,0));const currentInvoiceBalance=moneyRound(allocations.find((x:any)=>x.invoice_id===i.id)?.amount||0);return json({ok:true,payment_url:"https://bo.dvrealty.ca/payment.html?token="+raw,balance_amount:balanceAmount,current_invoice_balance:currentInvoiceBalance,prior_balance_amount:moneyRound(Math.max(balanceAmount-currentInvoiceBalance,0)),invoice_count:allocations.length,card:Boolean(i.agent_id),card_fee:cardFee,card_fee_tax:cardFeeTax,card_total:Number((balanceAmount+cardFee+cardFeeTax).toFixed(2)),etransfer_discount_percentage:discountPct,etransfer_discount_amount:discountAmount,etransfer_amount:moneyRound(balanceAmount-discountAmount)});
    }
    const token=String(b.token||"");
    if(!/^[a-f0-9]{64}$/i.test(token))return json({error:"Invalid payment link."},400);
    const {data:l}=await db.from("dv_agent_invoice_payment_links").select("id,invoice_id,expires_at,revoked_at").eq("token_hash",await hash(token)).maybeSingle();
    if(!l||l.revoked_at||new Date(l.expires_at)<new Date())return json({error:"Payment link expired or invalid."},404);
-   const {data:i}=await db.from("dv_agent_invoices").select("id,invoice_number,agent_id,balance_amount,status,subtotal,total_amount,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("id",l.invoice_id).maybeSingle();
-   if(!i||Number(i.balance_amount)<=0||i.status==="Void")return json({error:"No outstanding balance."},409);
+   const {data:i}=await db.from("dv_agent_invoices").select("id,invoice_number,agent_id,balance_amount,paid_amount,discount_amount,status,subtotal,total_amount,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("id",l.invoice_id).maybeSingle();
+   if(!i||invoiceBalance(i)<=0||i.status==="Void")return json({error:"No outstanding balance."},409);
    let allocations:any[]=[];
    if(i.agent_id){
-    const {data:rows,error:rowsError}=await db.from("dv_agent_invoices").select("id,invoice_number,invoice_date,created_at,balance_amount,subtotal,total_amount,status,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("agent_id",i.agent_id).neq("status","Void").gt("balance_amount",0).order("invoice_date",{ascending:true}).order("created_at",{ascending:true}).order("invoice_number",{ascending:true});
+    const {data:rows,error:rowsError}=await db.from("dv_agent_invoices").select("id,invoice_number,invoice_date,created_at,balance_amount,paid_amount,discount_amount,subtotal,total_amount,status,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("agent_id",i.agent_id).neq("status","Void").order("invoice_date",{ascending:true}).order("created_at",{ascending:true}).order("invoice_number",{ascending:true});
     if(rowsError)throw rowsError;
-    allocations=(rows||[]).map((row:any)=>{const amount=Number(row.balance_amount||0),fee=cardFeeFor(row,amount);return {invoice_id:row.id,invoice_number:row.invoice_number,amount:Number(amount.toFixed(2)),card_fee_amount:fee.fee,card_fee_tax:fee.tax};});
-   }else allocations=[{invoice_id:i.id,invoice_number:i.invoice_number,amount:Number(i.balance_amount),card_fee_amount:0,card_fee_tax:0}];
+    allocations=(rows||[]).filter((row:any)=>invoiceBalance(row)>0).map((row:any)=>{const amount=invoiceBalance(row),fee=cardFeeFor(row,amount);return {invoice_id:row.id,invoice_number:row.invoice_number,amount:Number(amount.toFixed(2)),card_fee_amount:fee.fee,card_fee_tax:fee.tax};});
+   }else allocations=[{invoice_id:i.id,invoice_number:i.invoice_number,amount:invoiceBalance(i),card_fee_amount:0,card_fee_tax:0}];
    const baseAmount=Number(allocations.reduce((s:number,x:any)=>s+x.amount,0).toFixed(2));
    const feeAmount=Number(allocations.reduce((s:number,x:any)=>s+x.card_fee_amount,0).toFixed(2));
    const feeTax=Number(allocations.reduce((s:number,x:any)=>s+x.card_fee_tax,0).toFixed(2));
    const payable=Number((baseAmount+feeAmount+feeTax).toFixed(2));
-   if(b.action==="details"){return json({ok:true,invoice_number:i.invoice_number,balance_amount:baseAmount,invoice_count:allocations.length,card:Boolean(i.agent_id),card_fee:feeAmount,card_fee_tax:feeTax,card_total:payable});}
+   const {data:feeSetting,error:feeSettingError}=await db.from("dv_accounting_settings").select("value").eq("key","AGENT_INVOICE_CARD_FEE").limit(1).maybeSingle();
+   if(feeSettingError)throw feeSettingError;
+   const discountPct=Math.min(99.99,Math.max(0,Number(feeSetting?.value?.etransfer_discount_percentage||0)));
+   const etransferAllocations=discountedAllocations(allocations,discountPct);
+   const discountAmount=moneyRound(etransferAllocations.reduce((s:number,x:any)=>s+x.discount_amount,0));
+   const etransferAmount=moneyRound(baseAmount-discountAmount);
+   const currentInvoiceBalance=moneyRound(allocations.find((x:any)=>x.invoice_id===i.id)?.amount||0);
+   const priorOutstandingBalance=moneyRound(Math.max(baseAmount-currentInvoiceBalance,0));
+   if(b.action==="details"){return json({ok:true,invoice_number:i.invoice_number,balance_amount:baseAmount,current_invoice_balance:currentInvoiceBalance,prior_balance_amount:priorOutstandingBalance,invoice_count:allocations.length,card:Boolean(i.agent_id),card_fee:feeAmount,card_fee_tax:feeTax,card_total:payable,etransfer_discount_percentage:discountPct,etransfer_discount_amount:discountAmount,etransfer_amount:etransferAmount});}
    if(b.action==="submit_etransfer"){
     const ref=String(b.reference_number||"").trim();
     if(ref.length<3||ref.length>120)return json({error:"Enter a reference number between 3 and 120 characters."},400);
     const {data:dup}=await db.from("dv_agent_invoice_payment_submissions").select("id").eq("invoice_id",i.id).eq("reference_number",ref).maybeSingle();
     if(dup)return json({error:"That reference number has already been submitted for this invoice."},409);
-    const {error:e}=await db.from("dv_agent_invoice_payment_submissions").insert({invoice_id:i.id,agent_id:i.agent_id,amount:baseAmount,allocations,payment_method:"E-transfer",reference_number:ref});
+    const {error:e}=await db.from("dv_agent_invoice_payment_submissions").insert({invoice_id:i.id,agent_id:i.agent_id,amount:etransferAmount,discount_amount:discountAmount,discount_percentage:discountPct,allocations:etransferAllocations,payment_method:"E-transfer",reference_number:ref});
     if(e)throw e;
     return json({ok:true,message:"Reference submitted. The office will verify the bank deposit before marking this invoice paid."});
    }
@@ -86,11 +97,11 @@ Deno.serve(async(req:Request)=>{
   if(!/^[a-f0-9]{64}$/i.test(token))return new Response("<h2>Invalid payment link</h2>",{status:404,headers:{"Content-Type":"text/html; charset=utf-8","Content-Disposition":"inline","X-Content-Type-Options":"nosniff"}});
   const {data:l}=await db.from("dv_agent_invoice_payment_links").select("invoice_id,expires_at,revoked_at").eq("token_hash",await hash(token)).maybeSingle();
   if(!l||l.revoked_at||new Date(l.expires_at)<new Date())return new Response("<h2>Payment link expired. Contact admin@dvrealty.ca.</h2>",{status:404,headers:{"Content-Type":"text/html"}});
-  const {data:i}=await db.from("dv_agent_invoices").select("id,invoice_number,agent_id,balance_amount,status,subtotal,total_amount,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("id",l.invoice_id).maybeSingle();
-  if(!i||Number(i.balance_amount)<=0||i.status==="Void")return new Response("<h2>No payment due.</h2>",{headers:{"Content-Type":"text/html"}});
+  const {data:i}=await db.from("dv_agent_invoices").select("id,invoice_number,agent_id,balance_amount,paid_amount,discount_amount,status,subtotal,total_amount,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("id",l.invoice_id).maybeSingle();
+  if(!i||invoiceBalance(i)<=0||i.status==="Void")return new Response("<h2>No payment due.</h2>",{headers:{"Content-Type":"text/html"}});
    let allocations:any[]=[];
-   if(i.agent_id){const {data:rows,error:rowsError}=await db.from("dv_agent_invoices").select("id,invoice_number,invoice_date,created_at,balance_amount,subtotal,total_amount,status,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("agent_id",i.agent_id).neq("status","Void").gt("balance_amount",0).order("invoice_date",{ascending:true}).order("created_at",{ascending:true}).order("invoice_number",{ascending:true});if(rowsError)throw rowsError;allocations=(rows||[]).map((row:any)=>{const amount=Number(row.balance_amount||0),fee=cardFeeFor(row,amount);return {invoice_id:row.id,invoice_number:row.invoice_number,amount:Number(amount.toFixed(2)),card_fee_amount:fee.fee,card_fee_tax:fee.tax};});}
-   else allocations=[{invoice_id:i.id,invoice_number:i.invoice_number,amount:Number(i.balance_amount),card_fee_amount:0,card_fee_tax:0}];
+   if(i.agent_id){const {data:rows,error:rowsError}=await db.from("dv_agent_invoices").select("id,invoice_number,invoice_date,created_at,balance_amount,paid_amount,discount_amount,subtotal,total_amount,status,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("agent_id",i.agent_id).neq("status","Void").order("invoice_date",{ascending:true}).order("created_at",{ascending:true}).order("invoice_number",{ascending:true});if(rowsError)throw rowsError;allocations=(rows||[]).map((row:any)=>{const amount=invoiceBalance(row),fee=cardFeeFor(row,amount);return {invoice_id:row.id,invoice_number:row.invoice_number,amount:Number(amount.toFixed(2)),card_fee_amount:fee.fee,card_fee_tax:fee.tax};});}
+   else allocations=[{invoice_id:i.id,invoice_number:i.invoice_number,amount:invoiceBalance(i),card_fee_amount:0,card_fee_tax:0}];
    const baseAmount=Number(allocations.reduce((s:number,x:any)=>s+x.amount,0).toFixed(2)),feeAmount=Number(allocations.reduce((s:number,x:any)=>s+x.card_fee_amount,0).toFixed(2)),feeTax=Number(allocations.reduce((s:number,x:any)=>s+x.card_fee_tax,0).toFixed(2)),payable=Number((baseAmount+feeAmount+feeTax).toFixed(2));
    const fmt=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(n||0)),amount=fmt(baseAmount),feeLines=feeAmount>0?'<div class="muted">Card fee: '+fmt(feeAmount)+'<br>HST on fee: '+fmt(feeTax)+'<br><b>Credit card total: '+fmt(payable)+'</b></div>':"";
   const card=Boolean(i.agent_id);

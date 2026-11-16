@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS"};
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,"Content-Type":"application/json"}});
+const invoiceBalance=(i:any)=>Number(Math.max(Number(i.total_amount||0)-Number(i.paid_amount||0)-Number(i.discount_amount||0),0).toFixed(2));
 const cardFeeFor=(i:any,b:number)=>{if(!i.card_fee_enabled||Number(i.card_fee_percentage)<=0)return {fee:0,tax:0};const total=Number(i.total_amount||0),sub=Number(i.subtotal||0),base=i.card_fee_basis==="TOTAL_INCL_HST"?b:(total>0?sub*b/total:0);const fee=Number((base*Number(i.card_fee_percentage)/100).toFixed(2));const tax=Number((fee*Number(i.card_fee_tax_rate??13)/100).toFixed(2));return {fee,tax};};
 
 Deno.serve(async(req:Request)=>{
@@ -17,16 +18,17 @@ Deno.serve(async(req:Request)=>{
   const {data:profile}=await db.from("dv_accounting_user_profiles").select("role").eq("user_id",user.id).maybeSingle();
   const role=String(user.app_metadata?.role||user.app_metadata?.user_role||profile?.role||"").toUpperCase().replace(/[^A-Z]/g,"");
   const isAdmin=["ADMIN","ADMINISTRATOR","SUPERADMIN","SUPERADMINISTRATOR","BROKER","BROKEROFRECORD","OFFICEADMIN","TRADEADMIN"].includes(role)||String(user.email).toLowerCase()==="admin@dvrealty.ca";
-  const {data:current,error:currentErr}=await db.from("dv_agent_invoices").select("id,invoice_number,agent_id,status").eq("id",invoiceId).maybeSingle();
+  const {data:current,error:currentErr}=await db.from("dv_agent_invoices").select("id,invoice_number,agent_id,status,total_amount,paid_amount,discount_amount").eq("id",invoiceId).maybeSingle();
   if(currentErr||!current)return json({error:"Invoice not found."},404);
   if(!current.agent_id)return json({error:"Card payment is unavailable for external invoices. Please use e-transfer."},409);
   const {data:agent,error:agentErr}=await db.from("dv_accounting_agents").select("id,email,active").eq("id",current.agent_id).maybeSingle();
   if(agentErr||!agent?.active||!agent.email)return json({error:"The invoice agent profile is not active or has no email address."},409);
   if(!isAdmin&&String(agent.email).trim().toLowerCase()!==String(user.email).trim().toLowerCase())return json({error:"You can only create checkout links for your own invoices."},403);
-  const {data:invoices,error:invoicesErr}=await db.from("dv_agent_invoices").select("id,invoice_number,invoice_date,created_at,subtotal,total_amount,balance_amount,status,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("agent_id",current.agent_id).neq("status","Void").gt("balance_amount",0).order("invoice_date",{ascending:true}).order("created_at",{ascending:true}).order("invoice_number",{ascending:true});
+  const {data:invoices,error:invoicesErr}=await db.from("dv_agent_invoices").select("id,invoice_number,invoice_date,created_at,subtotal,total_amount,balance_amount,paid_amount,discount_amount,status,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("agent_id",current.agent_id).neq("status","Void").order("invoice_date",{ascending:true}).order("created_at",{ascending:true}).order("invoice_number",{ascending:true});
   if(invoicesErr)throw invoicesErr;
-  if(!invoices?.length)return json({error:"There are no outstanding invoices."},409);
-  const allocations=invoices.map((i:any)=>{const amount=Number(i.balance_amount||0),fee=cardFeeFor(i,amount);return {invoice_id:i.id,invoice_number:i.invoice_number,amount:Number(amount.toFixed(2)),card_fee_amount:fee.fee,card_fee_tax:fee.tax};});
+  const openInvoices=(invoices||[]).filter((i:any)=>invoiceBalance(i)>0);
+  if(!openInvoices.length)return json({error:"There are no outstanding invoices."},409);
+  const allocations=openInvoices.map((i:any)=>{const amount=invoiceBalance(i),fee=cardFeeFor(i,amount);return {invoice_id:i.id,invoice_number:i.invoice_number,amount:Number(amount.toFixed(2)),card_fee_amount:fee.fee,card_fee_tax:fee.tax};});
   const baseCents=allocations.reduce((s:any,x:any)=>s+Math.round(x.amount*100),0);
   const feeCents=allocations.reduce((s:any,x:any)=>s+Math.round(x.card_fee_amount*100),0);
   const feeTaxCents=allocations.reduce((s:any,x:any)=>s+Math.round(x.card_fee_tax*100),0),cents=baseCents+feeCents+feeTaxCents;
