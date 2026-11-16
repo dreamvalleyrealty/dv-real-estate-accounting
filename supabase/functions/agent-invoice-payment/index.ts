@@ -25,7 +25,7 @@ Deno.serve(async(req:Request)=>{
     const raw=Array.from(crypto.getRandomValues(new Uint8Array(32))).map(v=>v.toString(16).padStart(2,"0")).join("");
     const {error:e}=await db.from("dv_agent_invoice_payment_links").insert({invoice_id:i.id,token_hash:await hash(raw),created_by:u.user.id});
     if(e)throw e;
-    return json({ok:true,payment_url:url+"/functions/v1/agent-invoice-payment?token="+raw});
+    return json({ok:true,payment_url:"https://dvbo.up.railway.app/payment.html?token="+raw});
    }
    const token=String(b.token||"");
    if(!/^[a-f0-9]{64}$/i.test(token))return json({error:"Invalid payment link."},400);
@@ -33,6 +33,7 @@ Deno.serve(async(req:Request)=>{
    if(!l||l.revoked_at||new Date(l.expires_at)<new Date())return json({error:"Payment link expired or invalid."},404);
    const {data:i}=await db.from("dv_agent_invoices").select("id,invoice_number,agent_id,balance_amount,status").eq("id",l.invoice_id).maybeSingle();
    if(!i||Number(i.balance_amount)<=0||i.status==="Void")return json({error:"No outstanding balance."},409);
+   if(b.action==="details")return json({ok:true,invoice_number:i.invoice_number,balance_amount:Number(i.balance_amount),card:Boolean(i.agent_id)});
    if(b.action==="submit_etransfer"){
     const ref=String(b.reference_number||"").trim();
     if(ref.length<3||ref.length>120)return json({error:"Enter a reference number between 3 and 120 characters."},400);
