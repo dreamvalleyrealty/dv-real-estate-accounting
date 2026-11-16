@@ -28,33 +28,101 @@ export default function AgentInvoices({agentId=null,adminMode=false}){
  },[agentId,adminMode]);
  useEffect(()=>{load()},[load]);
  const totals=useMemo(()=>({outstanding:invoices.reduce((s,x)=>s+Number(x.balance_amount||0),0),paid:invoices.reduce((s,x)=>s+Number(x.paid_amount||0),0)}),[invoices]);
- const buildInvoicePdf=inv=>{
-  const doc=new jsPDF({unit:"mm",format:"a4"}),left=18,right=192;
-  doc.setFillColor(15,33,65);doc.rect(0,0,210,38,"F");
-  doc.setTextColor(255,255,255);doc.setFontSize(17);doc.text("DREAM VALLEY REALTY INC.",left,17);
-  doc.setFontSize(9);doc.text("BROKERAGE",left,24);doc.setFontSize(18);doc.text("INVOICE",right,18,{align:"right"});
-  doc.setTextColor(25,35,50);doc.setFontSize(10);
+ let invoiceLogoPromise=null;
+ const getInvoiceLogo=()=>{
+  if(!invoiceLogoPromise)invoiceLogoPromise=(async()=>{
+   const response=await fetch("/dv-logo.svg");
+   if(!response.ok)throw new Error("Could not load the Dream Valley logo.");
+   const svg=await response.text();
+   const image=new Image();
+   const url=URL.createObjectURL(new Blob([svg],{type:"image/svg+xml"}));
+   try{
+    await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=reject;image.src=url});
+    const canvas=document.createElement("canvas");canvas.width=703;canvas.height=844;
+    const context=canvas.getContext("2d");context.drawImage(image,0,0,703,844);
+    return canvas.toDataURL("image/png");
+   }finally{URL.revokeObjectURL(url)}
+  })();
+  return invoiceLogoPromise;
+ };
+ const buildInvoicePdf=async inv=>{
+  const doc=new jsPDF({unit:"mm",format:"a4"}),left=16,right=194,width=178;
+  const navy=[15,33,65],gold=[158,133,86],ink=[34,45,64],muted=[111,122,139],line=[226,230,236],pale=[247,248,250];
   const agent=inv.dv_accounting_agents?.name||[inv.dv_accounting_agents?.first_name,inv.dv_accounting_agents?.last_name].filter(Boolean).join(" ")||inv.dv_accounting_agents?.email||"Agent";
-  doc.text("Bill to: "+agent,left,52);doc.text("Invoice #: "+(inv.invoice_number||""),right,52,{align:"right"});
-  doc.text("Invoice date: "+(inv.invoice_date||""),left,60);doc.text("Due date: "+(inv.due_date||"—"),right,60,{align:"right"});
-  doc.setDrawColor(210,215,225);doc.line(left,69,right,69);
-  doc.setFont(undefined,"bold");doc.text("Description",left,78);doc.text("Amount",right,78,{align:"right"});
-  doc.setFont(undefined,"normal");const lines=doc.splitTextToSize(String(inv.description||""),125);doc.text(lines,left,88);
-  doc.text(money(inv.subtotal),right,88,{align:"right"});
-  let y=105;doc.line(left,y,right,y);y+=9;
-  [["Subtotal",inv.subtotal],["HST",inv.tax_amount],["Total",inv.total_amount],["Paid",inv.paid_amount],["Balance due",inv.balance_amount]].forEach(([label,value],i)=>{if(i===2||i===4)doc.setFont(undefined,"bold");doc.text(label,left+95,y);doc.text(money(value),right,y,{align:"right"});doc.setFont(undefined,"normal");y+=8});
-  y+=8;doc.setFontSize(10);doc.setFont(undefined,"bold");doc.text("Payment by e-transfer",left,y);y+=7;doc.setFont(undefined,"normal");doc.text("Send payment to admin@dvrealty.ca",left,y);y+=6;doc.text("Include invoice number "+(inv.invoice_number||"")+" in the transfer message.",left,y);
-  if(inv.notes){y+=12;doc.setFont(undefined,"bold");doc.text("Notes",left,y);y+=6;doc.setFont(undefined,"normal");doc.text(doc.splitTextToSize(String(inv.notes),170),left,y)}
+  const logo=await getInvoiceLogo();
+  const items=Array.isArray(inv.dv_agent_invoice_items)?inv.dv_agent_invoice_items:[];
+  const fmtDate=value=>value?new Date(value+"T00:00:00").toLocaleDateString("en-CA",{year:"numeric",month:"short",day:"numeric"}):"—";
+  const text=(value,x,y,opts={})=>doc.text(String(value??""),x,y,opts);
+  const addHeader=()=>{
+   doc.setFillColor(...navy);doc.rect(0,0,210,49,"F");
+   doc.setFillColor(...gold);doc.rect(0,48,210,1.6,"F");
+   doc.addImage(logo,"PNG",left,8,19,27);
+   doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(13);text("DREAM VALLEY REALTY INC.",41,18);
+   doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(219,225,235);text("BROKERAGE",41,24);
+   doc.setFontSize(8);text("Toronto, Ontario, Canada",41,31);
+   doc.setFont("helvetica","bold");doc.setFontSize(24);doc.setTextColor(255,255,255);text("INVOICE",right,20,{align:"right"});
+   doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(226,231,240);text("# "+(inv.invoice_number||"DRAFT"),right,28,{align:"right"});
+  };
+  const addFooter=()=>{
+   doc.setDrawColor(...line);doc.line(left,282,right,282);
+   doc.setFont("helvetica","normal");doc.setFontSize(7.5);doc.setTextColor(...muted);
+   text("DREAM VALLEY REALTY INC.  •  Thank you for your business.",left,288);
+   text("Page "+doc.internal.getNumberOfPages(),right,288,{align:"right"});
+  };
+  addHeader();
+  doc.setTextColor(...ink);doc.setFont("helvetica","bold");doc.setFontSize(9);text("BILL TO",left,63);
+  doc.setFont("helvetica","normal");doc.setFontSize(11);text(agent,left,71);
+  doc.setFontSize(8.5);doc.setTextColor(...muted);text(inv.dv_accounting_agents?.email||"",left,77);
+  doc.setFillColor(...pale);doc.roundedRect(119,57,75,27,2,2,"F");
+  const meta=[["Invoice date",fmtDate(inv.invoice_date)],["Due date",fmtDate(inv.due_date)],["Status",inv.status||"Open"]];
+  meta.forEach(([label,value],i)=>{const y=64+i*7;doc.setFont("helvetica","normal");doc.setFontSize(7.5);doc.setTextColor(...muted);text(label,124,y);doc.setFont("helvetica","bold");doc.setFontSize(8);doc.setTextColor(...ink);text(value,189,y,{align:"right"})});
+  let y=96;
+  doc.setFillColor(...navy);doc.roundedRect(left,y,width,10,1.5,1.5,"F");
+  doc.setFont("helvetica","bold");doc.setFontSize(8);doc.setTextColor(255,255,255);
+  text("DESCRIPTION",left+4,y+6.5);text("QTY",148,y+6.5,{align:"right"});text("UNIT PRICE",171,y+6.5,{align:"right"});text("AMOUNT",right-4,y+6.5,{align:"right"});
+  y+=10;
+  const rows=items.length?items:[{item_name:inv.description||"Brokerage charges",quantity:1,unit_price:Number(inv.subtotal||0),line_subtotal:Number(inv.subtotal||0),tax_rate:Number(inv.tax_rate||0),line_type:"ITEM"}];
+  rows.forEach((item,index)=>{
+   const name=String(item.item_name||item.description||"Item");
+   const nameLines=doc.splitTextToSize(name,102);
+   const rowH=Math.max(12,Math.min(24,nameLines.length*4+7));
+   if(y+rowH>267){addFooter();doc.addPage();addHeader();y=61;}
+   if(index%2===0){doc.setFillColor(...pale);doc.rect(left,y,width,rowH,"F")}
+   doc.setFont("helvetica","bold");doc.setFontSize(8.5);doc.setTextColor(...ink);doc.text(nameLines,left+4,y+6);
+   if(item.line_type==="ADD_ON"){doc.setFont("helvetica","normal");doc.setFontSize(7);doc.setTextColor(...gold);text("OPTIONAL ADD-ON",left+4,y+rowH-2)}
+   doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(...ink);
+   text(Number(item.quantity||1).toString(),148,y+6,{align:"right"});
+   text(money(item.unit_price??item.line_subtotal),171,y+6,{align:"right"});
+   text(money(item.line_subtotal??item.unit_price),right-4,y+6,{align:"right"});
+   doc.setDrawColor(...line);doc.line(left,y+rowH,right,y+rowH);y+=rowH;
+  });
+  y+=10;
+  if(y>244){addFooter();doc.addPage();addHeader();y=62;}
+  const totalsX=116,totalsW=78;
+  doc.setFont("helvetica","normal");doc.setFontSize(8.5);doc.setTextColor(...muted);
+  [["Subtotal",inv.subtotal],["HST",inv.tax_amount]].forEach(([label,value])=>{text(label,totalsX,y);doc.setTextColor(...ink);text(money(value),right-3,y,{align:"right"});y+=7;doc.setTextColor(...muted)});
+  doc.setFillColor(...navy);doc.roundedRect(totalsX,y-2,totalsW,12,1.5,1.5,"F");
+  doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor(255,255,255);text("TOTAL",totalsX+4,y+5.5);text(money(inv.total_amount),right-3,y+5.5,{align:"right"});y+=19;
+  doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(...muted);text("Paid to date",totalsX,y);doc.setTextColor(...ink);text(money(inv.paid_amount),right-3,y,{align:"right"});y+=7;
+  doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(...gold);text("BALANCE DUE",totalsX,y);text(money(inv.balance_amount),right-3,y,{align:"right"});y+=15;
+  if(y>253){addFooter();doc.addPage();addHeader();y=63;}
+  doc.setDrawColor(...line);doc.line(left,y,right,y);y+=9;
+  doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor(...ink);text("PAYMENT INFORMATION",left,y);y+=7;
+  doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(...muted);
+  text("E-transfer: admin@dvrealty.ca",left,y);y+=5;
+  text("Please include invoice number "+(inv.invoice_number||"")+" in the transfer message.",left,y);y+=8;
+  if(inv.notes){doc.setFont("helvetica","bold");doc.setTextColor(...ink);text("NOTES",left,y);y+=6;doc.setFont("helvetica","normal");doc.setTextColor(...muted);const noteLines=doc.splitTextToSize(String(inv.notes),width);doc.text(noteLines,left,y);}
+  addFooter();
   return doc;
  };
- const makeInvoicePdf=inv=>buildInvoicePdf(inv).save("Invoice-"+(inv.invoice_number||inv.id)+".pdf");
+ const makeInvoicePdf=async inv=>{try{const doc=await buildInvoicePdf(inv);doc.save("Invoice-"+(inv.invoice_number||inv.id)+".pdf")}catch(e){setError(e?.message||"Could not create the invoice PDF.")}};
  const escapeHtml=value=>String(value??"").replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
  const sendInvoice=async inv=>{
   const recipient=String(inv.dv_accounting_agents?.email||"").trim();
   if(!recipient){setError("This agent does not have an email address on their accounting profile.");return;}
   setSendingInvoice(inv.id);setError("");setNotice("");
   try{
-   const doc=buildInvoicePdf(inv),dataUri=doc.output("datauristring"),base64=dataUri.split(",")[1]||"";
+   const doc=await buildInvoicePdf(inv),dataUri=doc.output("datauristring"),base64=dataUri.split(",")[1]||"";
    const htmlBody=`<p>Hello ${escapeHtml(inv.dv_accounting_agents?.name||[inv.dv_accounting_agents?.first_name,inv.dv_accounting_agents?.last_name].filter(Boolean).join(" ")||"")},</p><p>Please find attached your Dream Valley Realty invoice <strong>${escapeHtml(inv.invoice_number)}</strong>.</p><p><strong>Total:</strong> ${money(inv.total_amount)}<br/><strong>Paid:</strong> ${money(inv.paid_amount)}<br/><strong>Balance due:</strong> ${money(inv.balance_amount)}<br/><strong>Due date:</strong> ${escapeHtml(inv.due_date||"Not specified")}</p><p>For e-transfer, send payment to <strong>admin@dvrealty.ca</strong> and include invoice number ${escapeHtml(inv.invoice_number)} in the message.</p><p>Thank you,<br/>Dream Valley Realty Inc.</p>`;
    const {data,error:e}=await supabase.functions.invoke("zoho-mail-send",{body:{documentType:"AGENT_INVOICE",invoiceId:inv.id,invoiceNumber:inv.invoice_number,to:recipient,subject:"Dream Valley Realty Invoice "+inv.invoice_number,htmlBody,attachmentName:"Invoice-"+inv.invoice_number+".pdf",attachmentBase64:base64,senderMode:"admin"}});
    if(e)throw e;if(data?.error)throw new Error(data.error);
