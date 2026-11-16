@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, FileCheck2, FileText, RefreshCw, Trash2, Upload } from "lucide-react";
+import { AlertCircle, FileCheck2, FileText, RefreshCw, Trash2, Upload } from "lucide-react";
 
 const TYPES = [["FORM","Form / Agreement"],["SCHEDULE","Schedule / Attachment"],["DISCLOSURE","Disclosure"],["ID","Identity Document"],["OTHER","Other"]];
 const isPdf = file => /pdf/i.test(file?.type || "") || /\\.pdf$/i.test(file?.name || "");
@@ -42,21 +42,42 @@ export default function PaperworkValidation({ isActive = true }) {
     pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
     const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
     const pages = [];
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-      const page = await pdf.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const text = (content.items || []).map(item => String(item.str || "").trim()).filter(Boolean).join(" ");
-      const annotations = await page.getAnnotations({ intent: "display" });
-      const fields = annotations.filter(item => item.subtype === "Widget").map(item => ({
-        name: item.fieldName || item.alternativeText || "Unnamed field",
-        type: item.fieldType || "Text",
-        value: item.fieldValue,
-        required: Boolean((Number(item.fieldFlags) || 0) & 2),
-        rect: item.rect || null
-      }));
-      pages.push({ pageNumber, text, fields, hasText: text.trim().length > 0 });
+    let ocrWorker = null;
+    try {
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+        const page = await pdf.getPage(pageNumber);
+        const content = await page.getTextContent();
+        let text = (content.items || []).map(item => String(item.str || "").trim()).filter(Boolean).join(" ");
+        const annotations = await page.getAnnotations({ intent: "display" });
+        const fields = annotations.filter(item => item.subtype === "Widget").map(item => ({
+          name: item.fieldName || item.alternativeText || "Unnamed field",
+          type: item.fieldType || "Text",
+          value: item.fieldValue,
+          required: Boolean((Number(item.fieldFlags) || 0) & 2),
+          rect: item.rect || null
+        }));
+        if (text.trim().length < 30) {
+          if (!ocrWorker) {
+            const { createWorker } = await import("tesseract.js");
+            ocrWorker = await createWorker("eng");
+          }
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.ceil(viewport.width);
+          canvas.height = Math.ceil(viewport.height);
+          await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+          const result = await ocrWorker.recognize(canvas);
+          const ocrText = String(result?.data?.text || "");
+          if (ocrText.trim().length > text.trim().length) text = ocrText;
+          canvas.width = 0;
+          canvas.height = 0;
+        }
+        pages.push({ pageNumber, text, fields, hasText: text.trim().length > 0 });
+      }
+    } finally {
+      if (ocrWorker) await ocrWorker.terminate();
+      pdf.destroy();
     }
-    pdf.destroy();
     return pages;
   }
 
