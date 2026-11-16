@@ -25,7 +25,7 @@ Deno.serve(async(req:Request)=>{
     const raw=Array.from(crypto.getRandomValues(new Uint8Array(32))).map(v=>v.toString(16).padStart(2,"0")).join("");
     const {error:e}=await db.from("dv_agent_invoice_payment_links").insert({invoice_id:i.id,token_hash:await hash(raw),created_by:u.user.id});
     if(e)throw e;
-    return json({ok:true,payment_url:"https://dvbo.up.railway.app/payment.html?token="+raw});
+    return json({ok:true,payment_url:"https://bo.dvrealty.ca/payment.html?token="+raw});
    }
    const token=String(b.token||"");
    if(!/^[a-f0-9]{64}$/i.test(token))return json({error:"Invalid payment link."},400);
