@@ -17,7 +17,10 @@ Deno.serve(async(req:Request)=>{
   if(!eventPayment?.id||eventPayment.status!=="COMPLETED"||!eventPayment.order_id)return reply({received:true,ignored:true});
   const token=Deno.env.get("SQUARE_ACCESS_TOKEN");
   if(!token)return reply({error:"Square API credentials are not configured."},503);
-  const paymentResponse=await fetch("https://connect.squareupsandbox.com/v2/payments/"+encodeURIComponent(eventPayment.id),{headers:{"Authorization":"Bearer "+token,"Square-Version":"2025-10-16"}});
+  const environment=Deno.env.get("SQUARE_ENVIRONMENT")||"sandbox";
+  if(!["sandbox","production"].includes(environment))return reply({error:"SQUARE_ENVIRONMENT must be sandbox or production."},503);
+  const squareBase=environment==="production"?"https://connect.squareup.com":"https://connect.squareupsandbox.com";
+  const paymentResponse=await fetch(squareBase+"/v2/payments/"+encodeURIComponent(eventPayment.id),{headers:{"Authorization":"Bearer "+token,"Square-Version":"2025-10-16"}});
   const paymentBody=await paymentResponse.json(),payment=paymentBody.payment;
   if(!paymentResponse.ok||!payment)return reply({error:"Could not verify payment with Square."},502);
   if(payment.status!=="COMPLETED"||payment.order_id!==eventPayment.order_id)return reply({received:true,ignored:true});
