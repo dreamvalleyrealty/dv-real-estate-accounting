@@ -28,7 +28,7 @@ export function validateOfferPackage({ form = {}, docs = [], requirements = {}, 
     const item = issue(severity, code, title, detail, source);
     (severity === "error" ? errors : severity === "warning" ? warnings : passed).push(item);
   };
-  const transaction = isLease(form) ? (isCommercial(form) ? "commercial lease" : "residential lease") : "residential purchase and sale";
+  const transaction = isLease(form) ? (isCommercial(form) ? "commercial lease" : "residential lease") : (isCommercial(form) ? "commercial purchase and sale" : "residential purchase and sale");
   const address = [form.street_number, form.street_name, form.unit_number ? "Unit " + form.unit_number : "", form.city, form.province, form.postal_code].filter(Boolean).join(" ");
   const propertyRequired = [["street_number", "Street number"], ["street_name", "Street name"], ["city", "City"], ["province", "Province"], ["postal_code", "Postal code"]];
   propertyRequired.forEach(([key, label]) => clean(form[key]) ? add("pass", "field_" + key, label + " entered", "The trade record contains this property detail.") : add("error", "field_" + key, "Missing " + label.toLowerCase(), "Enter the " + label.toLowerCase() + " before the offer package is finalized."));
