@@ -805,7 +805,8 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
    setPostSignatureReport(report);
    setMessage(report.canProceed?"Post-signature check passed for our client(s).":"Post-signature check found items that must be completed.");
  }
-\n async function uploadFile(){
+
+ async function uploadFile(){
    const filesToUpload=files.length?files:(file?[file]:[]);
    if(!filesToUpload.length){setError("Choose at least one file before uploading.");return;}
    if(!supabase){setError("The database connection is not ready. Refresh the page and try again.");return;}
