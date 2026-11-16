@@ -77,12 +77,19 @@ Deno.serve(async(req:Request)=>{
     const {data:a}=await db.from("dv_accounting_agents").select("email,active").eq("id",i.agent_id).maybeSingle();
     if(!a?.active||!a.email)return json({error:"Agent profile unavailable."},409);
     const baseCents=Math.round(baseAmount*100),feeCents=Math.round(feeAmount*100),feeTaxCents=Math.round(feeTax*100),cents=baseCents+feeCents+feeTaxCents;
-    const {data:pending}=await db.from("dv_agent_invoice_square_sessions").select("checkout_url,amount_cents").eq("invoice_id",i.id).eq("status","PENDING").maybeSingle();
+    const {data:pending}=await db.from("dv_agent_invoice_square_sessions").select("id,checkout_url,amount_cents,square_payment_link_id").eq("invoice_id",i.id).eq("status","PENDING").order("created_at",{ascending:false}).limit(1).maybeSingle();
     if(pending&&Number(pending.amount_cents)===cents)return json({ok:true,checkout_url:pending.checkout_url});
-    if(pending)return json({error:"A previous Square checkout is pending for a different balance. Contact the office."},409);
     const sq=Deno.env.get("SQUARE_ACCESS_TOKEN"),loc=Deno.env.get("SQUARE_LOCATION_ID"),env=Deno.env.get("SQUARE_ENVIRONMENT")||"sandbox";
     if(!sq||!loc)return json({error:"Square is not configured."},503);
     const base=env==="production"?"https://connect.squareup.com":"https://connect.squareupsandbox.com";
+    if(pending){
+     if(!pending.square_payment_link_id)return json({error:"The previous Square checkout cannot be safely cancelled. Please contact the office."},409);
+     const cancel=await fetch(base+"/v2/online-checkout/payment-links/"+encodeURIComponent(pending.square_payment_link_id),{method:"DELETE",headers:{"Authorization":"Bearer "+sq,"Square-Version":"2026-09-16","Content-Type":"application/json"}});
+     const cancelData=await cancel.json().catch(()=>({}));
+     if(!cancel.ok)return json({error:cancelData.errors?.[0]?.detail||"The previous Square checkout could not be cancelled. No new checkout was created."},409);
+     const {error:expireError}=await db.from("dv_agent_invoice_square_sessions").update({status:"EXPIRED"}).eq("id",pending.id).eq("status","PENDING");
+     if(expireError)throw expireError;
+    }
     const r=await fetch(base+"/v2/online-checkout/payment-links",{method:"POST",headers:{"Authorization":"Bearer "+sq,"Content-Type":"application/json","Square-Version":"2025-10-16"},body:JSON.stringify({idempotency_key:crypto.randomUUID(),order:{location_id:loc,reference_id:i.invoice_number,line_items:[{name:"Dream Valley Realty invoice "+i.invoice_number,quantity:"1",base_price_money:{amount:cents,currency:"CAD"}}]},checkout_options:{merchant_support_email:"admin@dvrealty.ca"},pre_populated_data:{buyer_email:a.email}})});
     const sr=await r.json();
     if(!r.ok||!sr.payment_link?.url||!sr.payment_link?.order_id)return json({error:sr.errors?.[0]?.detail||"Square checkout failed."},502);
