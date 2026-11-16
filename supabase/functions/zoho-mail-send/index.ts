@@ -20,7 +20,7 @@ Deno.serve(async(req:Request)=>{
  const lawyerPackage=documentType==="LAWYER_DOCUMENT_PACKAGE";
  const agentInvoice=documentType==="AGENT_INVOICE";
  if(!validEmail(recipient)||(cc&&!validEmail(cc)))return json({error:"Enter a valid recipient email address."},400);
- if(!subject||subject.length>250||!html||html.length>40000)return json({error:"Subject or email body is missing or too long."},400);
+ if(!subject||subject.length>250||!html||html.length>250000)return json({error:"Subject or email body is missing or too long. Email body limit is 250 KB."},400);
  if(!["COMMISSION_INVOICE","SELLER_COMMISSION_STATEMENT","LAWYER_DOCUMENT_PACKAGE","AGENT_INVOICE"].includes(documentType))return json({error:"Unsupported document type."},400);
  const files:any[]=[];
  if(lawyerPackage){
