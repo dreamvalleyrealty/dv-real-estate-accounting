@@ -157,7 +157,7 @@ begin
     if not found or v_invoice.status = 'Void' then
       raise exception 'An allocated invoice is no longer payable';
     end if;
-    if v_submission.agent_id is not null and v_invoice.agent_id <> v_submission.agent_id then
+    if v_submission.agent_id is not null and v_invoice.agent_id is distinct from v_submission.agent_id then
       raise exception 'An allocated invoice does not belong to this agent';
     end if;
     if v_submission.agent_id is null and v_invoice.id <> v_submission.invoice_id then
