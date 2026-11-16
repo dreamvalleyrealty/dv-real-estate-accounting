@@ -73,7 +73,7 @@ begin
  status=case when v_paid>=v_total then 'Paid' when v_paid>0 then 'Partially Paid' when due_date is not null and due_date<current_date then 'Overdue' else 'Open' end,
  updated_at=now() where id=v_invoice_id;
  if tg_op='DELETE' then return old; else return new; end if;
-end; $;
+end; $$;
 drop trigger if exists trg_dv_agent_invoice_payment_balance on public.dv_agent_invoice_payments;
 create trigger trg_dv_agent_invoice_payment_balance after insert or update or delete on public.dv_agent_invoice_payments
 for each row execute function public.dv_agent_invoice_refresh_balance();
