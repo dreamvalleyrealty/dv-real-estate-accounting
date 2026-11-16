@@ -21,13 +21,19 @@ Deno.serve(async(req:Request)=>{
     const {data:p}=await db.from("dv_accounting_user_profiles").select("role").eq("user_id",u.user.id).maybeSingle();
     const role=String(u.user.app_metadata?.role||u.user.app_metadata?.user_role||p?.role||"").toUpperCase().replace(/[^A-Z]/g,"");
     if(!["ADMIN","ADMINISTRATOR","SUPERADMIN","SUPERADMINISTRATOR","BROKER","BROKEROFRECORD","OFFICEADMIN","TRADEADMIN"].includes(role)&&String(u.user.email).toLowerCase()!=="admin@dvrealty.ca")return json({error:"Administrator access required."},403);
-    const {data:i}=await db.from("dv_agent_invoices").select("id,balance_amount,status").eq("id",String(b.invoice_id||"")).maybeSingle();
+    const {data:i}=await db.from("dv_agent_invoices").select("id,invoice_number,agent_id,balance_amount,status,subtotal,total_amount,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("id",String(b.invoice_id||"")).maybeSingle();
     if(!i)return json({error:"Invoice not found."},404);
     if(Number(i.balance_amount)<=0||i.status==="Void")return json({error:"No outstanding balance."},409);
+    let rows:any[]=[i];
+    if(i.agent_id){const {data:openRows,error:rowsError}=await db.from("dv_agent_invoices").select("id,invoice_number,invoice_date,created_at,balance_amount,subtotal,total_amount,status,card_fee_enabled,card_fee_percentage,card_fee_basis,card_fee_tax_rate").eq("agent_id",i.agent_id).neq("status","Void").gt("balance_amount",0).order("invoice_date",{ascending:true}).order("created_at",{ascending:true}).order("invoice_number",{ascending:true});if(rowsError)throw rowsError;rows=openRows||[];}
+    const allocations=rows.map((row:any)=>{const amount=Number(row.balance_amount||0),fee=cardFeeFor(row,amount);return {invoice_id:row.id,invoice_number:row.invoice_number,amount:Number(amount.toFixed(2)),card_fee_amount:fee.fee,card_fee_tax:fee.tax};});
+    const balanceAmount=Number(allocations.reduce((s:number,x:any)=>s+x.amount,0).toFixed(2));
+    const cardFee=Number(allocations.reduce((s:number,x:any)=>s+x.card_fee_amount,0).toFixed(2));
+    const cardFeeTax=Number(allocations.reduce((s:number,x:any)=>s+x.card_fee_tax,0).toFixed(2));
     const raw=Array.from(crypto.getRandomValues(new Uint8Array(32))).map(v=>v.toString(16).padStart(2,"0")).join("");
     const {error:e}=await db.from("dv_agent_invoice_payment_links").insert({invoice_id:i.id,token_hash:await hash(raw),created_by:u.user.id});
     if(e)throw e;
-    return json({ok:true,payment_url:"https://bo.dvrealty.ca/payment.html?token="+raw});
+    return json({ok:true,payment_url:"https://bo.dvrealty.ca/payment.html?token="+raw,balance_amount:balanceAmount,invoice_count:allocations.length,card:Boolean(i.agent_id),card_fee:cardFee,card_fee_tax:cardFeeTax,card_total:Number((balanceAmount+cardFee+cardFeeTax).toFixed(2))});
    }
    const token=String(b.token||"");
    if(!/^[a-f0-9]{64}$/i.test(token))return json({error:"Invalid payment link."},400);
