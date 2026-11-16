@@ -1,6 +1,7 @@
 import React,{useCallback,useEffect,useMemo,useState} from "react";
 import {supabase} from "./lib/supabase";
-import {Plus,RefreshCw,ReceiptText,Wallet,CheckCircle2,AlertCircle,Download,History} from "lucide-react";\nimport {jsPDF} from "jspdf";
+import {Plus,RefreshCw,ReceiptText,Wallet,CheckCircle2,AlertCircle,Download,History} from "lucide-react";
+import {jsPDF} from "jspdf";
 
 const money=n=>new Intl.NumberFormat("en-CA",{style:"currency",currency:"CAD"}).format(Number(n||0));
 const dateToday=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-")};
