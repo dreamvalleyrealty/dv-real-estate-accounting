@@ -25,18 +25,33 @@ Deno.serve(async(req:Request)=>{
   if(!paymentResponse.ok||!payment)return reply({error:"Could not verify payment with Square."},502);
   if(payment.status!=="COMPLETED"||payment.order_id!==eventPayment.order_id)return reply({received:true,ignored:true});
   const db=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const {data:session,error:sessionErr}=await db.from("dv_agent_invoice_square_sessions").select("id,invoice_id,agent_id,amount_cents,currency,status").eq("square_order_id",payment.order_id).maybeSingle();
+  const {data:session,error:sessionErr}=await db.from("dv_agent_invoice_square_sessions").select("id,invoice_id,agent_id,amount_cents,base_amount_cents,fee_amount_cents,fee_tax_cents,allocations,currency,status").eq("square_order_id",payment.order_id).maybeSingle();
   if(sessionErr)throw sessionErr;
   if(!session)return reply({received:true,matched:false});
   const paidCents=Number(payment.amount_money?.amount),currency=payment.amount_money?.currency;
   if(session.status==="PAID"||paidCents!==Number(session.amount_cents)||currency!==session.currency)return reply({received:true,matched:true,ignored:true});
-  const {data:invoice,error:invoiceErr}=await db.from("dv_agent_invoices").select("id,agent_id,balance_amount").eq("id",session.invoice_id).maybeSingle();
-  if(invoiceErr)throw invoiceErr;
-  if(!invoice||invoice.agent_id!==session.agent_id||Math.round(Number(invoice.balance_amount||0)*100)!==paidCents)return reply({received:true,matched:true,ignored:true});
-  const {error:insertErr}=await db.from("dv_agent_invoice_payments").insert({invoice_id:session.invoice_id,agent_id:session.agent_id,amount:paidCents/100,payment_date:new Date().toISOString().slice(0,10),payment_method:"Credit card (Square)",reference_number:payment.id,notes:"Verified by Square payment webhook.",square_payment_id:payment.id});
-  if(insertErr&&insertErr.code!=="23505")throw insertErr;
+  const allocations=Array.isArray(session.allocations)?session.allocations:[];
+  if(!allocations.length)return reply({received:true,matched:true,ignored:true,reason:"Checkout allocation snapshot missing."},409);
+  const allocationBase=allocations.reduce((sum:any,item:any)=>sum+Math.round(Number(item.amount||0)*100),0);
+  const allocationFees=allocations.reduce((sum:any,item:any)=>sum+Math.round(Number(item.card_fee_amount||0)*100),0);
+  const allocationTax=allocations.reduce((sum:any,item:any)=>sum+Math.round(Number(item.card_fee_tax||0)*100),0);
+  if(allocationBase!==Number(session.base_amount_cents)||allocationFees!==Number(session.fee_amount_cents||0)||allocationTax!==Number(session.fee_tax_cents||0))return reply({error:"Saved invoice allocations do not match Square checkout."},409);
+  const paymentDate=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Toronto",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(payment.created_at||Date.now()));
+  const {data:recorded,error:recordErr}=await db.rpc("dv_record_agent_invoice_multi_payment",{
+   p_agent_id:session.agent_id,
+   p_allocations:allocations.map((item:any)=>({invoice_id:item.invoice_id,amount:item.amount,card_fee_amount:item.card_fee_amount,card_fee_tax:item.card_fee_tax})),
+   p_payment_method:"Square",
+   p_payment_date:paymentDate,
+   p_reference_number:payment.id,
+   p_square_payment_id:payment.id,
+   p_notes:"Verified Square payment. Allocated oldest outstanding invoice first."
+  });
+  if(recordErr){
+   const {data:existing}=await db.from("dv_agent_invoice_payments").select("id").eq("square_payment_id",payment.id).maybeSingle();
+   if(!existing)throw recordErr;
+  }
   const {error:updateErr}=await db.from("dv_agent_invoice_square_sessions").update({status:"PAID",square_payment_id:payment.id,paid_at:new Date().toISOString()}).eq("id",session.id).eq("status","PENDING");
   if(updateErr)throw updateErr;
-  return reply({received:true,matched:true,recorded:!insertErr});
+  return reply({received:true,matched:true,recorded:!recordErr});
  }catch(e){return reply({error:e instanceof Error?e.message:"Webhook processing failed."},500)}
 });
