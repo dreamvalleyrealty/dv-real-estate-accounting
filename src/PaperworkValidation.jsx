@@ -255,9 +255,15 @@ export default function PaperworkValidation({ isActive = true }) {
         </strong>
         {report.checkedDocuments !== undefined && <span className="muted">· {report.checkedDocuments} document(s), {report.totalPages} page(s)</span>}
       </div>
-      {[[ "Missing information",report.errors,"#b42318" ],[ "Please review",report.warnings,"#946200" ],[ "Completed checks",report.passed,"#167344" ]].map(([label,items,color]) => items.length > 0 && (
-        <div key={label} style={{ marginTop: 12 }}><strong style={{ color }}>{label}</strong>{items.map(item => <div key={item.code} style={{ marginTop: 8, padding: "8px 10px", background: "#f8f9fb", borderRadius: 6, fontSize: 13 }}><b>{item.title}</b><div className="muted">{item.detail}</div></div>)}</div>
+      {[[ "Missing information",report.errors,"#b42318" ],[ "Please review",report.warnings,"#946200" ]].map(([label,items,color]) => items.length > 0 && (
+        <div key={label} style={{ marginTop: 12 }}><strong style={{ color }}>{label}</strong>{items.map(item => {
+          const owner = files.find(file => item.code.startsWith(file.id));
+          const prefix = owner?.file?.name || "";
+          const title = prefix && item.title.startsWith(prefix) ? item.title.slice(prefix.length).replace(/^\\s*[—:]\\s*/, "") : item.title;
+          return <div key={item.code} style={{ marginTop: 7, padding: "8px 10px", background: "#f8f9fb", borderRadius: 6, fontSize: 13 }}><b>{title}</b><div className="muted">{item.detail}</div></div>;
+        })}</div>
       ))}
+      {report.passed.length > 0 && <div style={{ marginTop: 12, color: "#167344", fontSize: 13 }}><strong>{report.passed.length} check(s) completed</strong></div>}
     </section>
   );
 
@@ -311,21 +317,25 @@ export default function PaperworkValidation({ isActive = true }) {
           const pages = analyses[item.id] || [];
           const reference = libraryForms.find(form => form.id === item.referenceId);
           const rules = postSignatureRules(reference?.validation_rules);
+          const pageNumbers = [...new Set(rules.length ? rules.map(rule => Number(rule.page) || 1) : pages.map(page => page.pageNumber))].sort((a,b) => a-b);
           return <div key={item.id} style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #e4e7ec" }}>
-            <strong title={item.file.name}>{item.file.name}</strong>
-            {rules.length ? rules.map((rule,index) => {
-              const key = "rule:" + item.id + ":" + (rule.id || index);
-              const kind = rule.kind === "INITIAL" ? "initials" : rule.kind === "DATE" ? "signing date" : "signature";
-              return <label key={key} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10 }}>
-                <input type="checkbox" checked={signatureChecks[key] === true} onChange={e => setSignatureChecks(current => ({ ...current, [key]: e.target.checked }))}/>
-                <span>Page {rule.page}: Confirm {kind.toLowerCase()} for {rule.label} is present.</span>
-              </label>;
-            }) : pages.map(page => {
-              const key = item.id + ":" + page.pageNumber;
-              return <label key={key} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10 }}>
-                <input type="checkbox" checked={signatureChecks[key] === true} onChange={e => setSignatureChecks(current => ({ ...current, [key]: e.target.checked }))}/>
-                <span>Page {page.pageNumber}: I checked all required signatures, initials and dates.</span>
-              </label>;
+            <strong title={item.file.name} style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.file.name}</strong>
+            {pageNumbers.map(pageNumber => {
+              const pageRules = rules.filter(rule => (Number(rule.page) || 1) === pageNumber);
+              return <div key={pageNumber} style={{ marginTop: 9, padding: "9px 10px", background: "#f8f9fb", borderRadius: 6 }}>
+                <strong style={{ fontSize: 13 }}>Page {pageNumber}</strong>
+                {pageRules.length ? pageRules.map((rule,index) => {
+                  const key = "rule:" + item.id + ":" + (rule.id || rules.indexOf(rule));
+                  const kind = rule.kind === "INITIAL" ? "Initials" : rule.kind === "DATE" ? "Signing date" : "Signature";
+                  return <label key={key} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, fontSize: 13 }}>
+                    <input type="checkbox" checked={signatureChecks[key] === true} onChange={e => setSignatureChecks(current => ({ ...current, [key]: e.target.checked }))}/>
+                    <span>{kind}: {rule.label}</span>
+                  </label>;
+                }) : <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, fontSize: 13 }}>
+                  <input type="checkbox" checked={signatureChecks[item.id + ":" + pageNumber] === true} onChange={e => setSignatureChecks(current => ({ ...current, [item.id + ":" + pageNumber]: e.target.checked }))}/>
+                  <span>All required signatures, initials and dates are present</span>
+                </label>}
+              </div>;
             })}
           </div>;
         })}
