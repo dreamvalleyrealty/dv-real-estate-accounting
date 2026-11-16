@@ -1,3 +1,5 @@
+begin;
+
 -- Dream Valley Realty: official paperwork reference library
 -- Run this setup script in the Supabase SQL Editor for the DV-Back-Office project.
 
@@ -142,3 +144,5 @@ create policy "paperwork reference admins delete"
       array['SUPERADMIN','ADMIN','BROKER_OF_RECORD','BROKER-OF-RECORD','BROKER OF RECORD','BROKER','MANAGER','MANAGEMENT','OWNER']::text[]
     )
   );
+
+commit;
