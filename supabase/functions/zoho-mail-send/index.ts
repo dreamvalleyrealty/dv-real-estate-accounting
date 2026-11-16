@@ -18,9 +18,10 @@ Deno.serve(async(req:Request)=>{
  const recipient=String(body.to||"").trim(),cc=String(body.cc||"").trim(),subject=String(body.subject||"").trim(),html=String(body.htmlBody||"").trim();
  const documentType=String(body.documentType||"");
  const lawyerPackage=documentType==="LAWYER_DOCUMENT_PACKAGE";
+ const agentInvoice=documentType==="AGENT_INVOICE";
  if(!validEmail(recipient)||(cc&&!validEmail(cc)))return json({error:"Enter a valid recipient email address."},400);
  if(!subject||subject.length>250||!html||html.length>40000)return json({error:"Subject or email body is missing or too long."},400);
- if(!["COMMISSION_INVOICE","SELLER_COMMISSION_STATEMENT","LAWYER_DOCUMENT_PACKAGE"].includes(documentType))return json({error:"Unsupported document type."},400);
+ if(!["COMMISSION_INVOICE","SELLER_COMMISSION_STATEMENT","LAWYER_DOCUMENT_PACKAGE","AGENT_INVOICE"].includes(documentType))return json({error:"Unsupported document type."},400);
  const files:any[]=[];
  if(lawyerPackage){
   if(!Array.isArray(body.attachments)||body.attachments.length<1||body.attachments.length>15)return json({error:"Select between 1 and 15 trade documents."},400);
@@ -48,13 +49,23 @@ Deno.serve(async(req:Request)=>{
  const canManageTradeReview=adminPermissionCodes.some(permissionCode=>{const override=(userOverrideResult.data||[]).find((p:any)=>p.permission_code===permissionCode);if(override)return override.allowed===true;return (rolePermissionResult.data||[]).some((p:any)=>p.permission_code===permissionCode&&p.allowed===true)});
  const isAdmin=adminRoles.includes(role)||String(userData.user.email||"").toLowerCase()==="admin@dvrealty.ca";
  const requestedAdminSender=String(body.senderMode||"").toLowerCase()==="admin";
+ if(agentInvoice&&!isAdmin)return json({error:"Only an authorized administrator can send agent invoices."},403);
+ if(agentInvoice){
+  const invoiceId=String(body.invoiceId||"");
+  if(!/^[0-9a-f-]{36}$/i.test(invoiceId))return json({error:"A valid invoice ID is required."},400);
+  const {data:invoice,error:invoiceError}=await admin.from("dv_agent_invoices").select("id,invoice_number,agent_id").eq("id",invoiceId).maybeSingle();
+  if(invoiceError||!invoice)return json({error:"The invoice could not be verified. Apply the agent invoice database migration first."},404);
+  const {data:invoiceAgent,error:agentError}=await admin.from("dv_accounting_agents").select("email").eq("id",invoice.agent_id).maybeSingle();
+  if(agentError||!invoiceAgent?.email||String(invoiceAgent.email).trim().toLowerCase()!==recipient.toLowerCase())return json({error:"The recipient must match the email address on this invoice's agent record."},403);
+  if(String(body.invoiceNumber||"")!==String(invoice.invoice_number||""))return json({error:"The invoice number does not match the database record."},409);
+ }
  if(lawyerPackage&&requestedAdminSender&&!isAdmin)return json({error:"Only an authorized administrator can send from admin@dvrealty.ca."},403);
  const expectedLawyerFrom=requestedAdminSender?"admin@dvrealty.ca":String(userData.user.email||"").trim();
  if(lawyerPackage&&!validEmail(expectedLawyerFrom))return json({error:"Your signed-in account does not have a valid sender email address."},400);
  const {data:integration,error:integrationError}=await admin.from("dv_accounting_private_integrations").select("secret_payload").eq("integration_key","zoho_mail").maybeSingle();
  if(integrationError||!integration?.secret_payload?.refresh_token)return json({error:"Zoho Mail is not connected. Reconnect the mailbox first."},503);
  const p=integration.secret_payload,accountsServer=String(p.accounts_server||"https://accounts.zoho.com"),mailBase=String(p.mail_api_base||"https://mail.zoho.com"),configuredFrom=String(p.sender_email||"admin@dvrealty.ca");
- const from=lawyerPackage?expectedLawyerFrom:String(body.fromEmail||configuredFrom);
+ const from=lawyerPackage?expectedLawyerFrom:(agentInvoice?configuredFrom:String(body.fromEmail||configuredFrom));
  if(!validEmail(from))return json({error:"The configured sender email address is invalid."},400);
  const refresh=await fetch(accountsServer+"/oauth/v2/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({refresh_token:p.refresh_token,client_id:clientId,client_secret:clientSecret,grant_type:"refresh_token"})});
  const token=await refresh.json().catch(()=>({}));
