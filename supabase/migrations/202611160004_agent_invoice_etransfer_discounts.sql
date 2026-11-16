@@ -125,6 +125,7 @@ declare
   v_item jsonb;
   v_result jsonb;
   v_amount numeric(14,2);
+  v_payment numeric(14,2);
   v_discount numeric(14,2);
 begin
   if not public.dv_is_management_user() then
@@ -147,9 +148,10 @@ begin
 
   for v_item in select value from jsonb_array_elements(v_submission.allocations) loop
     v_amount := round(coalesce((v_item->>'amount')::numeric,0),2);
+    v_payment := round(coalesce((v_item->>'payment_amount')::numeric,v_amount),2);
     v_discount := round(coalesce((v_item->>'discount_amount')::numeric,0),2);
-    if v_amount <= 0 or v_discount < 0
-       or round(coalesce((v_item->>'payment_amount')::numeric,0),2) + v_discount <> v_amount then
+    if v_amount <= 0 or v_payment <= 0 or v_discount < 0
+       or v_payment + v_discount <> v_amount then
       raise exception 'The e-transfer payment and discount allocation does not balance';
     end if;
   end loop;
@@ -158,7 +160,7 @@ begin
     v_submission.agent_id,
     (select jsonb_agg(jsonb_build_object(
       'invoice_id', value->>'invoice_id',
-      'amount', value->>'payment_amount',
+      'amount', coalesce(value->>'payment_amount', value->>'amount'),
       'card_fee_amount', 0,
       'card_fee_tax', 0
     )) from jsonb_array_elements(v_submission.allocations)),
