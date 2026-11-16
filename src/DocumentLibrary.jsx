@@ -15,6 +15,40 @@ const CATEGORIES = [
 const ADMIN_ROLES = ["SUPERADMIN", "ADMIN", "BROKER_OF_RECORD", "BROKER OF RECORD", "BROKER", "MANAGER", "MANAGEMENT"];
 const newRule = () => ({ id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), label: "", page: 1, stage: "PRE_SIGN", kind: "FIELD", field_key: "", required: true, condition: "" });
 const safeName = name => String(name || "reference.pdf").normalize("NFKD").replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120);
+async function detectReferenceRules(file) {
+  try {
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const workerUrl = (await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url")).default;
+    pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+    const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    const rules = [];
+    try {
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+        const page = await pdf.getPage(pageNumber);
+        const annotations = await page.getAnnotations({ intent: "display" });
+        annotations.filter(item => item.subtype === "Widget" && item.fieldName).forEach(item => {
+          const fieldType = String(item.fieldType || "Text");
+          const kind = fieldType === "Sig" ? "SIGNATURE" : fieldType === "Btn" ? "CHECKBOX" : "FIELD";
+          const required = Boolean((Number(item.fieldFlags) || 0) & 2) || fieldType === "Sig";
+          rules.push({
+            id: (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()),
+            label: String(item.fieldName),
+            field_key: String(item.fieldName),
+            page: pageNumber,
+            stage: fieldType === "Sig" ? "POST_SIGN" : "PRE_SIGN",
+            kind,
+            required,
+            condition: ""
+          });
+        });
+      }
+    } finally { pdf.destroy(); }
+    return rules;
+  } catch {
+    return [];
+  }
+}
+
 
 export default function DocumentLibrary({ user, adminMode = false, role = "" }) {
   const canManage = adminMode || ADMIN_ROLES.includes(String(role).toUpperCase());
@@ -74,7 +108,7 @@ export default function DocumentLibrary({ user, adminMode = false, role = "" }) 
         id, document_name: draft.document_name.trim(), category: draft.category, version: draft.version.trim(),
         effective_date: draft.effective_date || null, status: "DRAFT", storage_path: storagePath,
         original_file_name: draft.file.name, mime_type: "application/pdf", file_size: draft.file.size,
-        validation_rules: [], notes: draft.notes.trim() || null, created_by: authData?.user?.id || user?.id || null,
+        validation_rules: detectedRules, notes: draft.notes.trim() || null, created_by: authData?.user?.id || user?.id || null,
         updated_by: authData?.user?.id || user?.id || null
       });
       if (insertError) {
@@ -84,7 +118,7 @@ export default function DocumentLibrary({ user, adminMode = false, role = "" }) 
       setDraft({ document_name: "", category: "AGREEMENT", version: "1.0", effective_date: "", notes: "", file: null });
       const picker = document.getElementById("paperwork-reference-file");
       if (picker) picker.value = "";
-      setMessage("Reference form added as a draft. Add its completion rules before publishing.");
+      setMessage("Reference form added as a draft. " + detectedRules.length + " fillable field(s) detected; review the rules and mark all required items before publishing.");
       await load();
     } catch (e) { setError(e?.message || "Could not add the reference form."); }
     finally { setSaving(false); }
