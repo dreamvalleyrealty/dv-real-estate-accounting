@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { PDFDocument } from "pdf-lib";
-import { AlertCircle, CheckCircle2, Clock3, FileText, Plus, RefreshCw, Search, Send, Upload, XCircle, ExternalLink, X, Trash2, Save, GripVertical, Copy, Mail } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock3, FileText, Plus, RefreshCw, Search, Send, Upload, XCircle, ExternalLink, X, Trash2, Save, GripVertical, Copy, Mail, ShieldCheck } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import MoneyInput from "./MoneyInput";
 import AgentSearchSelect from "./AgentSearchSelect";
