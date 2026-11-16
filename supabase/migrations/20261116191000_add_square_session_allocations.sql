@@ -1,0 +1,1 @@
+alter table public.dv_agent_invoice_square_sessions add column if not exists allocations jsonb not null default '[]'::jsonb;
