@@ -170,12 +170,18 @@ export default function PaperworkValidation({ isActive = true }) {
 
   async function runAiAudit() {
     if (!supabase) throw new Error("The Back Office connection is unavailable.");
+    const unmatchedFiles = files.filter(item => !libraryForms.some(form => form.id === item.referenceId && form.status !== "ARCHIVED"));
+    if (unmatchedFiles.length) {
+      const names = unmatchedFiles.map(item => item.file.name).join(", ");
+      throw new Error("AI review unavailable. The following form(s) are not matched to a published Document Library reference: " + names + ". Please ask an administrator to add and publish the official reference form, then select it before running the AI check.");
+    }
     const totalBytes = files.reduce((sum, item) => sum + item.file.size, 0);
     if (totalBytes > 4 * 1024 * 1024) {
       throw new Error("The AI review limit for this first release is 4 MB for the combined package. Reduce the file sizes or split the package.");
     }
     const uploaded = await Promise.all(files.map(async item => ({
       name: item.file.name,
+      referenceFormId: item.referenceId,
       referenceFormName: libraryForms.find(form => form.id === item.referenceId)?.document_name || "",
       referenceVersion: libraryForms.find(form => form.id === item.referenceId)?.version || "",
       mimeType: item.file.type || (isPdf(item.file) ? "application/pdf" : ""),
