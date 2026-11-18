@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertCircle, FileCheck2, FileText, RefreshCw, Trash2, Upload } from "lucide-react";
 import { supabase } from "./lib/supabase";
 
@@ -21,6 +21,9 @@ export default function PaperworkValidation({ isActive = true }) {
   const [signatureChecks, setSignatureChecks] = useState({});
   const [showPostReview, setShowPostReview] = useState(false);
   const [aiAudit, setAiAudit] = useState({ loading: false, audit: null, error: "" });
+  const [selectedFinding, setSelectedFinding] = useState(null);
+  const [previewError, setPreviewError] = useState("");
+  const previewCanvasRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -47,6 +50,7 @@ export default function PaperworkValidation({ isActive = true }) {
     setSignatureChecks({});
     setShowPostReview(false);
     setAiAudit({ loading: false, audit: null, error: "" });
+    setSelectedFinding(null);
     setError("");
     setMessage("");
   }
@@ -61,6 +65,7 @@ export default function PaperworkValidation({ isActive = true }) {
     setSignatureChecks({});
     setShowPostReview(false);
     setAiAudit({ loading: false, audit: null, error: "" });
+    setSelectedFinding(null);
     setError("");
     setMessage("");
   }
@@ -127,6 +132,40 @@ export default function PaperworkValidation({ isActive = true }) {
       binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
     }
     return btoa(binary);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    async function renderFindingPage() {
+      if (!selectedFinding || !previewCanvasRef.current) return;
+      const owner = files.find(item => item.file.name === selectedFinding.document_name);
+      if (!owner || !isPdf(owner.file)) { setPreviewError("Preview is available for PDF documents. Open the uploaded image separately."); return; }
+      try {
+        setPreviewError("");
+        const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+        const workerUrl = (await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url")).default;
+        pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+        const pdf = await pdfjs.getDocument({ data: new Uint8Array(await owner.file.arrayBuffer()) }).promise;
+        const pageNumber = Math.max(1, Math.min(Number(selectedFinding.page_number) || 1, pdf.numPages));
+        const page = await pdf.getPage(pageNumber);
+        const viewport = page.getViewport({ scale: 1.35 });
+        const canvas = previewCanvasRef.current;
+        if (!canvas || cancelled) { pdf.destroy(); return; }
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+        pdf.destroy();
+      } catch (e) {
+        if (!cancelled) setPreviewError(e?.message || "Could not render this PDF page.");
+      }
+    }
+    renderFindingPage();
+    return () => { cancelled = true; };
+  }, [selectedFinding, files]);
+
+  function openFinding(finding) {
+    setSelectedFinding(finding);
+    setPreviewError("");
   }
 
   async function runAiAudit() {
@@ -380,9 +419,23 @@ export default function PaperworkValidation({ isActive = true }) {
               <p style={{ margin: "7px 0", fontSize: 13 }}>{finding.explanation}</p>
               {finding.evidence && <div style={{ fontSize: 12, background: "#f8f9fb", padding: 7, borderRadius: 5 }}>Evidence: {finding.evidence}</div>}
               {finding.suggested_action && <div style={{ fontSize: 12, marginTop: 6 }}><strong>Suggested action:</strong> {finding.suggested_action}</div>}
+              <button type="button" className="secondary" style={{ marginTop: 8, fontSize: 12 }} onClick={() => openFinding(finding)}>View location on form</button>
             </div>;
           })}
         </div> : <div className="notice">AI did not identify any specific issues. This is not a legal approval; complete all required human checks.</div>}
+        {selectedFinding && <section style={{ marginTop: 16, border: "1px solid #d0d5dd", borderRadius: 8, padding: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div><strong>Form location preview</strong><div className="muted" style={{ fontSize: 12 }}>{selectedFinding.document_name} · Page {selectedFinding.page_number || 1}</div></div>
+            <button type="button" className="secondary" onClick={() => setSelectedFinding(null)}>Close preview</button>
+          </div>
+          <p style={{ fontSize: 13 }}>{selectedFinding.title}: {selectedFinding.explanation}</p>
+          {previewError && <div className="notice">{previewError}</div>}
+          <div style={{ position: "relative", width: "100%", border: "1px solid #d0d5dd", marginTop: 8, background: "#f8f9fb" }}>
+            <canvas ref={previewCanvasRef} style={{ display: "block", width: "100%", height: "auto" }}/>
+            {selectedFinding.location && Number(selectedFinding.location.width) > 0 && Number(selectedFinding.location.height) > 0 ? <div style={{ position: "absolute", left: (Number(selectedFinding.location.x)||0)/10+"%", top: (Number(selectedFinding.location.y)||0)/10+"%", width: Math.min(100,Number(selectedFinding.location.width)/10)+"%", height: Math.min(100,Number(selectedFinding.location.height)/10)+"%", border: "3px solid #d92d20", background: "rgba(217,45,32,.14)", boxSizing: "border-box", pointerEvents: "none" }}/> : <div className="muted" style={{ padding: 10 }}>Gemini could not reliably locate this exact area. Use the page number and instructions to inspect the page manually.</div>}
+          </div>
+          <p className="muted" style={{ fontSize: 11 }}>The red box is an AI-estimated location, not a verified field boundary. Always confirm against the original form.</p>
+        </section>}
         {(aiAudit.audit.cross_document_checks || []).length > 0 && <div style={{ marginTop: 14 }}>
           <strong>Cross-document consistency</strong>
           {(aiAudit.audit.cross_document_checks || []).map((check,index) => <div key={index} style={{ padding: "8px 0", borderBottom: "1px solid #e4e7ec", fontSize: 13 }}>
