@@ -407,7 +407,7 @@ export default function PaperworkValidation({ isActive = true }) {
             <span className="muted" style={{ whiteSpace: "nowrap" }}>{doc.page_count ?? "?"} pages · {doc.review_status === "REVIEWED" ? "Reviewed" : doc.review_status === "PARTIAL" ? "Partial" : "Unreadable"}</span>
           </div>)}
         </div>
-        {(aiAudit.audit.findings || []).length > 0 ? <div style={{ display: "grid", gap: 8 }}>
+        {(aiAudit.audit.findings || []).length > 0 ? <div className="dv-paperwork-visual-review" style={{ display: "grid", gridTemplateColumns: selectedFinding ? "minmax(0, 1fr) minmax(0, 1.15fr)" : "1fr", gap: 16, alignItems: "start" }}><div style={{ display: "grid", gap: 8, minWidth: 0 }}>
           <strong>AI findings ({aiAudit.audit.findings.length})</strong>
           {aiAudit.audit.findings.map((finding,index) => {
             const color = finding.severity === "ERROR" ? "#b42318" : finding.severity === "WARNING" ? "#946200" : finding.severity === "INFO" ? "#167344" : "#475467";
@@ -422,8 +422,8 @@ export default function PaperworkValidation({ isActive = true }) {
               <button type="button" className="secondary" style={{ marginTop: 8, fontSize: 12 }} onClick={() => openFinding(finding)}>View location on form</button>
             </div>;
           })}
-        </div> : <div className="notice">AI did not identify any specific issues. This is not a legal approval; complete all required human checks.</div>}
-        {selectedFinding && <section style={{ marginTop: 16, border: "1px solid #d0d5dd", borderRadius: 8, padding: 12 }}>
+        </div></div> : <div className="notice">AI did not identify any specific issues. This is not a legal approval; complete all required human checks.</div>}
+        {selectedFinding && <section style={{ marginTop: 0, border: "1px solid #d0d5dd", borderRadius: 8, padding: 12, minWidth: 0, position: "sticky", top: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <div><strong>Form location preview</strong><div className="muted" style={{ fontSize: 12 }}>{selectedFinding.document_name} · Page {selectedFinding.page_number || 1}</div></div>
             <button type="button" className="secondary" onClick={() => setSelectedFinding(null)}>Close preview</button>
@@ -436,6 +436,7 @@ export default function PaperworkValidation({ isActive = true }) {
           </div>
           <p className="muted" style={{ fontSize: 11 }}>The red box is an AI-estimated location, not a verified field boundary. Always confirm against the original form.</p>
         </section>}
+        {(aiAudit.audit.findings || []).length > 0 && <style>{"@media (max-width: 760px) { .dv-paperwork-visual-review { grid-template-columns: minmax(0, 1fr) !important; } }"}</style>}
         {(aiAudit.audit.cross_document_checks || []).length > 0 && <div style={{ marginTop: 14 }}>
           <strong>Cross-document consistency</strong>
           {(aiAudit.audit.cross_document_checks || []).map((check,index) => <div key={index} style={{ padding: "8px 0", borderBottom: "1px solid #e4e7ec", fontSize: 13 }}>
