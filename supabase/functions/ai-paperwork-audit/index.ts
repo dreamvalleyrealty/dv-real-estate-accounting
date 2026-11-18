@@ -82,9 +82,9 @@ Deno.serve(async (req: Request) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const openAiKey = Deno.env.get("OPENAI_API_KEY");
+  const geminiKey = Deno.env.get("GEMINI_API_KEY");
   if (!supabaseUrl || !serviceKey) return json({ error: "The paperwork audit service is not configured." }, 503);
-  if (!openAiKey) return json({ error: "AI review is not configured yet. An administrator must add the OPENAI_API_KEY secret in Supabase." }, 503);
+  if (!geminiKey) return json({ error: "Gemini AI review is not configured yet. An administrator must add the GEMINI_API_KEY secret in Supabase." }, 503);
 
   const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const token = authorization.slice(7);
@@ -117,9 +117,9 @@ Deno.serve(async (req: Request) => {
     if (totalBytes > MAX_TOTAL_BYTES) return json({ error: "The combined upload is larger than 4 MB for this first AI audit version. Reduce the file size or split the package." }, 413);
     fileNames.push(name + " -> selected reference: " + String(file?.referenceFormName || "not selected") + (file?.referenceVersion ? " v" + String(file.referenceVersion) : ""));
     if (mimeType === "application/pdf") {
-      content.push({ type: "input_file", filename: name, file_data: "data:application/pdf;base64," + base64, detail: "high" });
+      content.push({ inlineData: { mimeType: "application/pdf", data: base64 } });
     } else {
-      content.push({ type: "input_image", image_url: "data:" + mimeType + ";base64," + base64, detail: "high" });
+      content.push({ inlineData: { mimeType, data: base64 } });
     }
   }
 
@@ -152,28 +152,31 @@ Deno.serve(async (req: Request) => {
     "Return a concise audit of these files: " + fileNames.join("; "),
   ].join("\n\n");
 
-  content.push({ type: "input_text", text: instructions });
+  content.push({ text: instructions });
 
   try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
+    const model = Deno.env.get("GEMINI_MODEL") || "gemini-3.1-flash-lite";
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + encodeURIComponent(geminiKey), {
       method: "POST",
-      headers: { "Authorization": "Bearer " + openAiKey, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: Deno.env.get("OPENAI_MODEL") || "gpt-4.1",
-        input: [{ role: "user", content }],
-        text: { format: { type: "json_schema", name: "dream_valley_paperwork_audit", strict: true, schema: outputSchema } },
-        max_output_tokens: 6000,
+        contents: [{ role: "user", parts: content }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseJsonSchema: outputSchema,
+          temperature: 0,
+          maxOutputTokens: 6000,
+        },
       }),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const message = String(payload?.error?.message || "The AI provider could not complete the audit.");
-      return json({ error: message.slice(0, 500) }, response.status === 429 ? 429 : 502);
+      const message = String(payload?.error?.message || "Gemini could not complete the audit.");
+      return json({ error: response.status === 429 ? "Gemini free-tier quota or rate limit reached. Automatic PDF checks are still available. Please try again later." : message.slice(0, 500) }, response.status === 429 ? 429 : 502);
     }
 
-    const outputText = (payload?.output || []).flatMap((item: any) => item?.content || [])
-      .filter((item: any) => item?.type === "output_text")
-      .map((item: any) => item.text || "")
+    const outputText = (payload?.candidates?.[0]?.content?.parts || [])
+      .map((part: any) => part?.text || "")
       .join("\n");
     if (!outputText) return json({ error: "The AI returned no completed audit. Please try again." }, 502);
     let audit: any;
@@ -183,7 +186,7 @@ Deno.serve(async (req: Request) => {
       ok: true,
       audit,
       review_notice: "AI findings are suggestions for human review, not legal advice or signature authentication.",
-      provider: "OpenAI",
+      provider: "Google Gemini",
     });
   } catch {
     return json({ error: "The AI audit service could not be reached. Please try again." }, 502);
