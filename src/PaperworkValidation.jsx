@@ -356,9 +356,9 @@ export default function PaperworkValidation({ isActive = true }) {
       <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
         <strong style={{ fontSize: 16 }}>AI paperwork review</strong>
         {aiAudit.loading && <span className="muted">Reviewing documents…</span>}
-        {aiAudit.audit && <span className="muted">OpenAI-assisted review</span>}
+        {aiAudit.audit && <span className="muted">Google Gemini review</span>}
       </div>
-      {aiAudit.loading && <p className="muted">AI is reading the uploaded pages and checking information across the package. Keep this page open.</p>}
+      {aiAudit.loading && <p className="muted">Gemini is reading the uploaded pages and checking information across the package. Keep this page open.</p>}
       {aiAudit.error && <div className="notice" role="status">{aiAudit.error}</div>}
       {aiAudit.audit && <>
         <p style={{ marginTop: 0 }}>{aiAudit.audit.summary}</p>
@@ -391,7 +391,7 @@ export default function PaperworkValidation({ isActive = true }) {
             <div>{check.explanation}</div>
           </div>)}
         </div>}
-        <p className="muted" style={{ fontSize: 11, marginBottom: 0 }}>AI findings are suggestions for human review, not legal advice or signature authentication. Uploaded files are sent to OpenAI for processing and are not saved by this application. OpenAI API data controls and retention terms apply.</p>
+        <p className="muted" style={{ fontSize: 11, marginBottom: 0 }}>AI findings are suggestions for human review, not legal advice or signature authentication. Uploaded files are sent to Google Gemini for processing and are not saved by this application. The Gemini free tier may use submitted content to improve Google products. Do not upload confidential client documents unless the applicable Google data terms have been reviewed and approved.</p>
       </>}
     </section>}
     {reports.pre && <section style={{ border: "1px solid #e4e7ec", borderRadius: 10, padding: 16, marginBottom: 16 }}>
