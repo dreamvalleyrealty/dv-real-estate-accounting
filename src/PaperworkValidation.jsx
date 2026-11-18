@@ -50,6 +50,7 @@ export default function PaperworkValidation({ isActive = true }) {
     setSignatureChecks({});
     setShowPostReview(false);
     setAiAudit({ loading: false, audit: null, error: "" });
+    setSelectedFinding(null);
     setError("");
     setMessage("");
   }
@@ -64,6 +65,7 @@ export default function PaperworkValidation({ isActive = true }) {
     setSignatureChecks({});
     setShowPostReview(false);
     setAiAudit({ loading: false, audit: null, error: "" });
+    setSelectedFinding(null);
     setError("");
     setMessage("");
   }
