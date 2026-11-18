@@ -422,7 +422,7 @@ export default function PaperworkValidation({ isActive = true }) {
               <button type="button" className="secondary" style={{ marginTop: 8, fontSize: 12 }} onClick={() => openFinding(finding)}>View location on form</button>
             </div>;
           })}
-        </div></div> : <div className="notice">AI did not identify any specific issues. This is not a legal approval; complete all required human checks.</div>}
+        </div> : <div className="notice">AI did not identify any specific issues. This is not a legal approval; complete all required human checks.</div>}
         {selectedFinding && <section style={{ marginTop: 0, border: "1px solid #d0d5dd", borderRadius: 8, padding: 12, minWidth: 0, position: "sticky", top: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <div><strong>Form location preview</strong><div className="muted" style={{ fontSize: 12 }}>{selectedFinding.document_name} · Page {selectedFinding.page_number || 1}</div></div>
@@ -435,7 +435,7 @@ export default function PaperworkValidation({ isActive = true }) {
             {selectedFinding.location && Number(selectedFinding.location.width) > 0 && Number(selectedFinding.location.height) > 0 ? <div style={{ position: "absolute", left: (Number(selectedFinding.location.x)||0)/10+"%", top: (Number(selectedFinding.location.y)||0)/10+"%", width: Math.min(100,Number(selectedFinding.location.width)/10)+"%", height: Math.min(100,Number(selectedFinding.location.height)/10)+"%", border: "3px solid #d92d20", background: "rgba(217,45,32,.14)", boxSizing: "border-box", pointerEvents: "none" }}/> : <div className="muted" style={{ padding: 10 }}>Gemini could not reliably locate this exact area. Use the page number and instructions to inspect the page manually.</div>}
           </div>
           <p className="muted" style={{ fontSize: 11 }}>The red box is an AI-estimated location, not a verified field boundary. Always confirm against the original form.</p>
-        </section>}
+        </section>}</div>}
         {(aiAudit.audit.findings || []).length > 0 && <style>{"@media (max-width: 760px) { .dv-paperwork-visual-review { grid-template-columns: minmax(0, 1fr) !important; } }"}</style>}
         {(aiAudit.audit.cross_document_checks || []).length > 0 && <div style={{ marginTop: 14 }}>
           <strong>Cross-document consistency</strong>
