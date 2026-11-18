@@ -320,8 +320,8 @@ export default function PaperworkValidation({ isActive = true }) {
       <button className="secondary" type="button" onClick={resetValidation}><RefreshCw size={15}/> Start over</button>
     </div>
     <div style={{ padding: 12, border: "1px solid #d6b979", borderRadius: 8, background: "#fffcf5", marginBottom: 20 }}>
-      <strong>Private temporary review</strong>
-      <div className="muted">Your uploaded paperwork and results stay in this browser session. They are not saved or attached to a trade. Only official blank forms and their rules are stored in Document Library.</div>
+      <strong>Temporary review with Google Gemini</strong>
+      <div className="muted">Uploaded documents and results are not saved or attached to a trade by this application. The free Gemini API tier may use submitted content to improve Google products. Use dummy or redacted documents for testing. Do not upload confidential client paperwork through the free tier unless the brokerage has reviewed and approved Google’s data terms.</div>
     </div>
     {error && <div className="error" role="alert">{error}</div>}
     {message && <div className="notice" role="status">{message}</div>}
@@ -336,7 +336,7 @@ export default function PaperworkValidation({ isActive = true }) {
       {!libraryForms.length && !libraryError && <div className="muted" style={{ padding: 10, background: "#f8f9fb", borderRadius: 6, marginBottom: 12 }}>No official reference forms are published yet. An administrator must add them in Document Library before automatic form-specific checks are available.</div>}
       <label className="secondary" style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 12 }}>
         <Upload size={16}/> Choose files
-        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff" style={{ display: "none" }} onChange={event => { addFiles(event.target.files); event.target.value = ""; }}/>
+        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style={{ display: "none" }} onChange={event => { addFiles(event.target.files); event.target.value = ""; }}/>
       </label>
       {files.length > 0 && <div style={{ display: "grid", gap: 8, marginBottom: 14 }}>
         {files.map(item => <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(190px,280px) auto", alignItems: "center", gap: 10, border: "1px solid #e4e7ec", borderRadius: 8, padding: 10 }}>
