@@ -124,20 +124,36 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  const referenceRules = Array.isArray(body?.referenceRules) ? body.referenceRules.slice(0, 250) : [];
-  const safeRules = referenceRules.map((rule: any) => ({
-    document_name: String(rule?.document_name || "").slice(0, 160),
-    version: String(rule?.version || "").slice(0, 40),
-    rules: (Array.isArray(rule?.rules) ? rule.rules : []).slice(0, 100).map((r: any) => ({
-      label: String(r?.label || "").slice(0, 200),
-      page: Number(r?.page) || 0,
-      field_key: String(r?.field_key || "").slice(0, 200),
-      kind: String(r?.kind || "").slice(0, 40),
-      stage: String(r?.stage || "").slice(0, 40),
-      required: r?.required !== false,
-      condition: String(r?.condition || "").slice(0, 300),
-    })),
-  }));
+  const referenceIds = files.map((file: any) => String(file?.referenceFormId || "")).filter(Boolean);
+  if (referenceIds.length !== files.length) {
+    return json({ error: "AI review unavailable. Every uploaded form must be matched to a published Document Library reference. Ask an administrator to add and publish the official form, then select it before running the AI check." }, 400);
+  }
+  const uniqueReferenceIds = [...new Set(referenceIds)];
+  const { data: publishedReferences, error: referenceError } = await db
+    .from("dv_accounting_paperwork_library")
+    .select("id,document_name,version,validation_rules")
+    .in("id", uniqueReferenceIds)
+    .eq("status", "PUBLISHED");
+  if (referenceError || !publishedReferences || publishedReferences.length !== uniqueReferenceIds.length) {
+    return json({ error: "AI review unavailable. One or more selected forms are not published in the Document Library. Ask an administrator to publish the official reference form, then select it again." }, 400);
+  }
+  const referenceById = new Map(publishedReferences.map((reference: any) => [reference.id, reference]));
+  const safeRules = files.map((file: any) => {
+    const reference: any = referenceById.get(String(file.referenceFormId));
+    return {
+      document_name: String(reference.document_name || "").slice(0, 160),
+      version: String(reference.version || "").slice(0, 40),
+      rules: (Array.isArray(reference.validation_rules) ? reference.validation_rules : []).slice(0, 100).map((r: any) => ({
+        label: String(r?.label || "").slice(0, 200),
+        page: Number(r?.page) || 0,
+        field_key: String(r?.field_key || "").slice(0, 200),
+        kind: String(r?.kind || "").slice(0, 40),
+        stage: String(r?.stage || "").slice(0, 40),
+        required: r?.required !== false,
+        condition: String(r?.condition || "").slice(0, 300),
+      })),
+    };
+  });
 
   const instructions = [
     "You are the document-completion assistant for a Canadian real estate brokerage.",
