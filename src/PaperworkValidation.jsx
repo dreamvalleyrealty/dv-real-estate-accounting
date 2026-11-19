@@ -59,7 +59,7 @@ export default function PaperworkValidation({ isActive = true }) {
   function addFiles(list) {
     const picked = Array.from(list || []);
     if (!picked.length) return;
-    setFiles(current => [...current, ...picked.map(file => ({ id: idFor(), file, type: "FORM", referenceId: "" }))]);
+    setFiles(current => [...current, ...picked.map(file => ({ id: idFor(), file, type: "FORM" }))]);
     setAnalyses({});
     setReports({ pre: null, post: null });
     setSignatureChecks({});
@@ -138,7 +138,7 @@ export default function PaperworkValidation({ isActive = true }) {
     let cancelled = false;
     async function renderFindingPage() {
       if (!selectedFinding || !previewCanvasRef.current) return;
-      const owner = files.find(item => item.file.name === selectedFinding.document_name);
+      const owner = files.find(item => item.file.name === (selectedFinding.source_file || selectedFinding.document_name));
       if (!owner || !isPdf(owner.file)) { setPreviewError("Preview is available for PDF documents. Open the uploaded image separately."); return; }
       try {
         setPreviewError("");
@@ -170,29 +170,17 @@ export default function PaperworkValidation({ isActive = true }) {
 
   async function runAiAudit() {
     if (!supabase) throw new Error("The Back Office connection is unavailable.");
-    const unmatchedFiles = files.filter(item => !libraryForms.some(form => form.id === item.referenceId && form.status !== "ARCHIVED"));
-    if (unmatchedFiles.length) {
-      const names = unmatchedFiles.map(item => item.file.name).join(", ");
-      throw new Error("AI review unavailable. The following form(s) are not matched to a published Document Library reference: " + names + ". Please ask an administrator to add and publish the official reference form, then select it before running the AI check.");
-    }
-    const totalBytes = files.reduce((sum, item) => sum + item.file.size, 0);
+     const totalBytes = files.reduce((sum, item) => sum + item.file.size, 0);
     if (totalBytes > 4 * 1024 * 1024) {
       throw new Error("The AI review limit for this first release is 4 MB for the combined package. Reduce the file sizes or split the package.");
     }
     const uploaded = await Promise.all(files.map(async item => ({
       name: item.file.name,
-      referenceFormId: item.referenceId,
-      referenceFormName: libraryForms.find(form => form.id === item.referenceId)?.document_name || "",
-      referenceVersion: libraryForms.find(form => form.id === item.referenceId)?.version || "",
       mimeType: item.file.type || (isPdf(item.file) ? "application/pdf" : ""),
       base64: await fileToBase64(item.file),
     })));
-    const referenceRules = files.map(item => {
-      const form = libraryForms.find(candidate => candidate.id === item.referenceId);
-      return form ? { document_name: form.document_name, version: form.version, rules: form.validation_rules || [] } : null;
-    }).filter(Boolean);
     const { data, error: invokeError } = await supabase.functions.invoke("ai-paperwork-audit", {
-      body: { files: uploaded, referenceRules },
+      body: { files: uploaded },
     });
     if (invokeError) throw new Error(invokeError.message || "AI review could not be completed.");
     if (data?.error) throw new Error(data.error);
@@ -221,7 +209,13 @@ export default function PaperworkValidation({ isActive = true }) {
         next[item.id] = pages;
       }
       setAnalyses(next);
-
+      await runAiAudit();
+      setReports({ pre: null, post: null });
+      setShowPostReview(false);
+      setMessage("AI review finished. Follow the document-by-document findings below. Anything unreadable or unmatched requires manual review.");
+      return;
+      /* Legacy local field matching is intentionally disabled. The AI now identifies
+         document boundaries first and applies only the matching published library rules. */
       const errors = [];
       const warnings = [];
       const passed = [];
@@ -376,20 +370,16 @@ export default function PaperworkValidation({ isActive = true }) {
         <span style={{ background: "#0f2141", color: "#fff", borderRadius: 20, width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>1</span>
         <h3 style={{ margin: 0 }}>Upload documents</h3>
       </div>
-      <p className="muted">Upload all the forms in the package together. Match each document to its official reference form when one is available. The first AI review supports up to 4 MB combined per package.</p>
+      <p className="muted">Upload the complete paperwork package as one or more PDFs. The system will identify individual documents and page ranges automatically, then match recognized forms to the published Document Library. The first AI review supports up to 4 MB combined per package.</p>
       {libraryError && <p className="error">The reference library could not be loaded: {libraryError}</p>}
-      {!libraryForms.length && !libraryError && <div className="muted" style={{ padding: 10, background: "#f8f9fb", borderRadius: 6, marginBottom: 12 }}>No official reference forms are published yet. An administrator must add them in Document Library before automatic form-specific checks are available.</div>}
+      {!libraryForms.length && !libraryError && <div className="muted" style={{ padding: 10, background: "#f8f9fb", borderRadius: 6, marginBottom: 12 }}>No official reference forms are published yet. An administrator must publish reference forms in Document Library for automatic matching and form-specific checks.</div>}
       <label className="secondary" style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 12 }}>
         <Upload size={16}/> Choose files
         <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style={{ display: "none" }} onChange={event => { addFiles(event.target.files); event.target.value = ""; }}/>
       </label>
       {files.length > 0 && <div style={{ display: "grid", gap: 8, marginBottom: 14 }}>
-        {files.map(item => <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(190px,280px) auto", alignItems: "center", gap: 10, border: "1px solid #e4e7ec", borderRadius: 8, padding: 10 }}>
+        {files.map(item => <div key={item.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", alignItems: "center", gap: 10, border: "1px solid #e4e7ec", borderRadius: 8, padding: 10 }}>
           <span title={item.file.name} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}><FileText size={18}/><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.file.name}</span></span>
-          <select aria-label={"Official reference for " + item.file.name} value={item.referenceId} onChange={e => setFileValue(item.id,{referenceId:e.target.value})} style={{ minWidth: 0 }}>
-            <option value="">Choose matching reference form…</option>
-            {libraryForms.map(form => <option key={form.id} value={form.id}>{form.document_name} · v{form.version}</option>)}
-          </select>
           <button type="button" className="textbutton" aria-label={"Remove " + item.file.name} onClick={() => { setFiles(current => current.filter(file => file.id !== item.id)); setAnalyses({}); setReports({ pre: null, post: null }); setShowPostReview(false); }}><Trash2 size={16}/></button>
         </div>)}
         <button className="primary" type="button" disabled={busy || !files.length} onClick={runPreCheck}>{busy ? "Checking documents and AI…" : "Run completion + AI check"}</button>
@@ -409,8 +399,8 @@ export default function PaperworkValidation({ isActive = true }) {
         <p style={{ marginTop: 0 }}>{aiAudit.audit.summary}</p>
         <div style={{ display: "grid", gap: 7, marginBottom: 12 }}>
           {(aiAudit.audit.documents || []).map((doc,index) => <div key={doc.document_name+index} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 10px", background: "#f8f9fb", borderRadius: 6 }}>
-            <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>{doc.detected_type || "Document"}</strong><span className="muted"> · {doc.document_name}</span></span>
-            <span className="muted" style={{ whiteSpace: "nowrap" }}>{doc.page_count ?? "?"} pages · {doc.review_status === "REVIEWED" ? "Reviewed" : doc.review_status === "PARTIAL" ? "Partial" : "Unreadable"}</span>
+            <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>{doc.detected_type || "Document"}</strong><span className="muted"> · {doc.document_name}{doc.library_form_name ? " · Library: " + doc.library_form_name : " · No library match"}</span></span>
+            <span className="muted" style={{ whiteSpace: "nowrap" }}>Pages {doc.page_start || "?"}–{doc.page_end || "?"} · {doc.review_status === "REVIEWED" ? "Reviewed" : doc.review_status === "PARTIAL" ? "Needs review" : "Unreadable"}</span>
           </div>)}
         </div>
         {(aiAudit.audit.findings || []).length > 0 ? <div className="dv-paperwork-visual-review" style={{ display: "grid", gridTemplateColumns: selectedFinding ? "minmax(0, 1fr) minmax(0, 1.15fr)" : "1fr", gap: 16, alignItems: "start" }}><div style={{ display: "grid", gap: 8, minWidth: 0 }}>
@@ -421,7 +411,7 @@ export default function PaperworkValidation({ isActive = true }) {
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                 <strong>{finding.title}</strong><span style={{ color, fontSize: 11, fontWeight: 700 }}>{finding.severity.replace("_"," ")} · {finding.confidence} CONFIDENCE</span>
               </div>
-              <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>{finding.document_name}{finding.page_number ? " · Page "+finding.page_number : ""}</div>
+              <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>{finding.document_name}{finding.source_file ? " · " + finding.source_file : ""}{finding.page_number ? " · Page "+finding.page_number : ""}</div>
               <p style={{ margin: "7px 0", fontSize: 13 }}>{finding.explanation}</p>
               {finding.evidence && <div style={{ fontSize: 12, background: "#f8f9fb", padding: 7, borderRadius: 5 }}>Evidence: {finding.evidence}</div>}
               {finding.suggested_action && <div style={{ fontSize: 12, marginTop: 6 }}><strong>Suggested action:</strong> {finding.suggested_action}</div>}
