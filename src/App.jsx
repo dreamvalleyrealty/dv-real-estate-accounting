@@ -159,8 +159,9 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
  const defaults={visible:widgets.map(w=>w.id),birthdays:{start:monthStart,end:monthEnd},anniversaries:{start:monthStart,end:monthEnd},licences:{start:monthStart,end:monthEnd},closings:{start:monthStart,end:monthEnd},topAgents:{start:monthStart,end:monthEnd},topMetric:"volume"};
  const[config,setConfig]=useState(defaults),[editConfig,setEditConfig]=useState(defaults),[configOpen,setConfigOpen]=useState(false),[saving,setSaving]=useState(false),[loaded,setLoaded]=useState(false);
  const dashboardAdmin=String(role||"").toUpperCase()==="SUPERADMIN"||!!permissions["settings.roles.manage"]?.allowed;
+ const canViewBankBalances=String(role||"").toUpperCase()==="SUPERADMIN"||!!permissions["dashboard.bank_balances.view"]?.allowed;
  const userVisible=Array.isArray(config.userVisibility?.[user?.id])?config.userVisibility[user.id]:null;
- const visibleWidgets=userVisible?config.visible.filter(id=>userVisible.includes(id)):config.visible;
+ const visibleWidgets=(userVisible?config.visible.filter(id=>userVisible.includes(id)):config.visible).filter(id=>id!=="balances"||canViewBankBalances);
  const companyId=settings.rows.find(x=>x.key==="DASHBOARD_WIDGETS")?.company_id||null;
  useEffect(()=>{const row=settings.rows.find(x=>x.key==="DASHBOARD_WIDGETS");if(row?.value){const v=row.value;const next={...defaults,...v,visible:Array.isArray(v.visible)?v.visible:defaults.visible};setConfig(next);setEditConfig(next)}setLoaded(true)},[settings.rows]);
  const changeDate=(obj,setObj,key,field,value)=>setObj(old=>({...old,[key]:{...(old[key]||{}),[field]:value}}));
