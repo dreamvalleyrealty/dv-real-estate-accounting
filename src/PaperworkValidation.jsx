@@ -138,7 +138,7 @@ export default function PaperworkValidation({ isActive = true }) {
     let cancelled = false;
     async function renderFindingPage() {
       if (!selectedFinding || !previewCanvasRef.current) return;
-      const owner = files.find(item => item.file.name === selectedFinding.document_name);
+      const owner = files.find(item => item.file.name === (selectedFinding.source_file || selectedFinding.document_name));
       if (!owner || !isPdf(owner.file)) { setPreviewError("Preview is available for PDF documents. Open the uploaded image separately."); return; }
       try {
         setPreviewError("");
@@ -399,8 +399,8 @@ export default function PaperworkValidation({ isActive = true }) {
         <p style={{ marginTop: 0 }}>{aiAudit.audit.summary}</p>
         <div style={{ display: "grid", gap: 7, marginBottom: 12 }}>
           {(aiAudit.audit.documents || []).map((doc,index) => <div key={doc.document_name+index} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 10px", background: "#f8f9fb", borderRadius: 6 }}>
-            <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>{doc.detected_type || "Document"}</strong><span className="muted"> · {doc.document_name}</span></span>
-            <span className="muted" style={{ whiteSpace: "nowrap" }}>{doc.page_count ?? "?"} pages · {doc.review_status === "REVIEWED" ? "Reviewed" : doc.review_status === "PARTIAL" ? "Partial" : "Unreadable"}</span>
+            <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>{doc.detected_type || "Document"}</strong><span className="muted"> · {doc.document_name}{doc.library_form_name ? " · Library: " + doc.library_form_name : " · No library match"}</span></span>
+            <span className="muted" style={{ whiteSpace: "nowrap" }}>Pages {doc.page_start || "?"}–{doc.page_end || "?"} · {doc.review_status === "REVIEWED" ? "Reviewed" : doc.review_status === "PARTIAL" ? "Needs review" : "Unreadable"}</span>
           </div>)}
         </div>
         {(aiAudit.audit.findings || []).length > 0 ? <div className="dv-paperwork-visual-review" style={{ display: "grid", gridTemplateColumns: selectedFinding ? "minmax(0, 1fr) minmax(0, 1.15fr)" : "1fr", gap: 16, alignItems: "start" }}><div style={{ display: "grid", gap: 8, minWidth: 0 }}>
@@ -411,7 +411,7 @@ export default function PaperworkValidation({ isActive = true }) {
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                 <strong>{finding.title}</strong><span style={{ color, fontSize: 11, fontWeight: 700 }}>{finding.severity.replace("_"," ")} · {finding.confidence} CONFIDENCE</span>
               </div>
-              <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>{finding.document_name}{finding.page_number ? " · Page "+finding.page_number : ""}</div>
+              <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>{finding.document_name}{finding.source_file ? " · " + finding.source_file : ""}{finding.page_number ? " · Page "+finding.page_number : ""}</div>
               <p style={{ margin: "7px 0", fontSize: 13 }}>{finding.explanation}</p>
               {finding.evidence && <div style={{ fontSize: 12, background: "#f8f9fb", padding: 7, borderRadius: 5 }}>Evidence: {finding.evidence}</div>}
               {finding.suggested_action && <div style={{ fontSize: 12, marginTop: 6 }}><strong>Suggested action:</strong> {finding.suggested_action}</div>}
