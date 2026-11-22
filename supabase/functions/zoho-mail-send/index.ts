@@ -22,7 +22,7 @@ Deno.serve(async(req:Request)=>{
  const agentInvoice=documentType==="AGENT_INVOICE";
  if(!recipients.length||recipients.length>20||recipients.some(x=>!validEmail(x))||ccRecipients.length>20||ccRecipients.some(x=>!validEmail(x)))return json({error:"Enter valid To and CC email addresses. Separate multiple addresses with commas."},400);
  if(!subject||subject.length>250||!html||html.length>250000)return json({error:"Subject or email body is missing or too long. Email body limit is 250 KB."},400);
- if(!["COMMISSION_INVOICE","SELLER_COMMISSION_STATEMENT","LAWYER_DOCUMENT_PACKAGE","AGENT_INVOICE"].includes(documentType))return json({error:"Unsupported document type."},400);
+ if(!["COMMISSION_INVOICE","PRECONSTRUCTION_BUILDER_INVOICE","SELLER_COMMISSION_STATEMENT","LAWYER_DOCUMENT_PACKAGE","AGENT_INVOICE"].includes(documentType))return json({error:"Unsupported document type."},400);
  const files:any[]=[];
  if(lawyerPackage){
   if(!Array.isArray(body.attachments)||body.attachments.length<1||body.attachments.length>15)return json({error:"Select between 1 and 15 trade documents."},400);
