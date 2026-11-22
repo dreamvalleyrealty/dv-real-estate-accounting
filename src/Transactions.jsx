@@ -872,9 +872,19 @@ async function openInvoice(tx){
   const payerType=String(tx.commission_payer_type||"").trim().toUpperCase();
   const useRecordedBuilder=isPreConstruction&&payerType==="BUILDER";
   const useListingBrokerage=isPreConstruction&&payerType==="LISTING_BROKERAGE";
-  const recipientName=useRecordedBuilder?(tx.commission_payer_name||"Builder / Developer"):useListingBrokerage?(broker.company_name||"Listing Brokerage"):(broker.company_name||"Other Brokerage");
-  const recipientAddress=useRecordedBuilder?[tx.commission_payer_address,tx.commission_payer_city,tx.commission_payer_province,tx.commission_payer_postal_code].filter(Boolean).join(", "):[broker.address,broker.unit,broker.city,broker.province,broker.postal_code].filter(Boolean).join(", ");
-  const recipientEmail=useRecordedBuilder?(tx.commission_payer_email||""):broker.billing_email||broker.email||"";
+  // Builder billing details are stored on the linked builder profile. Transactions may
+  // have no copied commission_payer_email, so load the profile as the authoritative fallback.
+  let builderProfile=null;
+  if(useRecordedBuilder&&tx.commission_payer_profile_id){
+   const profileResult=await supabase.from("dv_accounting_preconstruction_builder_profiles")
+    .select("builder_name,billing_email,billing_address,billing_city,billing_province,billing_postal_code")
+    .eq("id",tx.commission_payer_profile_id).maybeSingle();
+   if(profileResult.error)throw profileResult.error;
+   builderProfile=profileResult.data||null;
+  }
+  const recipientName=useRecordedBuilder?(tx.commission_payer_name||builderProfile?.builder_name||"Builder / Developer"):useListingBrokerage?(broker.company_name||"Listing Brokerage"):(broker.company_name||"Other Brokerage");
+  const recipientAddress=useRecordedBuilder?[tx.commission_payer_address||builderProfile?.billing_address,tx.commission_payer_city||builderProfile?.billing_city,tx.commission_payer_province||builderProfile?.billing_province,tx.commission_payer_postal_code||builderProfile?.billing_postal_code].filter(Boolean).join(", "):[broker.address,broker.unit,broker.city,broker.province,broker.postal_code].filter(Boolean).join(", ");
+  const recipientEmail=useRecordedBuilder?(tx.commission_payer_email||builderProfile?.billing_email||""):broker.billing_email||broker.email||"";
   const terms=tx.preconstruction_commission_terms||{};
   const comm=(c.data||[]).filter(x=>x.settlement_direction==="RECEIVABLE");
   let lines=[],base=0,hst=0;
