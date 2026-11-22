@@ -954,7 +954,12 @@ async function openEmailCompose(kind){
  const data=isInvoice?invoiceData:statementData;
  if(!tx||!data){setEmailMessage("Could not open the email composer because the document data is not ready. Close this preview and reopen the invoice or statement, then try Email PDF again.");return;}
  if(isBuilderInvoice&&!String(data.recipientEmail||"").trim()){setEmailMessage("The builder billing email is missing. Update the builder profile billing email before sending this invoice.");return;}if(data.isLandlordStatement&&!String(data.landlordAddress||"").trim()){setEmailMessage("The landlord’s mailing address is missing. Add the landlord’s full mailing address in the trade People tab before emailing this statement.");return;}
+ // Open the composer immediately. The saved template and co-op agent details below are optional enhancements and must never block the window from appearing.
+ const immediateProperty=String(data.property||tx.property_address||[tx.street_number,tx.street_name,tx.unit_number?("# "+tx.unit_number):"",tx.city,tx.province,tx.postal_code].filter(Boolean).join(" ")).replace(/\\s+/g," ").trim();
+ const immediateTrade=String(data.tradeNo||tx.transaction_number||"TR#");
+ const immediateGreeting=new Date().getHours()<12?"Good morning":new Date().getHours()<17?"Good afternoon":"Good evening";
  setEmailMessage("");
+ setEmailCompose({kind,transactionId:tx.id,to:String(data.recipientEmail||"").trim(),cc:"",subject:(isBuilderInvoice?"Builder Commission Invoice - ":"Commission Invoice - ")+immediateProperty+" ("+immediateTrade+")",body:immediateGreeting+",\\n\\nPlease find attached the commission invoice for "+immediateProperty+" (Trade "+immediateTrade+").\\n\\nPlease review the attached invoice and confirm receipt.\\n\\nThank you.\\n\\nRegards,",bodyEdited:false,bodyTextOriginal:"",bodyHtmlOriginal:"",signature:"",templateKey:kind,templateValues:{},defaultSubject:"",defaultBody:"",defaultSignature:"",companyId:tx.company_id||companyRows[0]?.id||null,loadingTemplate:true});
  const hour=new Date().getHours(),greeting=hour<12?"Good morning":hour<17?"Good afternoon":"Good evening";
  const property=String(data.property||tx.property_address||[tx.street_number,tx.street_name,tx.unit_number?("# "+tx.unit_number):"",tx.city,tx.province,tx.postal_code].filter(Boolean).join(" ")).replace(/\\s+/g," ").trim();
  const closingDate=String(data.closeDate||longDate(tx.close_date)||"").trim();
