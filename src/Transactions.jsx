@@ -952,7 +952,8 @@ async function openEmailCompose(kind){
  const isInvoice=kind==="COMMISSION_INVOICE"||isBuilderInvoice;
  const tx=isInvoice?invoiceTarget:statementTarget;
  const data=isInvoice?invoiceData:statementData;
- if(!tx||!data){setEmailMessage("Could not open the email composer because the document data is not ready. Close this preview and reopen the invoice or statement, then try Email PDF again.");return;}if(data.isLandlordStatement&&!String(data.landlordAddress||"").trim()){setEmailMessage("The landlord’s mailing address is missing. Add the landlord’s full mailing address in the trade People tab before emailing this statement.");return;}
+ if(!tx||!data){setEmailMessage("Could not open the email composer because the document data is not ready. Close this preview and reopen the invoice or statement, then try Email PDF again.");return;}
+ if(isBuilderInvoice&&!String(data.recipientEmail||"").trim()){setEmailMessage("The builder billing email is missing. Update the builder profile billing email before sending this invoice.");return;}if(data.isLandlordStatement&&!String(data.landlordAddress||"").trim()){setEmailMessage("The landlord’s mailing address is missing. Add the landlord’s full mailing address in the trade People tab before emailing this statement.");return;}
  setEmailMessage("");
  const hour=new Date().getHours(),greeting=hour<12?"Good morning":hour<17?"Good afternoon":"Good evening";
  const property=String(data.property||tx.property_address||[tx.street_number,tx.street_name,tx.unit_number?("# "+tx.unit_number):"",tx.city,tx.province,tx.postal_code].filter(Boolean).join(" ")).replace(/\\s+/g," ").trim();
