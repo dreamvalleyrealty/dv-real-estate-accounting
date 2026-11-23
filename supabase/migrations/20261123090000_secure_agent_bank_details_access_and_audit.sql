@@ -7,6 +7,12 @@ ON public.dv_accounting_agent_bank_details;
 
 REVOKE ALL ON TABLE public.dv_accounting_agent_bank_details FROM anon;
 
+-- The legacy audit policy exposed each actor's own full before/after snapshot and
+-- trusted user-editable user_metadata as an admin fallback. Keep the permission-based
+-- audit policy below as the sole authenticated read path.
+DROP POLICY IF EXISTS dv_accounting_audit_log_read
+ON public.dv_accounting_audit_log;
+
 -- Direct-deposit proof files share the personnel bucket with ordinary personnel
 -- documents. Restrict this subfolder to bank managers and the owning agent.
 DROP POLICY IF EXISTS "dv personnel read" ON storage.objects;
