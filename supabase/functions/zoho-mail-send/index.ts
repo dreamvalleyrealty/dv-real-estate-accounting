@@ -19,19 +19,22 @@ Deno.serve(async(req:Request)=>{
  const recipients=parseEmailList(String(body.to||"")),ccRecipients=parseEmailList(String(body.cc||"")),recipient=recipients.join(", "),cc=ccRecipients.join(", "),subject=String(body.subject||"").trim(),html=String(body.htmlBody||"").trim();
  const documentType=String(body.documentType||"");
  const lawyerPackage=documentType==="LAWYER_DOCUMENT_PACKAGE";
+ const builderInvoice=documentType==="PRECONSTRUCTION_BUILDER_INVOICE";
  const agentInvoice=documentType==="AGENT_INVOICE";
  if(!recipients.length||recipients.length>20||recipients.some(x=>!validEmail(x))||ccRecipients.length>20||ccRecipients.some(x=>!validEmail(x)))return json({error:"Enter valid To and CC email addresses. Separate multiple addresses with commas."},400);
  if(!subject||subject.length>250||!html||html.length>250000)return json({error:"Subject or email body is missing or too long. Email body limit is 250 KB."},400);
  if(!["COMMISSION_INVOICE","PRECONSTRUCTION_BUILDER_INVOICE","SELLER_COMMISSION_STATEMENT","LAWYER_DOCUMENT_PACKAGE","AGENT_INVOICE"].includes(documentType))return json({error:"Unsupported document type."},400);
  const files:any[]=[];
- if(lawyerPackage){
-  if(!Array.isArray(body.attachments)||body.attachments.length<1||body.attachments.length>15)return json({error:"Select between 1 and 15 trade documents."},400);
+ if(lawyerPackage||builderInvoice){
+  if(!Array.isArray(body.attachments)||body.attachments.length<1||body.attachments.length>15)return json({error:builderInvoice?"Attach the invoice PDF and select no more than 14 supporting documents.":"Select between 1 and 15 trade documents."},400);
+  if(builderInvoice&&String(body.attachments[0]?.name||"")!==String(body.attachmentName||""))return json({error:"The generated builder invoice PDF must be the first attachment."},400);
   let totalBytes=0;
-  for(const item of body.attachments){
-   const name=String(item?.name||"").trim(),encoded=String(item?.base64||"");
+  for(let index=0;index<body.attachments.length;index++){
+   const item=body.attachments[index],name=String(item?.name||"").trim(),encoded=String(item?.base64||"");
    if(!/^[A-Za-z0-9._ -]{1,160}\.(pdf|jpg|jpeg|png|doc|docx|xls|xlsx|tif|tiff)$/i.test(name)||!encoded||encoded.length>12000000)return json({error:"One of the selected documents has an invalid name, type, or size."},400);
    let bytes:Uint8Array;try{bytes=decodeBase64(encoded)}catch{return json({error:"A selected document could not be decoded: "+name},400)}
    if(!bytes.length||bytes.length>8*1024*1024)return json({error:"Each attachment must be no larger than 8 MB: "+name},400);
+   if(builderInvoice&&index===0&&(bytes.length<5||bytes[0]!==37||bytes[1]!==80||bytes[2]!==68||bytes[3]!==70))return json({error:"The first attachment must be a valid builder invoice PDF."},400);
    totalBytes+=bytes.length;if(totalBytes>16*1024*1024)return json({error:"The selected documents exceed the 16 MB total attachment limit."},400);
    files.push({name,bytes});
   }
