@@ -195,6 +195,102 @@ VALUES
   ('AGENT','payments.issue',false,'OWN',now())
 ON CONFLICT (role, permission_code) DO NOTHING;
 
+
+-- Validate each source link against its payment type and the parent trade/company.
+CREATE OR REPLACE FUNCTION public.dv_accounting_validate_payment_approval_item()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_payment_type text;
+  v_source_transaction_id uuid;
+  v_transaction_company_id uuid;
+  v_approval_company_id uuid;
+BEGIN
+  SELECT a.payment_type, a.company_id
+    INTO v_payment_type, v_approval_company_id
+  FROM public.dv_accounting_payment_approvals a
+  WHERE a.id = NEW.approval_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Payment approval request was not found';
+  END IF;
+
+  IF v_payment_type = 'AGENT_COMMISSION' THEN
+    IF NEW.source_agent_commission_id IS NULL
+       OR NEW.source_transaction_commission_id IS NOT NULL
+       OR NEW.source_brokerage_commission_id IS NOT NULL THEN
+      RAISE EXCEPTION 'Agent commission payment item has an invalid source link';
+    END IF;
+    SELECT c.transaction_id INTO v_source_transaction_id
+    FROM public.dv_accounting_commissions c
+    WHERE c.id = NEW.source_agent_commission_id;
+  ELSIF v_payment_type = 'COOPERATING_BROKERAGE' THEN
+    IF NEW.source_transaction_commission_id IS NULL
+       OR NEW.source_agent_commission_id IS NOT NULL
+       OR NEW.source_brokerage_commission_id IS NOT NULL THEN
+      RAISE EXCEPTION 'Co-operating brokerage payment item has an invalid source link';
+    END IF;
+    SELECT tc.transaction_id INTO v_source_transaction_id
+    FROM public.dv_accounting_transaction_commissions tc
+    WHERE tc.id = NEW.source_transaction_commission_id
+      AND tc.settlement_direction = 'PAYABLE';
+  ELSIF v_payment_type = 'BROKERAGE_TRANSFER' THEN
+    IF NEW.source_brokerage_commission_id IS NULL
+       OR NEW.source_agent_commission_id IS NOT NULL
+       OR NEW.source_transaction_commission_id IS NOT NULL THEN
+      RAISE EXCEPTION 'Brokerage transfer payment item has an invalid source link';
+    END IF;
+    SELECT c.transaction_id INTO v_source_transaction_id
+    FROM public.dv_accounting_commissions c
+    WHERE c.id = NEW.source_brokerage_commission_id;
+  ELSE
+    RAISE EXCEPTION 'Unsupported payment type';
+  END IF;
+
+  IF v_source_transaction_id IS NULL OR v_source_transaction_id <> NEW.transaction_id THEN
+    RAISE EXCEPTION 'Payment item source does not match the selected transaction';
+  END IF;
+
+  SELECT t.company_id INTO v_transaction_company_id
+  FROM public.dv_accounting_transactions t
+  WHERE t.id = NEW.transaction_id;
+
+  IF v_transaction_company_id IS NULL OR v_transaction_company_id <> v_approval_company_id THEN
+    RAISE EXCEPTION 'Payment approval company does not match the transaction company';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
+REVOKE EXECUTE ON FUNCTION public.dv_accounting_validate_payment_approval_item()
+  FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS dv_accounting_validate_payment_approval_item
+  ON public.dv_accounting_payment_approval_items;
+CREATE TRIGGER dv_accounting_validate_payment_approval_item
+  BEFORE INSERT OR UPDATE ON public.dv_accounting_payment_approval_items
+  FOR EACH ROW
+  EXECUTE FUNCTION public.dv_accounting_validate_payment_approval_item();
+
+-- Add the same audit capture used by existing commission and cheque records.
+DROP TRIGGER IF EXISTS dv_accounting_audit_trigger
+  ON public.dv_accounting_payment_approvals;
+CREATE TRIGGER dv_accounting_audit_trigger
+  AFTER INSERT OR UPDATE OR DELETE ON public.dv_accounting_payment_approvals
+  FOR EACH ROW
+  EXECUTE FUNCTION public.dv_accounting_capture_audit_log();
+
+DROP TRIGGER IF EXISTS dv_accounting_audit_trigger
+  ON public.dv_accounting_payment_approval_items;
+CREATE TRIGGER dv_accounting_audit_trigger
+  AFTER INSERT OR UPDATE OR DELETE ON public.dv_accounting_payment_approval_items
+  FOR EACH ROW
+  EXECUTE FUNCTION public.dv_accounting_capture_audit_log();
+
 COMMENT ON TABLE public.dv_accounting_payment_approvals IS
   'Approval workflow header for payment preparation, independent review and issuance.';
 COMMENT ON TABLE public.dv_accounting_payment_approval_items IS
