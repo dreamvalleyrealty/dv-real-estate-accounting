@@ -50,6 +50,16 @@ CREATE TABLE IF NOT EXISTS public.dv_accounting_payment_approvals (
         AND nullif(btrim(payment_reference), '') IS NOT NULL
         AND payment_method IS NOT NULL
       )
+    ),
+  CONSTRAINT dv_payment_approval_submission_metadata
+    CHECK (
+      status NOT IN ('PENDING_APPROVAL','RETURNED','APPROVED','REJECTED','ISSUED')
+      OR submitted_at IS NOT NULL
+    ),
+  CONSTRAINT dv_payment_approval_reviewed_status_metadata
+    CHECK (
+      status NOT IN ('RETURNED','APPROVED','REJECTED','ISSUED')
+      OR (reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL)
     )
 );
 
