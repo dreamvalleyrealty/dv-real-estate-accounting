@@ -45,7 +45,7 @@ const errorText = error => error?.message || String(error || "Something went wro
 // cannot crash the entire Back Office application.
 const asArray = value => Array.isArray(value) ? value : value == null ? [] : [value];
 
-export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMode = false, activePage = "openhouses" }) {
+function OpenHouseSignsView({ user, agentId, role = "AGENT", adminMode = false, activePage = "openhouses" }) {
   const mapElement = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef([]);
@@ -854,4 +854,35 @@ export default function OpenHouseSigns({ user, agentId, role = "AGENT", adminMod
     </div>}
     {showNewEvent && <div className="oh-modal-backdrop"><form className="oh-modal" onSubmit={createEvent}><div className="oh-modal-head"><div><strong>{editingEventId ? "Edit open house" : "New open house"}</strong><span>{editingEventId ? "Update this date without changing its sign installation history." : "Start with the property address and event details."}</span></div><button type="button" className="oh-icon-btn" onClick={() => { setShowNewEvent(false); setEditingEventId(""); }}><X size={17}/></button></div><div className="oh-modal-body">{adminMode && <label className="full">Assign open house to agent<select required value={selectedAgentId} onChange={e => setSelectedAgentId(e.target.value)}><option value="">Select an agent</option>{safeAgents.map(agent => <option key={agent.id} value={agent.id}>{agent.name || [agent.first_name, agent.last_name].filter(Boolean).join(" ") || agent.email}</option>)}</select></label>}<label className="full">Property address<input autoFocus required value={eventForm.property_address} onChange={e => setEventForm(f => ({ ...f, property_address: e.target.value }))} placeholder="Street address, city, province, postal code"/></label>{editingEventId && <div className="oh-date-row"><label>Open house date<input required type="date" value={dateRows[0]?.event_date || ""} onChange={e => setDateRows([{ ...dateRows[0], event_date: e.target.value }])}/></label><div className="oh-form-grid"><label>Start time<input type="time" value={dateRows[0]?.start_time || "13:00"} onChange={e => setDateRows([{ ...dateRows[0], start_time: e.target.value }])}/></label><label>End time<input type="time" value={dateRows[0]?.end_time || "16:00"} onChange={e => setDateRows([{ ...dateRows[0], end_time: e.target.value }])}/></label></div></div>}{!editingEventId && <div className="oh-date-schedule"><div className="oh-date-schedule-head"><strong>Open house dates</strong><button type="button" className="oh-secondary" onClick={() => setDateRows(rows => [...rows, { event_date: "", start_time: rows[rows.length-1]?.start_time || "13:00", end_time: rows[rows.length-1]?.end_time || "16:00" }])}><Plus size={14}/> Add another date</button></div>{asArray(dateRows).map((row,index) => <div className="oh-date-row" key={index}><div className="oh-date-row-title"><strong>Date {index+1}</strong>{asArray(dateRows).length>1 && <button type="button" className="oh-text-btn" onClick={() => setDateRows(rows => rows.filter((_,i)=>i!==index))}>Remove</button>}</div><label>Date<input required type="date" value={row.event_date} onChange={e => setDateRows(rows => rows.map((item,i)=>i===index?{...item,event_date:e.target.value}:item))}/></label><div className="oh-form-grid"><label>Start time<input type="time" value={row.start_time} onChange={e => setDateRows(rows => rows.map((item,i)=>i===index?{...item,start_time:e.target.value}:item))}/></label><label>End time<input type="time" value={row.end_time} onChange={e => setDateRows(rows => rows.map((item,i)=>i===index?{...item,end_time:e.target.value}:item))}/></label></div></div>)}</div>}<label className="full">Notes<textarea value={eventForm.notes} onChange={e => setEventForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional instructions"/></label><div className="oh-modal-note"><AlertTriangle size={15}/> Sign suggestions are starting points only. Check municipal rules and place signs where they do not obstruct sidewalks, roads or sightlines.</div></div><div className="oh-modal-actions"><button type="button" className="oh-secondary" onClick={() => { setShowNewEvent(false); setEditingEventId(""); }}>Cancel</button><button type="submit" className="oh-primary" disabled={saving}>{saving ? "Saving…" : editingEventId ? "Save changes" : "Save open house"}</button></div></form></div>}
   </div>;
+}
+
+class OpenHouseSignsErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, info) {
+    console.error("Open House Signs render error:", error, info?.componentStack);
+  }
+  render() {
+    if (this.state.error) {
+      return <section className="oh-wrap" role="alert">
+        <div className="oh-alert oh-alert-error">
+          <AlertTriangle size={17}/>
+          <span>Open House Signs encountered an error. Other Back Office pages remain available. Please reload this section or contact support with the browser console details.</span>
+          <button type="button" onClick={() => this.setState({ error: null })}>Try again</button>
+        </div>
+      </section>;
+    }
+    return this.props.children;
+  }
+}
+
+export default function OpenHouseSigns(props) {
+  return <OpenHouseSignsErrorBoundary>
+    <OpenHouseSignsView {...props}/>
+  </OpenHouseSignsErrorBoundary>;
 }
