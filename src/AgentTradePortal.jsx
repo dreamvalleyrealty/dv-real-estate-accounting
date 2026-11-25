@@ -740,7 +740,7 @@ export default function AgentTradePortal({user,agentId,adminMode=false,isSuperAd
      const {error:upError}=await supabase.storage.from("dv-trade-documents").upload(path,currentFile,{upsert:false,contentType:currentFile.type||"application/octet-stream"});
      if(upError)throw new Error("Could not upload "+currentFile.name+": "+upError.message);
      const pendingDoc=docs.find(d=>d.submission_id===selected.id&&String(d.document_type||"").toUpperCase()===String(type).toUpperCase()&&!["MATCH","APPROVED"].includes(String(d.match_status||"").toUpperCase()));
-     const values={document_name:label,storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id,match_status:"PENDING",match_notes:null};
+     const values={document_name:label,storage_path:path,mime_type:currentFile.type||null,file_size:currentFile.size,uploaded_by:user.id,match_status:"PENDING",match_notes:null,transaction_id:selected.transaction_id||null};
      let error;
      if(pendingDoc){({error}=await supabase.from("dv_accounting_agent_trade_documents").update(values).eq("id",pendingDoc.id));if(!error&&pendingDoc.storage_path)await supabase.storage.from("dv-trade-documents").remove([pendingDoc.storage_path]);}
      else ({error}=await supabase.from("dv_accounting_agent_trade_documents").insert([{submission_id:selected.id,document_type:type,...values}]));
