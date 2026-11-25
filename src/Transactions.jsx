@@ -183,6 +183,40 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
  const[buyerRebateRecord,setBuyerRebateRecord]=useState(null),[buyerRebateLoadError,setBuyerRebateLoadError]=useState("");
  const[archiveDocs,setArchiveDocs]=useState([]),[archiveBusy,setArchiveBusy]=useState(false),[archiveType,setArchiveType]=useState("OTHER"),[archiveCategories,setArchiveCategories]=useState([{value:"APS",label:"Agreement of Purchase and Sale"},{value:"AMENDMENT",label:"Amendment / Waiver"},{value:"MLS",label:"MLS / Listing"},{value:"DISCLOSURE",label:"Disclosure / Representation"},{value:"ID",label:"Identity / Compliance"},{value:"COMMISSION",label:"Commission / Closing Statement"},{value:"TRUST",label:"Trust Deposit / Release"},{value:"CORRESPONDENCE",label:"Correspondence"},{value:"CLOSING",label:"Closing / Lawyer Documents"},{value:"SIGNED_TRADE_RECORD",label:"Signed Trade Record"},{value:"OTHER_BROKERAGE_COMMISSION_INVOICE",label:"Other Brokerage Commission Invoice"},{value:"OTHER",label:"Other Supporting Document"}]),[archiveFiles,setArchiveFiles]=useState([]),[archiveFileNames,setArchiveFileNames]=useState([]),[archiveNotes,setArchiveNotes]=useState("");
  useEffect(()=>{let active=true;if(!supabase)return;supabase.auth.getUser().then(async({data})=>{if(!active)return;const u=data?.user;if(!u)return;const roles=[u.app_metadata?.role,u.user_metadata?.role,u.app_metadata?.user_role,u.user_metadata?.user_role];try{const{data:profile}=await supabase.from("dv_accounting_user_profiles").select("role").eq("user_id",u.id).maybeSingle();roles.push(profile?.role)}catch{}if(!active)return;const normalized=roles.map(v=>String(v||"").toUpperCase().replace(/[^A-Z]/g,""));setIsSuperAdmin(normalized.some(v=>["SUPERADMIN","SUPERADMINISTRATOR"].includes(v)));const {data:tradeAdmin}=await supabase.rpc("dv_accounting_is_trade_admin");if(active)setIsTradeAdmin(!!tradeAdmin)});return()=>{active=false}},[]);
+ // Deal Lifecycle is database-owned. Re-read on record changes and subscribe so
+ // every open editor converges on the same value across users and browser tabs.
+ useEffect(()=>{
+  const txId=initial?.id||savedTransactionId;
+  if(!supabase||!txId)return;
+  let active=true;
+  const applyStatus=(value)=>{
+   const next=String(value||"DRAFT").toUpperCase();
+   setDealStatus(current=>current===next?current:next);
+   onPartialSaved?.({id:txId,deal_status:next});
+  };
+  const refresh=async()=>{
+   const {data,error}=await supabase.from("dv_accounting_transactions").select("deal_status").eq("id",txId).maybeSingle();
+   if(!active)return;
+   if(error){console.warn("Could not refresh Deal Lifecycle status:",error.message);return;}
+   if(data)applyStatus(data.deal_status);
+  };
+  // Initial authoritative read prevents stale list-row props from winning.
+  refresh();
+  const channel=supabase.channel("deal-lifecycle-"+txId)
+   .on("postgres_changes",{event:"UPDATE",schema:"public",table:"dv_accounting_transactions",filter:"id=eq."+txId},payload=>{
+    if(payload?.new&&Object.prototype.hasOwnProperty.call(payload.new,"deal_status"))applyStatus(payload.new.deal_status);
+   })
+   .subscribe();
+  const onFocus=()=>refresh();
+  const onVisibility=()=>{if(document.visibilityState==="visible")refresh()};
+  window.addEventListener("focus",onFocus);
+  document.addEventListener("visibilitychange",onVisibility);
+  return()=>{active=false;window.removeEventListener("focus",onFocus);document.removeEventListener("visibilitychange",onVisibility);supabase.removeChannel(channel)};
+ },[initial?.id,savedTransactionId,onPartialSaved]);
+ useEffect(()=>{
+  if(!initial?.id)return;
+  setDealStatus(String(initial.deal_status||"DRAFT").toUpperCase());
+ },[initial?.id,initial?.deal_status]);
  const[form,setForm]=useState({transaction_number:"",mls_number:"",listing_id:"",is_own_listing:"NO",street_number:"",street_name:"",unit_number:"",city:"",province:"ON",postal_code:"",offer_date:"",firm_date:"",close_date:"",entry_date:today(),finalized_date:"",side:"BUYER",transaction_type:"BUY_SELL",market_segment:"RESIDENTIAL",is_brokerage_lead:false,sale_price:"",client_name:"",ar_payment_received:false,ar_payment_received_date:"",ar_payment_amount:"",ar_payment_bank_account_id:"",ar_payment_reference:"",commercial_lease_commission:null,is_pre_construction:false,commission_payer_type:"BUILDER",commission_payer_name:"",commission_payer_email:"",commission_payer_phone:"",commission_payer_address:"",commission_payer_city:"",commission_payer_province:"ON",commission_payer_postal_code:"",commission_payer_profile_id:"",preconstruction_commission_terms:{},preconstruction_project_name:"",preconstruction_unit_block:"",preconstruction_purchaser_names:"",preconstruction_excluded_amount:""});
  useEffect(()=>{let live=true;const id=initial?.id||savedTransactionId;if(!supabase||!id||String(form.side||initial?.side||"").toUpperCase()!=="BUYER"){setBuyerRebateRecord(null);setBuyerRebateLoadError("");return()=>{live=false}}supabase.from("dv_accounting_buyer_rebates").select("id,buyer_name,amount,reason,status,payment_date,payment_method,payment_reference").eq("transaction_id",id).order("created_at",{ascending:false}).limit(1).maybeSingle().then(({data,error})=>{if(!live)return;setBuyerRebateRecord(error?null:data||null);setBuyerRebateLoadError(error?.message||"")});return()=>{live=false}},[initial?.id,savedTransactionId,form.side]);
  const[people,setPeople]=useState([]);const[tradeExpenses,setTradeExpenses]=useState([]);
@@ -574,7 +608,7 @@ if(initialAction){const win=window.open("","_blank","width=1000,height=800");if(
   try{
    const {data,error}=await supabase.rpc("dv_accounting_set_deal_status",{p_transaction_id:txId,p_deal_status:dealStatus,p_reason:dealStatusReason.trim()||null});
    if(error)throw error;
-   setDealStatus(data?.deal_status||dealStatus);
+   const savedDealStatus=String(data?.deal_status||dealStatus).toUpperCase();setDealStatus(savedDealStatus);onPartialSaved?.({id:txId,deal_status:savedDealStatus});
    if((data?.deal_status||dealStatus)==="FIRM")setForm(f=>({...f,firm_date:f.firm_date||today()}));
    setDealStatusReason("");
    const {data:history,error:historyError}=await supabase.from("dv_accounting_deal_status_history").select("id,previous_status,new_status,reason,changed_at,changed_by").eq("transaction_id",txId).order("changed_at",{ascending:false}).limit(20);
