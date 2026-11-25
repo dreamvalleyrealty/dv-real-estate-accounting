@@ -178,6 +178,7 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
  const listings=useRows("dv_accounting_listing_submissions"),agents=useRows("dv_accounting_agents"),banks=useRows("dv_accounting_bank_accounts"),companies=useRows("dv_accounting_companies"),plans=useRows("dv_accounting_fee_plans"),feeSettings=useRows("dv_accounting_agent_fee_settings"),feeRules=useRows("dv_accounting_agent_fee_rules"),feeCharges=useRows("dv_accounting_commission_charges"),contacts=useRows("dv_accounting_contacts"),brokerages=useRows("dv_accounting_external_brokerages"),brokerageAgents=useRows("dv_accounting_external_brokerage_agents");
  const tradeRecordLookupsReady=[listings,agents,banks,companies,plans,feeSettings,feeRules,feeCharges,contacts,brokerages,brokerageAgents].every(x=>x.loaded);
  const[tab,setTab]=useState(paymentCorrection?5:0),[historyEmails,setHistoryEmails]=useState([]),[historyEmailLoading,setHistoryEmailLoading]=useState(false),[historyEmailError,setHistoryEmailError]=useState(""),[historyPayments,setHistoryPayments]=useState([]),[historyPaymentLoading,setHistoryPaymentLoading]=useState(false),[historyPaymentError,setHistoryPaymentError]=useState(""),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[isSuperAdmin,setIsSuperAdmin]=useState(false),[isTradeAdmin,setIsTradeAdmin]=useState(false),[dealStatus,setDealStatus]=useState(initial?.deal_status||"DRAFT"),[dealStatusReason,setDealStatusReason]=useState(""),[dealStatusBusy,setDealStatusBusy]=useState(false),[dealStatusHistory,setDealStatusHistory]=useState([]),[tradeStatus,setTradeStatus]=useState(initial?.status||"DRAFT"),[directoryEdit,setDirectoryEdit]=useState(null),[directoryBusy,setDirectoryBusy]=useState(false),[personModal,setPersonModal]=useState(null),[brokerModal,setBrokerModal]=useState(null),[trustShow,setTrustShow]=useState(false),[savedTransactionId,setSavedTransactionId]=useState(initial?.id||null),[tradePreviewHtml,setTradePreviewHtml]=useState(""),[transactionDataReady,setTransactionDataReady]=useState(!initial?.id);
+ const dealStatusRef=useRef(dealStatus);dealStatusRef.current=dealStatus;const onPartialSavedRef=useRef(onPartialSaved);onPartialSavedRef.current=onPartialSaved;
  const canEditFinalized=isSuperAdmin;const editorReadOnly=readOnly&&!isSuperAdmin;const allowAccountingCorrection=paymentCorrection||(canEditFinalized&&["FINALIZED","CLOSED"].includes(String(initial?.status||"").toUpperCase()));
  const[contactDirectoryRole,setContactDirectoryRole]=useState("BUYER"),[linkedFromTradeSubmission,setLinkedFromTradeSubmission]=useState(false);
  const[buyerRebateRecord,setBuyerRebateRecord]=useState(null),[buyerRebateLoadError,setBuyerRebateLoadError]=useState("");
@@ -191,8 +192,9 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
   let active=true;
   const applyStatus=(value)=>{
    const next=String(value||"DRAFT").toUpperCase();
-   setDealStatus(current=>current===next?current:next);
-   onPartialSaved?.({id:txId,deal_status:next});
+   if(dealStatusRef.current===next)return;
+   dealStatusRef.current=next;setDealStatus(next);
+   onPartialSavedRef.current?.({id:txId,deal_status:next});
   };
   const refresh=async()=>{
    const {data,error}=await supabase.from("dv_accounting_transactions").select("deal_status").eq("id",txId).maybeSingle();
@@ -212,10 +214,10 @@ export function TransactionEditor({onClose,onSaved,onPartialSaved,initial=null,p
   window.addEventListener("focus",onFocus);
   document.addEventListener("visibilitychange",onVisibility);
   return()=>{active=false;window.removeEventListener("focus",onFocus);document.removeEventListener("visibilitychange",onVisibility);supabase.removeChannel(channel)};
- },[initial?.id,savedTransactionId,onPartialSaved]);
+ },[initial?.id,savedTransactionId]);
  useEffect(()=>{
   if(!initial?.id)return;
-  setDealStatus(String(initial.deal_status||"DRAFT").toUpperCase());
+  const next=String(initial.deal_status||"DRAFT").toUpperCase();dealStatusRef.current=next;setDealStatus(next);
  },[initial?.id,initial?.deal_status]);
  const[form,setForm]=useState({transaction_number:"",mls_number:"",listing_id:"",is_own_listing:"NO",street_number:"",street_name:"",unit_number:"",city:"",province:"ON",postal_code:"",offer_date:"",firm_date:"",close_date:"",entry_date:today(),finalized_date:"",side:"BUYER",transaction_type:"BUY_SELL",market_segment:"RESIDENTIAL",is_brokerage_lead:false,sale_price:"",client_name:"",ar_payment_received:false,ar_payment_received_date:"",ar_payment_amount:"",ar_payment_bank_account_id:"",ar_payment_reference:"",commercial_lease_commission:null,is_pre_construction:false,commission_payer_type:"BUILDER",commission_payer_name:"",commission_payer_email:"",commission_payer_phone:"",commission_payer_address:"",commission_payer_city:"",commission_payer_province:"ON",commission_payer_postal_code:"",commission_payer_profile_id:"",preconstruction_commission_terms:{},preconstruction_project_name:"",preconstruction_unit_block:"",preconstruction_purchaser_names:"",preconstruction_excluded_amount:""});
  useEffect(()=>{let live=true;const id=initial?.id||savedTransactionId;if(!supabase||!id||String(form.side||initial?.side||"").toUpperCase()!=="BUYER"){setBuyerRebateRecord(null);setBuyerRebateLoadError("");return()=>{live=false}}supabase.from("dv_accounting_buyer_rebates").select("id,buyer_name,amount,reason,status,payment_date,payment_method,payment_reference").eq("transaction_id",id).order("created_at",{ascending:false}).limit(1).maybeSingle().then(({data,error})=>{if(!live)return;setBuyerRebateRecord(error?null:data||null);setBuyerRebateLoadError(error?.message||"")});return()=>{live=false}},[initial?.id,savedTransactionId,form.side]);
