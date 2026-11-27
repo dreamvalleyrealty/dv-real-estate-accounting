@@ -35,7 +35,7 @@ Deno.serve(async (req:Request) => {
        const documentType=String(claimed.document_type||"");
       if(!validEmail(recipient)||(cc&&!validEmail(cc))) throw new Error("Scheduled email has an invalid recipient address.");
       if(!subject||subject.length>250||!html||html.length>40000) throw new Error("Scheduled email subject or body is missing or too long.");
-      if(!["COMMISSION_INVOICE","SELLER_COMMISSION_STATEMENT","AGENT_INVOICE"].includes(documentType)) throw new Error("Unsupported scheduled document type.");
+      if(!["COMMISSION_INVOICE","PRECONSTRUCTION_BUILDER_INVOICE","SELLER_COMMISSION_STATEMENT","AGENT_INVOICE"].includes(documentType)) throw new Error("Unsupported scheduled document type.");
       if(!/^[A-Za-z0-9._ -]{1,160}\.pdf$/i.test(attachmentName)||!base64||base64.length>12000000) throw new Error("Scheduled email PDF is missing or exceeds the allowed size.");
       const bytes=decodeBase64(base64);
       if(bytes.length<5||bytes[0]!==37||bytes[1]!==80||bytes[2]!==68||bytes[3]!==70||bytes.length>8*1024*1024) throw new Error("Scheduled attachment is not a valid PDF no larger than 8 MB.");
