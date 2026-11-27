@@ -1769,7 +1769,8 @@ function CommissionPaymentDialog({commission,transaction,agent,cheques,commissio
  const hst=Number(commission?._agent_hst??0);
  const total=Number(commission?._payment_total??(net+hst));
  const chargeBalance=ch=>{const hstApplicable=ch.hst_applicable===true||String(ch.hst_applicable||"").toLowerCase()==="true";const gross=Math.max(0,Number(ch.amount||0))+(hstApplicable?Number(ch.hst_amount||0):0);const paymentRows=chargePayments.filter(p=>String(p.charge_id)===String(ch.id)).reduce((sum,p)=>sum+Number(p.amount||0),0);const paid=Math.max(Number(ch.paid_amount||0),paymentRows);const allocationRows=chargeAllocations.filter(a=>String(a.charge_id)===String(ch.id)).reduce((sum,a)=>sum+Number(a.amount||0),0);const allocated=Math.max(0,allocationRows);return Math.max(0,Math.round((gross-paid-allocated)*100)/100)};
- const outstandingChargeRows=[...new Map(charges.filter(ch=>String(ch.agent_id)===String(agent?.id)&&["OPEN","PARTIAL"].includes(String(ch.status||"").toUpperCase())&&!ch.applied_to_cheque_id).map(ch=>[String(ch.id),ch])).values()];
+ const chargeTypesIncludedInPayroll=["DESK_FEE","RECURRING_FEE","ADD_ON_SERVICE","GENERAL_EXPENSE","GENERAL_EXP","OTHER_FEE"];
+ const outstandingChargeRows=[...new Map(charges.filter(ch=>String(ch.agent_id)===String(agent?.id)&&chargeTypesIncludedInPayroll.includes(String(ch.charge_type||"").toUpperCase())&&["OPEN","PARTIAL"].includes(String(ch.status||"").toUpperCase())&&!ch.applied_to_cheque_id).map(ch=>[String(ch.id),ch])).values()];
  const outstandingFor=types=>outstandingChargeRows.filter(ch=>types.includes(String(ch.charge_type||"").toUpperCase())).reduce((sum,ch)=>sum+chargeBalance(ch),0);
  const outstandingDeskFees=outstandingFor(["DESK_FEE"]);
  const outstandingRecurringFees=outstandingFor(["RECURRING_FEE"]);
