@@ -31,13 +31,17 @@ Deno.serve(async (req:Request) => {
       const recipient=String(claimed.recipient_email||"").trim(), cc=String(claimed.cc_email||"").trim();
       const subject=String(claimed.subject||"").trim(), html=refreshScheduledGreeting(String(claimed.html_body||"").trim());
       const attachmentName=String(claimed.attachment_name||"").trim(), base64=String(claimed.attachment_base64||"");
-      const documentType=String(claimed.document_type||"");
+      const additionalAttachments=Array.isArray(claimed.additional_attachments)?claimed.additional_attachments:[];
+       const documentType=String(claimed.document_type||"");
       if(!validEmail(recipient)||(cc&&!validEmail(cc))) throw new Error("Scheduled email has an invalid recipient address.");
       if(!subject||subject.length>250||!html||html.length>40000) throw new Error("Scheduled email subject or body is missing or too long.");
       if(!["COMMISSION_INVOICE","SELLER_COMMISSION_STATEMENT","AGENT_INVOICE"].includes(documentType)) throw new Error("Unsupported scheduled document type.");
       if(!/^[A-Za-z0-9._ -]{1,160}\.pdf$/i.test(attachmentName)||!base64||base64.length>12000000) throw new Error("Scheduled email PDF is missing or exceeds the allowed size.");
       const bytes=decodeBase64(base64);
       if(bytes.length<5||bytes[0]!==37||bytes[1]!==80||bytes[2]!==68||bytes[3]!==70||bytes.length>8*1024*1024) throw new Error("Scheduled attachment is not a valid PDF no larger than 8 MB.");
+       if(additionalAttachments.length>14) throw new Error("Scheduled email has more than 14 additional attachments.");
+       const attachmentFiles=[{name:attachmentName,bytes}];let totalAttachmentBytes=bytes.length;
+       for(const item of additionalAttachments){const name=String(item?.name||"").trim(),encoded=String(item?.base64||"");if(!/^[A-Za-z0-9._ -]{1,150}\\.(pdf|jpg|jpeg|png|doc|docx|xls|xlsx|tif|tiff)$/i.test(name)||!encoded||encoded.length>12000000)throw new Error("A scheduled supporting file has an invalid name, type, or size.");let fileBytes:Uint8Array;try{fileBytes=decodeBase64(encoded)}catch{throw new Error("A scheduled supporting file could not be decoded: "+name)}if(!fileBytes.length||fileBytes.length>8*1024*1024)throw new Error("Each supporting file must be no larger than 8 MB: "+name);totalAttachmentBytes+=fileBytes.length;if(totalAttachmentBytes>16*1024*1024)throw new Error("Scheduled attachments exceed the 16 MB total limit.");attachmentFiles.push({name,bytes:fileBytes});}
       const {data:integration,error:integrationError}=await admin.from("dv_accounting_private_integrations").select("secret_payload").eq("integration_key","zoho_mail").maybeSingle();
       if(integrationError||!integration?.secret_payload?.refresh_token) throw new Error("Zoho Mail is not connected. Reconnect the mailbox first.");
       const p=integration.secret_payload, accountsServer=String(p.accounts_server||"https://accounts.zoho.com"), mailBase=String(p.mail_api_base||"https://mail.zoho.com"), from=String(p.sender_email||"admin@dvrealty.ca");
@@ -52,15 +56,12 @@ Deno.serve(async (req:Request) => {
       const acct=list.find((a:any)=>String(a.accountAddress||a.emailAddress||a.primaryEmailAddress||a.email||"").toLowerCase()===from.toLowerCase())||list.find((a:any)=>String(a.accountName||"").toLowerCase().includes("admin"))||list[0];
       const accountId=acct?.accountId||acct?.account_id||acct?.id;
       if(!accountId) throw new Error("Zoho account ID could not be identified.");
-      const {data:log,error:logError}=await admin.from("dv_accounting_email_log").insert({transaction_id:claimed.transaction_id||null,agent_invoice_id:claimed.agent_invoice_id||null,document_type:documentType,recipient_email:recipient,cc_email:cc||null,subject,attachment_name:attachmentName,status:"PENDING",sent_by:claimed.created_by||null,sent_by_email:claimed.created_by_email||null}).select("id").single();
+      const {data:log,error:logError}=await admin.from("dv_accounting_email_log").insert({transaction_id:claimed.transaction_id||null,agent_invoice_id:claimed.agent_invoice_id||null,document_type:documentType,recipient_email:recipient,cc_email:cc||null,subject,attachment_name:attachmentFiles.map(file=>file.name).join("; "),status:"PENDING",sent_by:claimed.created_by||null,sent_by_email:claimed.created_by_email||null}).select("id").single();
       if(logError) throw new Error("Could not create the email audit record.");
       logId=log.id;
-      const uploadUrl=new URL(mailBase+"/api/accounts/"+encodeURIComponent(String(accountId))+"/messages/attachments");
-      uploadUrl.searchParams.set("fileName",attachmentName); uploadUrl.searchParams.set("isInline","false");
-      const upload=await fetch(uploadUrl.toString(),{method:"POST",headers:{...headers,"Content-Type":"application/octet-stream"},body:bytes});
-      const uploadJson=await upload.json().catch(()=>({})), uploaded=uploadJson?.data;
-      if(!upload.ok||!uploaded?.storeName||!uploaded?.attachmentName||!uploaded?.attachmentPath) throw new Error("Zoho attachment upload failed (HTTP "+upload.status+").");
-      const sendBody:any={fromAddress:from,toAddress:recipient,subject,content:html,mailFormat:"html",attachments:[{storeName:uploaded.storeName,attachmentName:uploaded.attachmentName,attachmentPath:uploaded.attachmentPath}]};
+      const uploadedAttachments:any[]=[];
+       for(const file of attachmentFiles){const uploadUrl=new URL(mailBase+"/api/accounts/"+encodeURIComponent(String(accountId))+"/messages/attachments");uploadUrl.searchParams.set("fileName",file.name);uploadUrl.searchParams.set("isInline","false");const upload=await fetch(uploadUrl.toString(),{method:"POST",headers:{...headers,"Content-Type":"application/octet-stream"},body:file.bytes});const uploadJson=await upload.json().catch(()=>({})),uploaded=uploadJson?.data;if(!upload.ok||!uploaded?.storeName||!uploaded?.attachmentName||!uploaded?.attachmentPath)throw new Error("Zoho attachment upload failed for "+file.name+" (HTTP "+upload.status+").");uploadedAttachments.push({storeName:uploaded.storeName,attachmentName:uploaded.attachmentName,attachmentPath:uploaded.attachmentPath});}
+       const sendBody:any={fromAddress:from,toAddress:recipient,subject,content:html,mailFormat:"html",attachments:uploadedAttachments};
       if(cc) sendBody.ccAddress=cc;
       const sent=await fetch(mailBase+"/api/accounts/"+encodeURIComponent(String(accountId))+"/messages",{method:"POST",headers:{...headers,"Content-Type":"application/json"},body:JSON.stringify(sendBody)});
       const sentJson=await sent.json().catch(()=>({}));
