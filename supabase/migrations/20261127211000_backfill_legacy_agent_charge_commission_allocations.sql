@@ -9,7 +9,7 @@ INSERT INTO public.dv_accounting_agent_charge_commission_allocations (
   company_id, agent_id, charge_id, commission_cheque_id, amount, recorded_by, created_at
 )
 SELECT
-  ch.company_id,
+  q.company_id,
   ch.agent_id,
   ch.id,
   ch.applied_to_cheque_id,
