@@ -97,8 +97,7 @@ BEGIN
         frequency = 'MONTHLY',
         start_date = effective_start,
         next_charge_date = next_bill_date,
-        active = true,
-        end_date = NULL
+        active = true
     WHERE id = sub.id
     RETURNING id INTO sid;
     RETURN sid;
