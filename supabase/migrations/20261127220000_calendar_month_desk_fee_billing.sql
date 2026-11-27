@@ -22,7 +22,7 @@ CREATE OR REPLACE FUNCTION public.dv_accounting_sync_agent_desk_fee_subscription
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS $
+AS $func$
 DECLARE
   a public.dv_accounting_agents%ROWTYPE;
   fs public.dv_accounting_agent_fee_settings%ROWTYPE;
@@ -126,7 +126,7 @@ BEGIN
 
   RETURN sid;
 END;
-$;
+$func$;
 
 REVOKE ALL ON FUNCTION public.dv_accounting_sync_agent_desk_fee_subscription(uuid, date)
   FROM PUBLIC, anon, authenticated, service_role;
