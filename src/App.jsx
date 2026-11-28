@@ -1180,8 +1180,9 @@ function AgentRankings({onOpenTransaction,onOpenTradeSubmission,onOpenListingSub
   listingSubmissions.rows.forEach(x=>countListing(x,x.listing_start_date||x.original_listing_date,x.listing_type||x.property_type,[x.agent_id,...(Array.isArray(x.additional_agent_ids)?x.additional_agent_ids:[])]));
   legacyListings.rows.forEach(x=>countListing(x,x.listing_start_date||x.list_date||x.listing_date,x.listing_type||x.type||x.transaction_type,[x.agent_id,x.listing_agent_id,...(Array.isArray(x.additional_agent_ids)?x.additional_agent_ids:[])]));
   const rows=[...agentMap.values()];
+  const producers=rows.filter(row=>row.units>0||row.volume>0||row.gci>0||row.listings>0);
   const rankPoints=key=>{
-   const sorted=[...rows].sort((a,b)=>Number(b[key]||0)-Number(a[key]||0));
+   const sorted=[...producers].sort((a,b)=>Number(b[key]||0)-Number(a[key]||0));
    const n=sorted.length,points=new Map();
    for(let i=0;i<n;){
     let end=i+1;while(end<n&&Number(sorted[end][key]||0)===Number(sorted[i][key]||0))end++;
@@ -1192,12 +1193,12 @@ function AgentRankings({onOpenTransaction,onOpenTradeSubmission,onOpenListingSub
    return points;
   };
   const points={units:rankPoints("units"),volume:rankPoints("volume"),gci:rankPoints("gci"),listings:rankPoints("listings")};
-  rows.forEach(row=>{
+  producers.forEach(row=>{
    row.combinedBreakdown={units:points.units.get(row.id)||0,volume:points.volume.get(row.id)||0,gci:points.gci.get(row.id)||0,listings:points.listings.get(row.id)||0};
    row.combinedScore=Math.round(Object.values(row.combinedBreakdown).reduce((sum,value)=>sum+value,0)/4*100)/100;
   });
   const key=metric==="LISTINGS"?"listings":metric==="VOLUME"?"volume":metric==="GCI"?"gci":metric==="COMBINED"?"combinedScore":"units";
-  return rows.filter(row=>metric==="COMBINED"?row.units>0||row.volume>0||row.gci>0||row.listings>0:Number(row[key]||0)>0)
+  return producers.filter(row=>metric==="COMBINED"?true:Number(row[key]||0)>0)
    .sort((a,b)=>Number(b[key]||0)-Number(a[key]||0)||b.units-a.units||b.volume-a.volume||b.gci-a.gci||a.name.localeCompare(b.name))
    .map((row,index)=>({...row,tradeCount:row.tradeIds.size,rank:index+1}));
  },[agents.rows,transactions.rows,transactionAgents.rows,agentInfo.rows,commissions.rows,listingSubmissions.rows,legacyListings.rows,start,end,metric]);
