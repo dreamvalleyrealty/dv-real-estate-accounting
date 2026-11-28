@@ -152,12 +152,37 @@ function PdfTool(){
  return <div><div style={{display:"flex",gap:8,flexWrap:"wrap",borderBottom:"1px solid #e4e7ec",paddingBottom:12,marginBottom:18}}><button className={tool==="split"?"primary":"secondary"} onClick={()=>setTool("split")}>PDF Splitter</button><button className={tool==="merge"?"primary":"secondary"} onClick={()=>setTool("merge")}>PDF Merger</button></div>{tool==="split"?<PdfSplitterTool/>:<PdfMerger/>}</div>;
 }
 
+function getAgentTransactionCredits(links, commissionRows, info, tx) {
+ const uniqueLinks=[...new Map((links||[]).filter(x=>x?.agent_id).map(x=>[String(x.agent_id),x])).values()];
+ if(!uniqueLinks.length)return [];
+ const commissionByAgent=new Map((commissionRows||[]).filter(x=>x?.agent_id).map(x=>[String(x.agent_id),x]));
+ const weights=uniqueLinks.map(link=>Math.max(0,Number(link.commission_base)||0));
+ const weightTotal=weights.reduce((sum,value)=>sum+value,0);
+ const shares=uniqueLinks.map((link,index)=>weightTotal>0?weights[index]/weightTotal:1/uniqueLinks.length);
+ const hasSavedAllocations=uniqueLinks.some(link=>Math.max(0,Number(link.agent_payable)||0)+Math.max(0,Number(link.total_deductions)||0)>0.005);
+ const hasIndividualCommissionRows=uniqueLinks.every(link=>{
+  const row=commissionByAgent.get(String(link.agent_id));
+  return row&&Number(row.agent_share??row.gross_commission??0)>0;
+ });
+ const commissionTotal=(commissionRows||[]).reduce((sum,row)=>sum+Math.max(0,Number(row.agent_share)||0),0);
+ const totalAgentGross=commissionTotal>0?commissionTotal:(Math.max(0,Number(info?.agent_gross)||0)||Math.max(0,Number(tx?.agent_commission)||0));
+ return uniqueLinks.map((link,index)=>{
+  const savedGross=Math.max(0,Number(link.agent_payable)||0)+Math.max(0,Number(link.total_deductions)||0);
+  const individualCommission=commissionByAgent.get(String(link.agent_id));
+  let gci=0;
+  if(hasSavedAllocations&&savedGross>0.005)gci=savedGross;
+  else if(hasIndividualCommissionRows)gci=Math.max(0,Number(individualCommission.agent_share??individualCommission.gross_commission)||0);
+  else if(totalAgentGross>0)gci=totalAgentGross*shares[index];
+  return {agentId:String(link.agent_id),weight:shares[index],gci:Math.round(gci*100)/100};
+ });
+}
+
 function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
  const agents=useRows("dv_accounting_agents"),transactions=useRows("dv_accounting_transactions"),transactionAgents=useRows("dv_accounting_transaction_agents"),commissions=useRows("dv_accounting_commissions"),transactionCommissions=useRows("dv_accounting_transaction_commissions"),transactionAgentInfo=useRows("dv_accounting_transaction_agent_info"),generalIncomeRows=useRows("dv_accounting_agent_charge_payments"),generalChargeRows=useRows("dv_accounting_commission_charges"),listingSubmissions=useRows("dv_accounting_listing_submissions"),legacyListings=useRows("dv_accounting_listings"),banks=useRows("dv_accounting_bank_accounts"),bankTx=useRows("dv_accounting_bank_transactions"),trustTransactions=useRows("dv_accounting_trust_transactions"),expenses=useRows("dv_accounting_expenses"),settings=useRows("dv_accounting_settings");
  const now=new Date(),iso=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");return y+"-"+m+"-"+day},monthStart=iso(new Date(now.getFullYear(),now.getMonth(),1)),monthEnd=iso(new Date(now.getFullYear(),now.getMonth()+1,0)),prevStart=iso(new Date(now.getFullYear(),now.getMonth()-1,1)),prevEnd=iso(new Date(now.getFullYear(),now.getMonth(),0));
  const [incomeRange,setIncomeRange]=useState({start:iso(new Date(now.getFullYear(),0,1)),end:iso(now)});
  const widgets=[{id:"birthdays",label:"Agent birthdays"},{id:"anniversaries",label:"Agent anniversaries"},{id:"licences",label:"Licences expiring"},{id:"balances",label:"Bank account balances"},{id:"closings",label:"Deals closing"},{id:"topAgents",label:"Top agents"}];
- const defaults={visible:widgets.map(w=>w.id),birthdays:{start:monthStart,end:monthEnd},anniversaries:{start:monthStart,end:monthEnd},licences:{start:monthStart,end:monthEnd},closings:{start:monthStart,end:monthEnd},topAgents:{start:monthStart,end:monthEnd},topMetric:"volume"};
+ const defaults={visible:widgets.map(w=>w.id),birthdays:{start:monthStart,end:monthEnd},anniversaries:{start:monthStart,end:monthEnd},licences:{start:monthStart,end:monthEnd},closings:{start:monthStart,end:monthEnd},topAgents:{start:monthStart,end:monthEnd},topMetric:"gci"};
  const[config,setConfig]=useState(defaults),[editConfig,setEditConfig]=useState(defaults),[configOpen,setConfigOpen]=useState(false),[saving,setSaving]=useState(false),[loaded,setLoaded]=useState(false);
  const dashboardAdmin=String(role||"").toUpperCase()==="SUPERADMIN"||!!permissions["settings.roles.manage"]?.allowed;
  const canViewBankBalances=String(role||"").toUpperCase()==="SUPERADMIN"||!!permissions["dashboard.bank_balances.view"]?.allowed;
@@ -191,15 +216,16 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
    const info=infoByTx.get(String(tx.id));let links=[...(linksByTx.get(String(tx.id))||[])];
    if(!links.length&&info?.agent_id)links=[{agent_id:info.agent_id,side:tx.side,primary_agent:true}];
    if(!links.length&&tx.agent_id)links=[{agent_id:tx.agent_id,side:tx.side,primary_agent:true}];
-   links=[...new Map(links.map(x=>[String(x.agent_id),x])).values()];
-   const amount=Math.max(0,Number(tx.sale_price??tx.purchase_price??0)||0),commissionRows=commissionByTx.get(String(tx.id))||[];
-   for(const link of links){const row=agentMap.get(String(link.agent_id));if(!row)continue;row.units++;row.volume+=amount;row.tradeIds.add(String(tx.id));const assigned=commissionRows.find(c=>String(c.agent_id)===String(link.agent_id));if(assigned)row.gci+=Math.max(0,Number(assigned.agent_share??assigned.gross_commission??0)||0);else if(String(link.agent_id)===String(info?.agent_id||""))row.gci+=Math.max(0,Number(info?.agent_gross??tx.agent_commission??0)||0);else row.gci+=Math.max(0,Number(link.commission_base||0)||0)}
+   const credits=getAgentTransactionCredits(links,commissionByTx.get(String(tx.id))||[],info,tx);
+   const amount=Math.max(0,Number(tx.sale_price??tx.purchase_price??0)||0);
+   for(const credit of credits){
+    const row=agentMap.get(credit.agentId);if(!row)continue;
+    row.units+=credit.weight;row.volume+=amount*credit.weight;row.gci+=credit.gci;row.tradeIds.add(String(tx.id));
+   }
   }
   const addListing=(listing,dateValue,typeValue,agentIds)=>{const date=String(dateValue||"").slice(0,10),status=String(listing.status||"").toUpperCase().replace(/[^A-Z]/g,""),rawType=String(typeValue||"").toUpperCase().replace(/[^A-Z]/g,""),type=rawType.includes("LEASE")||rawType.includes("RENT")?"LEASE":rawType.includes("SALE")||rawType.includes("SELL")?"SALE":"";if(!date||date<startDate||date>endDate||["DRAFT","REJECTED","CANCELLED","DELETED","WITHDRAWN"].includes(status)||!type)return;for(const id of new Set(agentIds.filter(Boolean).map(String))){const row=agentMap.get(id);if(!row)continue;row.listings++;if(type==="LEASE")row.leaseListings++;else row.saleListings++}};
   listingSubmissions.rows.forEach(x=>addListing(x,x.listing_start_date||x.original_listing_date,x.listing_type||x.property_type,[x.agent_id,...(Array.isArray(x.additional_agent_ids)?x.additional_agent_ids:[])]));
   legacyListings.rows.forEach(x=>addListing(x,x.listing_start_date||x.list_date||x.listing_date,x.listing_type||x.type||x.transaction_type,[x.agent_id,x.listing_agent_id,...(Array.isArray(x.additional_agent_ids)?x.additional_agent_ids:[])]));
-  // Only agents with measurable activity in the selected period participate in the combined ranking.
-  // Equal metric values receive equal points; ties use their average rank position.
   const rows=[...agentMap.values()].map(x=>({...x,tradeCount:x.tradeIds.size}));
   const producers=rows.filter(x=>x.units>0||x.listings>0||x.volume>0||x.gci>0);
   const rankPoints=key=>{
@@ -207,8 +233,7 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
    const n=sorted.length,points=new Map();
    for(let i=0;i<n;){
     let end=i+1;while(end<n&&Number(sorted[end][key]||0)===Number(sorted[i][key]||0))end++;
-    const averagePosition=(i+end-1)/2;
-    const score=n<=1?100:100*(n-1-averagePosition)/(n-1);
+    const averagePosition=(i+end-1)/2,score=n<=1?100:100*(n-1-averagePosition)/(n-1);
     for(let j=i;j<end;j++)points.set(sorted[j].id,score);
     i=end;
    }
@@ -390,7 +415,7 @@ function Dashboard({setActive,onOpenTransaction,user,permissions={},role}){
  {visibleWidgets.includes("anniversaries")&&card("Agent Anniversaries",<><div className="notice" style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>Anniversaries in selected period</span><strong style={{fontSize:18}}>{anniversaryRows.length}</strong></div>{dateControls("anniversaries")}{anniversaryRows.length?anniversaryRows.map(a=>{const start=String(a.start_date).slice(0,10),anniversary=String(now.getFullYear())+"-"+start.slice(5,10),years=serviceYearsForDate(start,now);return <div className="settingsline" key={a.id}><span>{agentName(a)}<small className="block" style={{display:"block",marginTop:3,fontWeight:600}}>{years===null?"Service years unavailable":`${years} ${years===1?"year":"years"} of service`}</small></span><b>{fmtDate(anniversary)}</b></div>}):<p className="muted">No anniversaries found in this date range.</p>}</>)}
  {visibleWidgets.includes("licences")&&card("Licences Expiring",<><div className="notice" style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>Licences expiring in selected period</span><strong style={{fontSize:18}}>{licenceRows.length}</strong></div>{dateControls("licences")}{licenceRows.length?licenceRows.map(a=>{const localToday=(()=>{const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Toronto",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());const part=k=>parts.find(p=>p.type===k)?.value||"";return `${part("year")}-${part("month")}-${part("day")}`})();const expired=String(a.reco_license_expiry).slice(0,10)<localToday;const renewal=String(a.reco_renewal_status||"NONE").toUpperCase()==="IN_PROGRESS";const eligible=renewal&&a.reco_eligible_to_trade===true;const status=eligible?"ELIGIBLE TO TRADE":renewal?"RENEWAL IN PROGRESS":expired?"EXPIRED":"";const statusStyle=eligible?{color:"#166534",background:"#f0fdf4",borderLeft:"4px solid #16a34a",paddingLeft:10,borderRadius:6}:renewal?{color:"#9a3412",background:"#fff7ed",borderLeft:"4px solid #d97706",paddingLeft:10,borderRadius:6}:expired?{color:"#b91c1c",background:"#fef2f2",borderLeft:"4px solid #dc2626",paddingLeft:10,borderRadius:6}:undefined;const statusColor=eligible?"#166534":renewal?"#9a3412":"#b91c1c";return <div className="settingsline" key={a.id} style={statusStyle}><span>{agentName(a)}{status&&<small className="block" style={{color:statusColor,fontWeight:800}}>{status}</small>}{renewal&&a.reco_renewal_applied_date&&<small className="block">Applied: {fmtDate(a.reco_renewal_applied_date)}</small>}<small className="block">{a.reco_license_number||"Licence number not entered"}</small></span><b style={status?{color:statusColor,fontWeight:800}:undefined}>{fmtDate(a.reco_license_expiry)}</b></div>}):<p className="muted">No licence expiries found in this date range.</p>}</>)}
  {visibleWidgets.includes("closings")&&card("Deals Closing",<><div className="notice" style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>Closings in selected period</span><strong style={{fontSize:18}}>{closingRows.length}</strong></div>{dateControls("closings")}{closingRows.length?closingRows.map(t=><button type="button" className="settingsline" key={t.id} onClick={()=>onOpenTransaction(t.id)} style={{width:"100%",textAlign:"left",border:0,background:"transparent",cursor:"pointer",font:"inherit",color:"inherit"}} title="Open this transaction"><span><strong style={{color:"var(--navy)",textDecoration:"underline"}}>{t.transaction_number||"Trade"} · {t.property_address||"Address not entered"}</strong><small className="block">{t.client_name||""}</small></span><b>{fmtDate(t.close_date)}</b></button>):<p className="muted">No deals closing in this date range.</p>}</>)}
- {visibleWidgets.includes("topAgents")&&card("Top Agents",<><div className="notice" style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>Agents shown in ranking</span><strong style={{fontSize:18}}>{topRows.length}</strong></div><div className="actions" style={{marginBottom:10,flexWrap:"wrap"}}><button type="button" className="secondary" onClick={()=>applyPreset("topAgents","thisMonth")}>This Month</button><button type="button" className="secondary" onClick={()=>applyPreset("topAgents","previousMonth")}>Previous Month</button><button type="button" className="secondary" onClick={()=>applyPreset("topAgents","nextMonth")}>Next Month</button><button type="button" className="secondary" onClick={()=>applyPreset("topAgents","thisYear")}>This Year</button></div><div className="formgrid"><label>From<input type="date" value={config.topAgents?.start||monthStart} onChange={e=>changeDate(config,setConfig,"topAgents","start",e.target.value)}/></label><label>To<input type="date" value={config.topAgents?.end||monthEnd} onChange={e=>changeDate(config,setConfig,"topAgents","end",e.target.value)}/></label><label>Rank by<select value={config.topMetric||"volume"} onChange={e=>setConfig(v=>({...v,topMetric:e.target.value}))}><option value="volume">Sales volume</option><option value="units">Completed units</option><option value="gci">Gross commission</option><option value="listings">Listings</option><option value="combined">Combined top producer</option></select></label><div className="muted" style={{alignSelf:"end"}}>Transactions are ranked by closing date, matching Agent Rankings.</div></div>{topRows.length?<div className="tablewrap"><table><thead><tr><th>Rank</th><th>Agent</th>{config.topMetric==="listings"?<><th>Lease Listings</th><th>Sale Listings</th><th>Total Listings</th></>:config.topMetric==="combined"?<><th>Units</th><th>Volume</th><th>GCI</th><th>Lease Listings</th><th>Sale Listings</th><th>Combined Score</th></>:<><th>Units</th><th>Volume</th><th>GCI</th></>}</tr></thead><tbody>{topRows.map((a,i)=><tr key={a.id}><td>{i+1}</td><td>{a.name}</td>{config.topMetric==="listings"?<><td>{a.leaseListings}</td><td>{a.saleListings}</td><td>{a.listings}</td></>:config.topMetric==="combined"?<><td>{a.units}</td><td>{money(a.volume)}</td><td>{money(a.gci)}</td><td>{a.leaseListings}</td><td>{a.saleListings}</td><td title={a.combinedBreakdown?`Units ${a.combinedBreakdown.units.toFixed(2)} · Volume ${a.combinedBreakdown.volume.toFixed(2)} · GCI ${a.combinedBreakdown.gci.toFixed(2)} · Listings ${a.combinedBreakdown.listings.toFixed(2)}`:""}>{a.combinedScore}</td></>:<><td>{a.units}</td><td>{money(a.volume)}</td><td>{money(a.gci)}</td></>}</tr>)}</tbody></table></div>:<p className="muted">{config.topMetric==="listings"?"No listings with a listing start date were found in this date range.":config.topMetric==="combined"?"No production activity found in this date range.":"No completed transactions found in this date range."}</p>}</>)}</div></div>
+ {visibleWidgets.includes("topAgents")&&card("Top Agents",<><div className="notice" style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>Agents shown in ranking</span><strong style={{fontSize:18}}>{topRows.length}</strong></div><div className="actions" style={{marginBottom:10,flexWrap:"wrap"}}><button type="button" className="secondary" onClick={()=>applyPreset("topAgents","thisMonth")}>This Month</button><button type="button" className="secondary" onClick={()=>applyPreset("topAgents","previousMonth")}>Previous Month</button><button type="button" className="secondary" onClick={()=>applyPreset("topAgents","nextMonth")}>Next Month</button><button type="button" className="secondary" onClick={()=>applyPreset("topAgents","thisYear")}>This Year</button></div><div className="formgrid"><label>From<input type="date" value={config.topAgents?.start||monthStart} onChange={e=>changeDate(config,setConfig,"topAgents","start",e.target.value)}/></label><label>To<input type="date" value={config.topAgents?.end||monthEnd} onChange={e=>changeDate(config,setConfig,"topAgents","end",e.target.value)}/></label><label>Rank by<select value={config.topMetric||"gci"} onChange={e=>setConfig(v=>({...v,topMetric:e.target.value}))}><option value="volume">Sales volume</option><option value="units">Completed units</option><option value="gci">Gross commission</option><option value="listings">Listings</option><option value="combined">Combined top producer</option></select></label><div className="muted" style={{alignSelf:"end"}}>Transactions are ranked by closing date, matching Agent Rankings.</div></div>{topRows.length?<div className="tablewrap"><table><thead><tr><th>Rank</th><th>Agent</th>{config.topMetric==="listings"?<><th>Lease Listings</th><th>Sale Listings</th><th>Total Listings</th></>:config.topMetric==="combined"?<><th>Credited Units</th><th>Volume</th><th>GCI</th><th>Lease Listings</th><th>Sale Listings</th><th>Combined Score</th></>:<><th>Units</th><th>Volume</th><th>GCI</th></>}</tr></thead><tbody>{topRows.map((a,i)=><tr key={a.id}><td>{i+1}</td><td>{a.name}</td>{config.topMetric==="listings"?<><td>{a.leaseListings}</td><td>{a.saleListings}</td><td>{a.listings}</td></>:config.topMetric==="combined"?<><td>{a.units}</td><td>{money(a.volume)}</td><td>{money(a.gci)}</td><td>{a.leaseListings}</td><td>{a.saleListings}</td><td title={a.combinedBreakdown?`Units ${a.combinedBreakdown.units.toFixed(2)} · Volume ${a.combinedBreakdown.volume.toFixed(2)} · GCI ${a.combinedBreakdown.gci.toFixed(2)} · Listings ${a.combinedBreakdown.listings.toFixed(2)}`:""}>{a.combinedScore}</td></>:<><td>{a.units}</td><td>{money(a.volume)}</td><td>{money(a.gci)}</td></>}</tr>)}</tbody></table></div>:<p className="muted">{config.topMetric==="listings"?"No listings with a listing start date were found in this date range.":config.topMetric==="combined"?"No production activity found in this date range.":"No completed transactions found in this date range."}</p>}</>)}</div></div>
  <section className="panel" style={{marginBottom:18}}>
   <div className="paneltitle"><h2>RECO Renewal Status</h2><span className="pill">Agent compliance</span></div>
   <div className="grid4">
@@ -1097,7 +1122,7 @@ function AgentRankings({onOpenTransaction,onOpenTradeSubmission,onOpenListingSub
  const[period,setPeriod]=useState("YEAR");
  const[start,setStart]=useState(iso(new Date(now.getFullYear(),0,1)));
  const[end,setEnd]=useState(iso(now));
- const[metric,setMetric]=useState("UNITS");
+ const[metric,setMetric]=useState("GCI");
  const[search,setSearch]=useState("");
  const[selectedAgent,setSelectedAgent]=useState(null);
  const[detailStart,setDetailStart]=useState(start);
@@ -1121,97 +1146,67 @@ function AgentRankings({onOpenTransaction,onOpenTradeSubmission,onOpenListingSub
    listings:0,saleListings:0,leaseListings:0,tradeIds:new Set()
   }]));
   const linksByTx=new Map();
-  for(const link of transactionAgents.rows){
-   if(!link.transaction_id||!link.agent_id)continue;
-   const key=String(link.transaction_id);
-   if(!linksByTx.has(key))linksByTx.set(key,[]);
-   linksByTx.get(key).push(link);
-  }
+  for(const link of transactionAgents.rows){if(!link.transaction_id||!link.agent_id)continue;const key=String(link.transaction_id);if(!linksByTx.has(key))linksByTx.set(key,[]);linksByTx.get(key).push(link)}
   const commissionByTx=new Map();
-  for(const c of commissions.rows){
-   if(!c.transaction_id||!c.agent_id)continue;
-   const key=String(c.transaction_id);
-   if(!commissionByTx.has(key))commissionByTx.set(key,[]);
-   commissionByTx.get(key).push(c);
-  }
+  for(const c of commissions.rows){if(!c.transaction_id||!c.agent_id)continue;const key=String(c.transaction_id);if(!commissionByTx.has(key))commissionByTx.set(key,[]);commissionByTx.get(key).push(c)}
   const infoByTx=new Map(agentInfo.rows.filter(x=>x.transaction_id).map(x=>[String(x.transaction_id),x]));
   const eligibleStatus=s=>["CLOSED","COMPLETED","FINALIZED","CLOSEDWON","PAID"].includes(String(s||"").toUpperCase().replace(/[^A-Z]/g,""));
   for(const tx of transactions.rows){
    if(!eligibleStatus(tx.status))continue;
-   const date=String(tx.close_date||"").slice(0,10);
-   if(!date||date<start||date>end)continue;
-   const info=infoByTx.get(String(tx.id));
-   let links=[...(linksByTx.get(String(tx.id))||[])];
+   const date=String(tx.close_date||"").slice(0,10);if(!date||date<start||date>end)continue;
+   const info=infoByTx.get(String(tx.id));let links=[...(linksByTx.get(String(tx.id))||[])];
    if(!links.length&&info?.agent_id)links=[{agent_id:info.agent_id,side:tx.side,primary_agent:true}];
    if(!links.length&&tx.agent_id)links=[{agent_id:tx.agent_id,side:tx.side,primary_agent:true}];
-   links=[...new Map(links.map(x=>[String(x.agent_id),x])).values()];
+   const credits=getAgentTransactionCredits(links,commissionByTx.get(String(tx.id))||[],info,tx);
    const type=String(tx.transaction_type||"").toUpperCase().replace(/[^A-Z]/g,"");
    const isLease=type.includes("LEASE")||type==="RENT";
-   const amount=Math.max(0,Number(tx.sale_price??tx.purchase_price??0)||0);
-   const commissionRows=commissionByTx.get(String(tx.id))||[];
-   for(const link of links){
-    const row=agentMap.get(String(link.agent_id));if(!row)continue;
-    const side=String(link.side||tx.side||"").toUpperCase();
-    if(isLease)row.leaseUnits++;
-    else if(["SELLER","LANDLORD","LISTING","LISTINGSIDE"].includes(side))row.sellUnits++;
-    else row.buyUnits++;
+   for(const credit of credits){
+    const row=agentMap.get(credit.agentId);if(!row)continue;
+    const side=String((links.find(link=>String(link.agent_id)===credit.agentId)||{}).side||tx.side||"").toUpperCase();
+    if(isLease)row.leaseUnits+=credit.weight;
+    else if(["SELLER","LANDLORD","LISTING","LISTINGSIDE"].includes(side))row.sellUnits+=credit.weight;
+    else row.buyUnits+=credit.weight;
     row.units=row.buyUnits+row.sellUnits+row.leaseUnits;
-    row.volume+=amount;
-    row.tradeIds.add(String(tx.id));
-    const assignedCommission=commissionRows.find(c=>String(c.agent_id)===String(link.agent_id));
-    if(assignedCommission){
-     row.gci+=Math.max(0,Number(assignedCommission.agent_share??assignedCommission.gross_commission??0)||0);
-    }else if(String(link.agent_id)===String(info?.agent_id||"")){
-     row.gci+=Math.max(0,Number(info?.agent_gross??tx.agent_commission??0)||0);
-    }else{
-     row.gci+=Math.max(0,Number(link.commission_base||0)||0);
-    }
+    row.volume+=Math.max(0,Number(tx.sale_price??tx.purchase_price??0)||0)*credit.weight;
+    row.gci+=credit.gci;row.tradeIds.add(String(tx.id));
    }
   }
   const countListing=(listing,dateValue,typeValue,agentIds)=>{
-   const date=String(dateValue||"").slice(0,10);
-   const status=String(listing.status||"").toUpperCase().replace(/[^A-Z]/g,"");
-   const rawType=String(typeValue||"").toUpperCase().replace(/[^A-Z]/g,"");
+   const date=String(dateValue||"").slice(0,10),status=String(listing.status||"").toUpperCase().replace(/[^A-Z]/g,""),rawType=String(typeValue||"").toUpperCase().replace(/[^A-Z]/g,"");
    const type=rawType.includes("LEASE")||rawType.includes("RENT")?"LEASE":rawType.includes("SALE")||rawType.includes("SELL")?"SALE":"";
    if(!date||date<start||date>end||["DRAFT","REJECTED","CANCELLED","DELETED","WITHDRAWN"].includes(status)||!type)return;
-   const ids=[...new Set(agentIds.filter(Boolean).map(String))];
-   for(const id of ids){const row=agentMap.get(id);if(!row)continue;row.listings++;if(type==="LEASE")row.leaseListings++;else row.saleListings++;}
+   for(const id of new Set(agentIds.filter(Boolean).map(String))){const row=agentMap.get(id);if(!row)continue;row.listings++;if(type==="LEASE")row.leaseListings++;else row.saleListings++;}
   };
-  for(const listing of listingSubmissions.rows){
-   countListing(listing,listing.listing_start_date||listing.original_listing_date,listing.listing_type||listing.property_type,
-    [listing.agent_id,...(Array.isArray(listing.additional_agent_ids)?listing.additional_agent_ids:[])]);
-  }
-  for(const listing of legacyListings.rows){
-   countListing(listing,listing.listing_start_date||listing.list_date||listing.listing_date,listing.listing_type||listing.type||listing.transaction_type,
-    [listing.agent_id,listing.listing_agent_id,...(Array.isArray(listing.additional_agent_ids)?listing.additional_agent_ids:[])]);
-  }
+  listingSubmissions.rows.forEach(x=>countListing(x,x.listing_start_date||x.original_listing_date,x.listing_type||x.property_type,[x.agent_id,...(Array.isArray(x.additional_agent_ids)?x.additional_agent_ids:[])]));
+  legacyListings.rows.forEach(x=>countListing(x,x.listing_start_date||x.list_date||x.listing_date,x.listing_type||x.type||x.transaction_type,[x.agent_id,x.listing_agent_id,...(Array.isArray(x.additional_agent_ids)?x.additional_agent_ids:[])]));
   const key=metric==="LISTINGS"?"listings":metric==="VOLUME"?"volume":metric==="GCI"?"gci":"units";
-  return [...agentMap.values()].filter(row=>Number(row[key]||0)>0).sort((a,b)=>Number(b[key]||0)-Number(a[key]||0)||b.units-a.units||b.volume-a.volume||b.gci-a.gci||a.name.localeCompare(b.name))
+  return [...agentMap.values()].filter(row=>Number(row[key]||0)>0)
+   .sort((a,b)=>Number(b[key]||0)-Number(a[key]||0)||b.units-a.units||b.volume-a.volume||b.gci-a.gci||a.name.localeCompare(b.name))
    .map((row,index)=>({...row,tradeCount:row.tradeIds.size,rank:index+1}));
  },[agents.rows,transactions.rows,transactionAgents.rows,agentInfo.rows,commissions.rows,listingSubmissions.rows,legacyListings.rows,start,end,metric]);
  const normalizedSearch=search.trim().toLowerCase();
  const visible=ranking.filter(x=>!normalizedSearch||x.name.toLowerCase().includes(normalizedSearch)||String(x.agentNumber).toLowerCase().includes(normalizedSearch));
  const cash=n=>money(n);
- const metricLabel=metric==="UNITS"?"completed units":metric==="VOLUME"?"transaction volume":metric==="LISTINGS"?"listings by original listing date":"gross commission income";
+ const metricLabel=metric==="UNITS"?"credited units":metric==="VOLUME"?"transaction volume":metric==="LISTINGS"?"listings by original listing date":"gross commission income";
  function exportCsv(){
-  const headers=["Rank","Agent","Agent Number","Buy Units","Sell Units","Lease Units","Total Units","Transaction Volume","GCI","Listings","Sale Listings","Lease Listings"];
+  const headers=["Rank","Agent","Agent Number","Buy Credited Units","Sell Credited Units","Lease Credited Units","Total Credited Units","Transaction Volume","GCI","Listings","Sale Listings","Lease Listings"];
   const rows=[headers,...visible.map(x=>[x.rank,x.name,x.agentNumber,x.buyUnits,x.sellUnits,x.leaseUnits,x.units,x.volume.toFixed(2),x.gci.toFixed(2),x.listings,x.saleListings,x.leaseListings])];
   const csv=rows.map(row=>row.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(",")).join("\n");
   const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));const a=document.createElement("a");a.href=url;a.download="agent-rankings-"+start+"-to-"+end+".csv";a.click();URL.revokeObjectURL(url);
  }
  const refresh=()=>{agents.load();transactions.load();transactionAgents.load();agentInfo.load();commissions.load();listingSubmissions.load();legacyListings.load()};
- return <><div className="pagehead"><div><h1>Agent Rankings</h1><p>Four separate leaderboards. Each ranking uses its own measure and date rules.</p></div><button className="secondary" type="button" onClick={refresh}><RefreshCw size={16}/> Refresh</button></div>
+ return <><div className="pagehead"><div><h1>Agent Rankings</h1><p>Four separate leaderboards. Shared transaction credit is apportioned by each agent’s recorded commission allocation.</p></div><button className="secondary" type="button" onClick={refresh}><RefreshCw size={16}/> Refresh</button></div>
  <section className="panel"><div className="formgrid">
   <label>Reporting period<select value={period} onChange={e=>choosePeriod(e.target.value)}><option value="MONTH">This month</option><option value="LAST_MONTH">Last month</option><option value="QUARTER">This quarter</option><option value="HALF">This half-year</option><option value="YEAR">This year</option><option value="ALL">All time</option><option value="CUSTOM">Custom date range</option></select></label>
   <label>From date<input type="date" value={start} max={end||undefined} onChange={e=>{setStart(e.target.value);setPeriod("CUSTOM")}}/></label>
   <label>To date<input type="date" value={end} min={start||undefined} max={iso(now)} onChange={e=>{setEnd(e.target.value);setPeriod("CUSTOM")}}/></label>
   <label>Search agent<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Agent name or agent number"/></label>
- </div><div className="muted" style={{marginTop:10}}>Transaction rankings always use the transaction closing date (Close Date). Lease transaction volume uses the monthly rent entered in the transaction's Sale Price field. GCI uses the agent gross commission amount before agent fees and deductions. Listing rankings use the listing's original start date; sold or expired listings remain included.</div>
+ </div><div className="muted" style={{marginTop:10}}>Transaction rankings use the closing date. Shared transaction volume and units are apportioned using each agent’s recorded commission allocation. GCI uses each agent’s gross commission before agent fees and deductions. Lease volume uses the monthly rent entered in Sale Price. Listing rankings use the original listing start date; sold or expired listings remain included.</div>
  <div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}><button className="primary" type="button" onClick={exportCsv} disabled={!visible.length}><FileSpreadsheet size={16}/> Export CSV</button></div></section>
- <div className="grid3"><Card title="Buy Units" value={ranking.reduce((n,x)=>n+x.buyUnits,0)} sub="Buyer / tenant representation"/><Card title="Sell Units" value={ranking.reduce((n,x)=>n+x.sellUnits,0)} sub="Seller / landlord representation"/><Card title="Lease Units" value={ranking.reduce((n,x)=>n+x.leaseUnits,0)} sub="Lease transactions"/></div>
+ <div className="grid3"><Card title="Buy Credited Units" value={ranking.reduce((n,x)=>n+x.buyUnits,0)} sub="Allocated by agent commission share"/><Card title="Sell Credited Units" value={ranking.reduce((n,x)=>n+x.sellUnits,0)} sub="Allocated by agent commission share"/><Card title="Lease Credited Units" value={ranking.reduce((n,x)=>n+x.leaseUnits,0)} sub="Allocated by agent commission share"/></div>
  <section className="panel"><div className="paneltitle"><div><h2>Independent Rankings</h2><p className="panelhint">{start||"—"} to {end||"—"} · ranked by {metricLabel}</p></div><span className="pill">{visible.length} agents</span></div>
  <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>{[["UNITS","Number of units"],["VOLUME","Transaction volume"],["LISTINGS","Number of listings"],["GCI","GCI"]].map(([value,label])=><button key={value} type="button" className={metric===value?"primary":"secondary"} onClick={()=>setMetric(value)}>{label}</button>)}</div>
- <div className="tablewrap"><table><thead><tr><th>Rank</th><th>Agent</th><th>Agent #</th>{metric==="UNITS"?<><th>Buy</th><th>Sell</th><th>Lease</th><th>Total Units</th></>:metric==="VOLUME"?<><th>Transaction Volume</th><th>Transactions</th></>:metric==="LISTINGS"?<><th>Total Listings</th><th>Sale Listings</th><th>Lease Listings</th></>:<><th>GCI</th><th>Transactions</th></>}</tr></thead><tbody>{visible.map(x=><tr key={x.id}><td><strong>{x.rank}</strong>{x.rank===1&&<span className="pill" style={{marginLeft:6}}>Top</span>}</td><td><button type="button" onClick={()=>{setSelectedAgent(x);setDetailStart(start);setDetailEnd(end)}} style={{border:0,background:"transparent",padding:0,color:"#174ea6",fontWeight:700,textDecoration:"underline",cursor:"pointer"}}>{x.name}</button></td><td>{x.agentNumber||"—"}</td>{metric==="UNITS"?<><td>{x.buyUnits}</td><td>{x.sellUnits}</td><td>{x.leaseUnits}</td><td><strong>{x.units}</strong></td></>:metric==="VOLUME"?<><td><strong>{cash(x.volume)}</strong></td><td>{x.tradeCount}</td></>:metric==="LISTINGS"?<><td><strong>{x.listings}</strong></td><td>{x.saleListings}</td><td>{x.leaseListings}</td></>:<><td><strong>{cash(x.gci)}</strong></td><td>{x.tradeCount}</td></>}</tr>)}{!visible.length&&<tr><td colSpan="8"><div className="empty small"><BarChart3/><h3>No ranking data found</h3><p>Try a different date range or check that transactions and listings have the required dates and agent assignments.</p></div></td></tr>}</tbody></table></div></section>
+ <div className="tablewrap"><table><thead><tr><th>Rank</th><th>Agent</th><th>Agent #</th>{metric==="UNITS"?<><th>Buy</th><th>Sell</th><th>Lease</th><th>Total Credited Units</th></>:metric==="VOLUME"?<><th>Transaction Volume</th><th>Transactions</th></>:metric==="LISTINGS"?<><th>Total Listings</th><th>Sale Listings</th><th>Lease Listings</th></>:<><th>GCI</th><th>Transactions</th></>}</tr></thead><tbody>{visible.map(x=><tr key={x.id}><td><strong>{x.rank}</strong>{x.rank===1&&<span className="pill" style={{marginLeft:6}}>Top</span>}</td><td><button type="button" onClick={()=>{setSelectedAgent(x);setDetailStart(start);setDetailEnd(end)}} style={{border:0,background:"transparent",padding:0,color:"#174ea6",fontWeight:700,textDecoration:"underline",cursor:"pointer"}}>{x.name}</button></td><td>{x.agentNumber||"—"}</td>{metric==="UNITS"?<><td>{x.buyUnits}</td><td>{x.sellUnits}</td><td>{x.leaseUnits}</td><td><strong>{x.units}</strong></td></>:metric==="VOLUME"?<><td><strong>{cash(x.volume)}</strong></td><td>{x.tradeCount}</td></>:metric==="LISTINGS"?<><td><strong>{x.listings}</strong></td><td>{x.saleListings}</td><td>{x.leaseListings}</td></>:<><td><strong>{cash(x.gci)}</strong></td><td>{x.tradeCount}</td></>}</tr>)}{!visible.length&&<tr><td colSpan="8"><div className="empty small"><BarChart3/><h3>No ranking data found</h3><p>Try a different date range or check that transactions and listings have the required dates and agent assignments.</p></div></td></tr>}</tbody></table></div></section>
  {selectedAgent&&(()=>{
   const agent=selectedAgent;
   const txIds=new Set(transactionAgents.rows.filter(link=>String(link.agent_id)===agent.id).map(link=>String(link.transaction_id)));
