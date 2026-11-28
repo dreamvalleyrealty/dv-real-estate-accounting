@@ -1,5 +1,5 @@
 const CACHE_NAME = "dv-back-office-static-v1";
-const STATIC_ASSETS = ["/offline.html", "/dv-logo.svg"];
+const STATIC_ASSETS = ["/offline.html", "/dv-logo.svg", "/field.html", "/field.webmanifest", "/dv-home-icon-180.png"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS)));
@@ -21,11 +21,12 @@ self.addEventListener("fetch", event => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("/offline.html")));
+    const fallbackPage = url.pathname.startsWith("/field") ? "/field.html" : "/offline.html";
+    event.respondWith(fetch(request).catch(() => caches.match(fallbackPage)));
     return;
   }
 
-  const isStaticAsset = url.pathname.startsWith("/assets/") || url.pathname === "/dv-logo.svg";
+  const isStaticAsset = url.pathname.startsWith("/assets/") || ["/dv-logo.svg", "/field.html", "/field.webmanifest", "/dv-home-icon-180.png"].includes(url.pathname);
   if (!isStaticAsset) return;
 
   event.respondWith(
