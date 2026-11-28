@@ -1,11 +1,18 @@
 {
-  "name": "Dream Valley Realty – Open House Signs",
-  "short_name": "DV Signs",
-  "description": "Plan and manage Dream Valley Realty open house directional signs.",
+  "name": "Dream Valley Realty Back Office",
+  "short_name": "DV Back Office",
+  "description": "Secure mobile-friendly back office for Dream Valley Realty.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0f2141",
   "theme_color": "#0f2141",
-  "icons": [{ "src": "/dv-logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+  "icons": [
+    {
+      "src": "/dv-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }
