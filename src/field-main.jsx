@@ -4,7 +4,7 @@ import FieldApp from "./FieldApp.jsx";
 import "./field.css";
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("/field-sw.js").catch(error => console.warn("DV Signs service worker registration failed:", error)));
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(error => console.warn("DV app service worker registration failed:", error)));
 }
 
 createRoot(document.getElementById("root")).render(
