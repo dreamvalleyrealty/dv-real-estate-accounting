@@ -1080,3 +1080,31 @@ body, #root {
 .sidebar .nav{margin:1px 0;padding:9px 12px;min-height:36px;font-size:11.5px}
 .sidebar .nav svg{flex:none}
 .nav-empty{padding:18px 12px;color:#aab8cc;font-size:11px;text-align:center}
+
+
+/* Mobile app-style navigation and touch layout */
+.mobile-bottom-nav{display:none}
+@media(max-width:760px){
+ .mobile-bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:60;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);align-items:stretch;gap:2px;padding:7px 6px calc(7px + env(safe-area-inset-bottom));background:rgba(255,255,255,.97);backdrop-filter:blur(16px);border-top:1px solid #e3e7ed;box-shadow:0 -5px 22px rgba(15,33,65,.08)}
+ .mobile-bottom-nav button{min-width:0;min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:3px 2px;border:0;border-radius:9px;background:transparent;color:#788497;font-size:9px;font-weight:700;line-height:1.15;white-space:nowrap;cursor:pointer}
+ .mobile-bottom-nav button svg{flex:none;width:19px;height:19px;stroke-width:2}
+ .mobile-bottom-nav button.active{color:var(--navy);background:#f5f2eb}
+ .mobile-bottom-nav button.active svg{color:var(--gold)}
+ .content{padding-bottom:calc(94px + env(safe-area-inset-bottom))}
+ .content.trade-submissions-fullwidth{padding-bottom:calc(94px + env(safe-area-inset-bottom))}
+ .sidebar{padding-bottom:env(safe-area-inset-bottom)}
+ .top{gap:9px;min-width:0}
+ .top>div:first-of-type{min-width:0;overflow:hidden}
+ .top>div:first-of-type strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+ .top>div:first-of-type span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .top .logout{flex:none;padding:7px 9px;font-size:10px}
+ .primary,.secondary{min-height:40px}
+ input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea{font-size:16px}
+}
+@media(max-width:390px){
+ .mobile-bottom-nav{padding-left:3px;padding-right:3px}
+ .mobile-bottom-nav button{font-size:8px}
+ .top{padding-left:10px;padding-right:10px;gap:6px}
+ .top .logout{padding:6px 7px}
+ .content{padding-left:11px;padding-right:11px}
+}
